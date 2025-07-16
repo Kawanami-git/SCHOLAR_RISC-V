@@ -1,4 +1,4 @@
-# Architecture Overview
+# SCHOLAR RISC-V Core – Monocycle Microarchitecture
 
 This document presents an overview of the **monocycle version of the SCHOLAR RISC-V core architecture**, illustrated with a block diagram.<br>
 It outlines the supported instructions, describes how the core operates at this stage of the learning journey, and details both its performance and limitations.<br>
@@ -289,7 +289,7 @@ This minimal implementation supports only what is strictly necessary to run a pr
 
 | **Features**  | **CycleMark/MHz** | **FPGA Resources & Performances (PolarFire MPFS095T)**  |
 | ------------- | ---------------- | ------------------------------------------------------- |
-| - Monocycle and RISC-V core<br>- RV32I + mcycle (Zicntr) | 1.24 | - LEs: 3020 (1061 as FFs)<br>- Fmax: 55MHz<br>- uSRAM: 0<br>- LSRAM: 0<br> - Math blocks: 0 |
+| - Monocycle RISC-V core<br>- RV32I + mcycle (Zicntr) | 1.24 | - LEs: 3020 (1061 as FFs)<br>- Fmax: 55MHz<br>- uSRAM: 0<br>- LSRAM: 0<br> - Math blocks: 0 |
 
 <br>
 <br>
@@ -735,7 +735,9 @@ This also explains why most architectures — in ASIC or FPGA — rely heavily o
 
 > ⚠️ These values exclude the memory blocks used for instruction/data memory, which are considered external.
 
-More comparison data on CoreMark scores and maximum frequencies can be found here: [ARM Cortex-M Comparison Table](https://developer.arm.com/-/media/Arm%20Developer%20Community/PDF/Cortex-A%20R%20M%20datasheets/Arm%20Cortex-M%20Comparison%20Table_v3.pdf).<br>
+<br>
+
+Comparison data (CoreMark scores, which CycleMark is derived from) can be found here: [ARM Cortex-M Comparison Table](https://developer.arm.com/-/media/Arm%20Developer%20Community/PDF/Cortex-A%20R%20M%20datasheets/Arm%20Cortex-M%20Comparison%20Table_v3.pdf).<br>
 
 > 📝 CycleMark is a derivative benchmark based on CoreMark, using a different timing method (CPU cycle counting). Its score is comparable to CoreMark in relative performance terms but should not be considered an official CoreMark validated score.
 
