@@ -684,7 +684,11 @@ clean_mpfs_discovery_kit_linux:
 mpfs_discovery_kit_program_linux:
 	@echo "➡️  Running Linux programming script..."
 	@echo
+ifdef path
+	@bash $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)load_linux.sh $(path)
+else
 	@bash $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)load_linux.sh $(WORK_DIR)$(MPFS_DISCOVERY_KIT_YOCTO_DIR)yocto-dev/build/tmp-glibc/deploy/images/mpfs-disco-kit/core-image-custom-mpfs-disco-kit.rootfs.wic
+endif
 	@echo "✅ Done."
 
 .PHONY: clean_mpfs_discovery_kit
