@@ -142,19 +142,11 @@ uint32_t run(char* firmwarefile, char* spikefile)
         {
             if((instr->instr_bin & 0b1111111) == 0b1110011) // CSR (e.g. mcycle)
             {
-<<<<<<< HEAD
-                if(dut->GPR_MEM[instr->rd] != dut->CSR_MCYCLE - 1)
-                {
-                    flag = FAILURE;
-                    log_printf("Instruction %s error: Data in RD %02u should be %08x but is %08x.\n",
-                               instr->instr, instr->rd, dut->CSR_MCYCLE, dut->GPR_MEM[instr->rd]);
-=======
                 if(dut->GPR_MEMORY[instr->rd] != dut->CSR_MCYCLE - 1)
                 {
                     flag = FAILURE;
                     log_printf("Instruction %s error: Data in RD %02u should be %08x but is %08x.\n",
                                instr->instr, instr->rd, dut->CSR_MCYCLE, dut->GPR_MEMORY[instr->rd]);
->>>>>>> monocycle
                 }
 
                 // Force RD to match Spike (one cycle per instruction)
@@ -166,19 +158,11 @@ uint32_t run(char* firmwarefile, char* spikefile)
             }
             else
             {
-<<<<<<< HEAD
-                if(dut->GPR_MEM[instr->rd] != instr->rd_data)
-                {
-                    flag = FAILURE;
-                    log_printf("Instruction %s error: Data in RD %02u should be %08x but is %08x.\n",
-                               instr->instr, instr->rd, instr->rd_data, dut->GPR_MEM[instr->rd]);
-=======
                 if(dut->GPR_MEMORY[instr->rd] != instr->rd_data)
                 {
                     flag = FAILURE;
                     log_printf("Instruction %s error: Data in RD %02u should be %08x but is %08x.\n",
                                instr->instr, instr->rd, instr->rd_data, dut->GPR_MEMORY[instr->rd]);
->>>>>>> monocycle
                 }
             }
         }
