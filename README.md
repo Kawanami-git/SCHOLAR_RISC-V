@@ -283,9 +283,10 @@ To explore the documentation, simply navigate to the **[`docs/`](./docs/)** fold
 
 ## 📦 Dependencies
 
-This project was developed on **Ubuntu 20.04.6 LTS**, to ensure compatibility with Microchip’s toolchain.<br>
+This project was developed on **Ubuntu 20.04 LTS** to ensure compatibility with Microchip’s toolchain.<br>
+Few adjustments have been made to also make it work on **Ubuntu 24.04 LTS**.
 Other Ubuntu versions will work fine for simulation purposes.<br>
-However, to build the bitstream and perform real-case tests on the Microchip PolarFire SoC/FPGA (MPFS DISCOVERY KIT), the Ubuntu version must match the supported one — **Ubuntu 20.04 LTS**.
+However, to build the bitstream and perform real-case tests on the Microchip PolarFire SoC/FPGA (MPFS DISCOVERY KIT), the Ubuntu version must match the supported ones — **Ubuntu 20.04 LTS** and **Ubuntu 24.04 LTS**.
 
 <br>
 <br>
@@ -294,9 +295,9 @@ However, to build the bitstream and perform real-case tests on the Microchip Pol
 
 To run any simulation, the following tools are required:
 
-- **Ubuntu packages** `sudo apt install git build-essential python3 python3-pip python3-tk device-tree-compiler autoconf make g++ flex bison libfl2 libfl-dev zlib1g-dev help2man automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev gawk texinfo gperf libtool patchutils bc libexpat-dev ninja-build cmake libglib2.0-dev libslirp-dev`
+- **Ubuntu packages** `sudo apt install git build-essential libflac-dev python3 python3-pip python3-tk device-tree-compiler autoconf make g++ flex bison libfl2 libfl-dev zlib1g-dev help2man automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev gawk texinfo gperf libtool patchutils bc libexpat-dev ninja-build cmake libglib2.0-dev libslirp-dev`
 
-- **Python3 modules** `pip3 install pyelftools`
+- **Python3 modules** `pip3 install pyelftools` (**Ubuntu 20.04**) or `sudo apt install python3-pyelftools` (**Ubuntu 24.04**)
 
 - **Verilator** version `5.034` (2025-02-24)  
 
@@ -331,7 +332,7 @@ To synthesize the SCHOLAR RISC-V core and its environment for the **PolarFire So
 Once installed, you can build the core and its environment using the Makefile.  
 For detailed steps, refer to the [Hardware Integration](./docs/hardware_integration/) section.
 
-> ⚠️ **Libero requires Ubuntu 20.04.6 LTS to function properly.**
+> ⚠️ **Libero requires Ubuntu 20.04 LTS or Ubuntu 24.04 LTS to function properly.**
 > Other versions may not be officially supported or may require workarounds.
 
 <br>

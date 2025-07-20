@@ -93,7 +93,7 @@ To install them:
 ```bash
 sudo apt install python3
 sudo apt install python3-pip
-pip3 install pyelftools
+pip3 install pyelftools (Unbuntu 20.04) or sudo apt install python3-pyelftools (Ubuntu 24.04)
 ```
 
 <br>
@@ -152,7 +152,7 @@ Spike is the official simulator for the RISC-V instruction set architecture (ISA
 It’s used for verifying and comparing core functionality against a trusted reference model.
 
 ```bash
-apt-get install device-tree-compiler libboost-regex-dev libboost-system-dev
+sudo apt-get install device-tree-compiler libboost-regex-dev libboost-system-dev
 
 git clone https://github.com/riscv-software-src/riscv-isa-sim.git
 cd riscv-isa-sim

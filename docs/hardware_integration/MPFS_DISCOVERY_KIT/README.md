@@ -3,7 +3,7 @@
 This document provides instructions on how to set up the **MPFS DISCOVERY KIT** development board from **Microchip** to implement and use the **SCHOLAR_RISC-V** core. It includes steps for configuring the board, running tests, and evaluating the performance of the RISC-V core.<br>
 If you haven’t already, please refer to the [**simulation README**](../../simulation_environment/README.md), which contains useful information about the tests that can be executed to validate the **SCHOLAR RISC-V**.
 
-> ⚠️ The following instructions are written for **Ubuntu 20.04.6 LTS**. If you are using another Linux distribution or version, you can still follow the general steps, but you may need to make slight adjustments to install the required dependencies or tools.
+> ⚠️ The following instructions are written for **Ubuntu 20.04 LTS** and **Ubuntu 24.04 LTS**. If you are using another Linux distribution or version, you can still follow the general steps, but you may need to make slight adjustments to install the required dependencies or tools.
 
 <br>
 <br>
@@ -20,6 +20,7 @@ If you haven’t already, please refer to the [**simulation README**](../../simu
 
 - [Required Hardware](#⚙️-required-hardware)
 - [Required Tools](#⚙️-required-tools)
+- [Microchip License](#📜-microchip-license)
 - [Retreiving or Building the Linux Image and Programming it](#🔨💾-retreiving-or-building-the-linux-image-and-programming-it)
 - [Building and Programming the FPGA Bitstream](#🔨💾-building-and-programming-the-fpga-bitstream)
 - [Running Tests on the Board](#🏃‍♂️-running-tests-on-the-board)
@@ -73,7 +74,7 @@ To successfully run the simulation and tests, the following tools are required:
 >- **SC_INSTALL_DIR**	 : Path to the Soft Console installation directory.
 >- **LIBERO_INSTALL_DIR**: Path to the Libero installation directory.
 >- **LICENSE_DAEMON_DIR**: Path to the License Deamon executable.
->- **LICENSE_FILE_DIR**	 : Path to the Licence directory.<br>
+>- **LICENSE_FILE_DIR**	 : Path to the License directory.<br>
 >
 > To ensure proper installation behavior, make sure the following packages are installed:
 > ```bash
@@ -103,11 +104,21 @@ Then, follow the instructions provided by the installer.
 > 📝 
 > 
 > After installation, run:  
-> `/home/$USER/microchip/Libero_SoC_2025.1/Libero_SoC/Designer/bin/fp6_env_install`  
+> ```bash
+> sudo /home/$USER/microchip/Libero_SoC_2025.1/Libero_SoC/Designer/bin/fp6_env_install  
+> ```
 > This script installs the required drivers and configures the environment for proper detection of the board’s FlashPro programmer.<br><br>
 >
-> If the file exists, also run:  
-> `/home/$USER/microchip/req_to_install.sh`  
+> If the file exists, also run: 
+> - For **Ubuntu 24.04**:
+> ```bash
+> sudo apt install libflac-dev
+> sudo sh /home/$USER/microchip/Libero_SoC_2025.1/req_to_install.sh
+> ``` 
+> - For **Ubuntu 20.04**:
+> ```bash
+> sudo sh /home/$USER/microchip/Libero_SoC_2025.1/req_to_install.sh
+> ``` 
 > This script installs additional dependencies required by Libero.<br><br>
 >
 > When attempting to download IP cores from Microchip via Libero on Ubuntu, you might encounter a CA certificate error like:  
@@ -166,6 +177,60 @@ To install it, use the following command:
 ```bash
 sudo apt-get install ssh
 ```
+
+<br>
+<br>
+
+---
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## 📜 Microchip License
+
+To use the Microchip tools suite, a Microchip License is necessary.
+
+<br>
+<br>
+
+### Get a License
+
+The Microchip License can be requested from their [website](https://www.microchipdirect.com/fpga-software-products) by clicking on **Request Free License**.
+
+The license to take is the **Libero Silver 1Yr Floating License for Windows/Linux Server**:
+![Microchip_free_license.png](img/Microchip_free_license.png)
+
+A MAC ID will be asked by Microchip:
+![Microchip_mac_id_request.png](img/Microchip_mac_id_request.png)
+
+It can be found by using the following command:
+```bash
+ip -br link
+```
+
+![Microchip_mac_id.png](img/Microchip_mac_id.png)
+
+An example of MAC: ab:ef:12:23:45:cd.
+
+The license will be sent by email.
+
+<br>
+<br>
+
+### Install the License
+
+The license must be placed in `/home/$USER/microchip/` (same path as the tools).<br>
+If not, the **setup_microchip_tools.sh** script shall be modified to specify the path of the license file:<br>
+`export LICENSE_FILE_DIR=/home/$USER/microchip/` -> `export LICENSE_FILE_DIR=path/to/License.dat`
+
+The license had to be modified, by replacing **<put.hostname.here>** with your computer name in its top line:<br>
+**SERVER <put.hostname.here> abef122345cd 1702**.
+
+<br>
+<br>
 
 ---
 
