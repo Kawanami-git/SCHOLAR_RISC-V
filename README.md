@@ -351,7 +351,7 @@ For detailed steps, refer to the [Hardware Integration](./docs/hardware_integrat
 To get started, clone the repository and navigate to the RISC-V simulation directory:
 ```bash
 git clone --recurse-submodules https://github.com/Kawanami-git/SCHOLAR_RISC-V.git
-cd SCHOLAR_RISCV/
+cd SCHOLAR_RISC-V/
 ```
 
 You can then choose between the following options:
