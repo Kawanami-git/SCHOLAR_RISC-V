@@ -62,6 +62,8 @@ To successfully run the simulation and tests, the following tools are required:
 
 -	[SoftConsole](https://www.microchip.com/en-us/products/fpgas-and-plds/fpga-and-soc-design-tools/soc-fpga/softconsole): Required for HSS compilation.
 
+- The Linux **repo, chrpath, diffstat and lz4** commands: Required to build the Linux image.
+
 -	The Linux **dd** command: Required to flash the Linux image onto a SD card.
 
 - The Linux **ssh** command:  Required to communicate with the board over SSH.
@@ -157,20 +159,33 @@ Then, follow the instructions provided by the installer.
 <br>
 <br>
 
+### repo, chrpath, diffstat and lz4
+
+These Linux commands are required to build the Linux image.
+
+To install them, use the following command:
+
+```bash
+sudo apt install repo chrpath diffstat lz4
+```
+
+<br>
+<br>
+
 ### dd
-This linux command is required to flash the Linux image onto an SD card.
+This Linux command is required to flash the Linux image onto an SD card.
 
 To install it, use the following command:
 
 ```bash
-sudo apt-get install coreutils
+sudo apt install coreutils
 ```
 
 <br>
 <br>
 
 ### ssh
-This linux command is required to communicate with the board via Ethernet.
+This Linux command is required to communicate with the board via Ethernet.
 
 To install it, use the following command:
 
@@ -291,6 +306,10 @@ make mpfs_discovery_kit_program_linux
 ```bash
 make mpfs_discovery_kit_program_linux path=path/to/file.wic
 ```
+
+> 📝 
+>
+> During the build, several packages installation may be required by Yocto. Please, install all of these packages.
 
 <br>
 <br>
@@ -457,7 +476,7 @@ make send_mpfs_discovery_kit_custom_firmware
 
 ### 🛠️ Modify the platform Makefile
 
-The [plartform makefile](../../../software/platform/Makefile) is meant to be used on a development board supporting linux.
+The [plartform makefile](../../../software/platform/Makefile) is meant to be used on a development board supporting Linux.
 Its purpose it to allow the compilation of the platform softwares on the development board (i.e the MPFS_DISCOVERY_KIT).
 
 First, locate the section:

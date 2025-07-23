@@ -295,7 +295,7 @@ However, to build the bitstream and perform real-case tests on the Microchip Pol
 
 To run any simulation, the following tools are required:
 
-- **Ubuntu packages** `sudo apt install git build-essential libflac-dev python3 python3-pip python3-tk device-tree-compiler autoconf make g++ flex bison libfl2 libfl-dev zlib1g-dev help2man automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev gawk texinfo gperf libtool patchutils bc libexpat-dev ninja-build cmake libglib2.0-dev libslirp-dev`
+- **Ubuntu packages** `sudo apt install git build-essential libflac-dev python3 python3-pip python3-tk device-tree-compiler autoconf make g++ flex bison libfl2 libfl-dev zlib1g-dev help2man automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev gawk texinfo gperf libtool patchutils bc libexpat-dev ninja-build cmake libglib2.0-dev libslirp-dev repo`
 
 - **Python3 modules** `pip3 install pyelftools` (**Ubuntu 20.04**) or `sudo apt install python3-pyelftools` (**Ubuntu 24.04**)
 
