@@ -5,6 +5,20 @@ If you haven’t already, please refer to the [**simulation README**](../../simu
 
 > ⚠️ The following instructions are written for **Ubuntu 20.04 LTS** and **Ubuntu 24.04 LTS**. If you are using another Linux distribution or version, you can still follow the general steps, but you may need to make slight adjustments to install the required dependencies or tools.
 
+> 📝
+>
+> **Default tools location** for **Microchip** tools should be **/home/$USER/microchip/**. This path can be changed, but make sure to consistently use the paths matching your actual **Microchip** installation throughout this tutorial. 
+> Additionally, the following values in the [**setup_microchip_tools.sh**](../../../MPFS_DISCOVERY_KIT/scripts/setup_microchip_tools.sh) must be updated:
+>- **SC_INSTALL_DIR**	 : Path to the Soft Console installation directory.
+>- **LIBERO_INSTALL_DIR**: Path to the Libero installation directory.
+>- **LICENSE_DAEMON_DIR**: Path to the License Deamon executable.
+>- **LICENSE_FILE_DIR**	 : Path to the License directory.<br>
+> 
+> To ensure proper setup, please install the following packages:
+> ```bash
+> sudo apt install build-essential python3-tk device-tree-compiler
+> ```
+
 <br>
 <br>
 
@@ -69,21 +83,6 @@ To successfully run the simulation and tests, the following tools are required:
 - The Linux **ssh** command:  Required to communicate with the board over SSH.
 
 <br>
-
-> 📝
->
-> **Default tools location** for **Libero** and **SoftConsole** should be **/home/$USER/microchip/**. It can be changed, but the following values in the [**setup_microchip_tools.sh**](../../../MPFS_DISCOVERY_KIT/scripts/setup_microchip_tools.sh) must be updated:
->- **SC_INSTALL_DIR**	 : Path to the Soft Console installation directory.
->- **LIBERO_INSTALL_DIR**: Path to the Libero installation directory.
->- **LICENSE_DAEMON_DIR**: Path to the License Deamon executable.
->- **LICENSE_FILE_DIR**	 : Path to the License directory.<br>
->
-> To ensure proper installation behavior, make sure the following packages are installed:
-> ```bash
-> sudo apt install build-essential python3-tk device-tree-compiler
-> ```
-
-<br>
 <br>
 
 ### Libero SoC Design Suite
@@ -102,41 +101,6 @@ chmod +x Libero_SoC_2025.1_online_lin.sh
 Then, follow the instructions provided by the installer.
 
 > ⚠️ **Make sure to set the installation directory of Libero to `/home/$USER/microchip/Libero_SoC_2025.1` and the common directory path to `/home/$USER/microchip/common`.**
-
-> 📝 
-> 
-> After installation, run:  
-> ```bash
-> sudo /home/$USER/microchip/Libero_SoC_2025.1/Libero_SoC/Designer/bin/fp6_env_install  
-> ```
-> This script installs the required drivers and configures the environment for proper detection of the board’s FlashPro programmer.<br><br>
->
-> If the file exists, also run: 
-> - For **Ubuntu 24.04**:
-> ```bash
-> sudo apt install libflac-dev
-> sudo sh /home/$USER/microchip/Libero_SoC_2025.1/req_to_install.sh
-> ``` 
-> - For **Ubuntu 20.04**:
-> ```bash
-> sudo sh /home/$USER/microchip/Libero_SoC_2025.1/req_to_install.sh
-> ``` 
-> This script installs additional dependencies required by Libero.<br><br>
->
-> When attempting to download IP cores from Microchip via Libero on Ubuntu, you might encounter a CA certificate error like:  
-> `Downloading ...`
-> `INFO:Could not download the core ...`
->
-> The issue occurs when you're either offline or when Libero (and some tools like `curl`) look for CA certificates in `/etc/pki/tls/certs/`, while Ubuntu stores them in `/etc/ssl/certs/`.
->
-> In practice, on Ubuntu systems the CA store is located at `/etc/ssl/certs/ca-certificates.crt`, but Libero expects it under the Red Hat-style path `/etc/pki/tls/certs/ca-bundle.crt`.
->
-> To fix this, create the expected directory and add a symbolic link:
-> 
-> ```bash
-> sudo mkdir -p /etc/pki/tls/certs
-> sudo ln -s /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
-> ```
 
 <br>
 <br>
@@ -190,7 +154,95 @@ This Linux command is required to communicate with the board via Ethernet.
 To install it, use the following command:
 
 ```bash
-sudo apt-get install ssh
+sudo apt install ssh
+```
+
+<br>
+<br>
+
+### Post-install instructions
+
+After the installations, run:  
+```bash
+sudo /home/$USER/microchip/Libero_SoC_2025.1/Libero_SoC/Designer/bin/fp6_env_install  
+```
+
+This script installs the required drivers and configures the environment for proper detection of the board’s FlashPro programmer.
+<br>
+<br>
+
+also run: 
+- For **Ubuntu 24.04**:
+```bash
+sudo dpkg --add-architecture i386
+
+sudo apt update 
+
+sudo apt install -y libc6:i386 \
+                    libdrm2:i386 \
+                    libexpat1:i386 \
+                    libfontconfig1:i386 \
+                    libfreetype6:i386 \
+                    libglapi-mesa:i386 \
+                    libglib2.0-0t64:i386 \
+                    libgl1:i386 \
+                    libice6:i386 \
+                    libsm6:i386 \
+                    libuuid1:i386 \
+                    libx11-6:i386 \
+                    libx11-xcb1:i386 \
+                    libxau6:i386 \
+                    libxcb-dri2-0:i386 \
+                    libxcb-glx0:i386 \
+                    libxcb1:i386 \
+                    libxdamage1:i386 \
+                    libxext6:i386 \
+                    libxfixes3:i386 \
+                    libxrender1:i386 \
+                    libxxf86vm1:i386 \
+                    zlib1g:i386 \
+                    libflac12t64 \
+                    libpcre3 \
+                    libxcb-xinerama0 \
+                    libxcb-xinput0 \
+                    xfonts-intl-asian \
+                    xfonts-intl-chinese \
+                    xfonts-intl-chinese-big \
+                    xfonts-intl-japanese \
+                    xfonts-intl-japanese-big \
+                    ksh \
+                    libxft2:i386 \
+                    libgtk2.0-0t64:i386 \
+                    libcanberra-gtk-module:i386 \
+                    libfreetype-dev \
+                    libharfbuzz-dev
+
+find ~/Microchip/Libero_SoC_v2024.2 -name "libstdc++.so.6" -type f -delete
+
+find ~/Microchip/Libero_SoC_v2024.2 -name "libgcc_s.so.1" -type f -delete
+``` 
+
+- For **Ubuntu 20.04**, if the file exists:
+```bash
+sudo sh /home/$USER/microchip/Libero_SoC_2025.1/req_to_install.sh
+``` 
+
+This installs additional dependencies required by Libero and eventually applies correction for **Ubuntu 24.04**.
+<br>
+<br>
+
+When attempting to download IP cores from Microchip via Libero on Ubuntu, you might encounter a CA certificate error like:  
+`Downloading ...`
+`INFO:Could not download the core ...`
+The issue occurs when you're either offline or when Libero (and some tools like `curl`) look for CA certificates in `/etc/pki/tls/certs/`, while Ubuntu stores them in `/etc/ssl/certs/`.
+
+In practice, on Ubuntu systems the CA store is located at `/etc/ssl/certs/ca-certificates.crt`, but Libero expects it under the Red Hat-style path `/etc/pki/tls/certs/ca-bundle.crt`.
+
+To fix this, create the expected directory and add a symbolic link:
+
+```bash
+sudo mkdir -p /etc/pki/tls/certs
+sudo ln -s /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
 ```
 
 <br>
@@ -459,11 +511,11 @@ Copy one of the existing **send_mpfs_discovery_kit_xxx_firmware** rules and adap
 ```
 .PHONY: send_mpfs_discovery_kit_custom_firmware
 send_mpfs_discovery_kit_custom_firmware: custom_firmware
-	@echo "➡️  Running firmware sender script..."
-	@echo
-	@chmod +x $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)send_firmware.sh
-	@bash -c "$(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)send_firmware.sh $(CUSTOM_BUILD_DIR)firmware.hex custom.hex"
-	@echo "✅ Done."
+  @echo "➡️  Running firmware sender script..."
+  @echo
+  @chmod +x $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)send_firmware.sh
+  @bash -c "$(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)send_firmware.sh $(CUSTOM_BUILD_DIR)firmware.hex custom.hex"
+  @echo "✅ Done."
 ```
 
 You can now send your firmware to the board via SSH by running:
