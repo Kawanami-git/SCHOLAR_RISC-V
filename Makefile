@@ -653,11 +653,11 @@ ifdef program
 	@bash -c "program=1 && \
 	source $(MPFS_DISCOVERY_KIT_ROOT_DIR)/scripts/setup_microchip_tools.sh && \
 	cd $(MPFS_DISCOVERY_KIT_FPGA_DIR) && \
-	LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6 libero SCRIPT:MPFS_DISCOVERY_KIT_DESIGN.tcl"
+	libero SCRIPT:MPFS_DISCOVERY_KIT_DESIGN.tcl"
 else
 	@bash -c "source $(MPFS_DISCOVERY_KIT_ROOT_DIR)/scripts/setup_microchip_tools.sh && \
 	cd $(MPFS_DISCOVERY_KIT_FPGA_DIR) && \
-	LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6 libero SCRIPT:MPFS_DISCOVERY_KIT_DESIGN.tcl"
+	libero SCRIPT:MPFS_DISCOVERY_KIT_DESIGN.tcl"
 endif
 	@echo "✅ Done."
 
