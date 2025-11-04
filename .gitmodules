@@ -1,0 +1,3 @@
+[submodule "MPFS_DISCOVERY_KIT"]
+	path = MPFS_DISCOVERY_KIT
+	url = https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT.git
