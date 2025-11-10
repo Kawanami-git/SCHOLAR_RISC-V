@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Firmware build pipeline for SCHOLAR RISC-V (ELF → BIN/DUMP/HEX).
 # \author     Kawanami
-# \version    1.0
-# \date       04/11/2025
+# \version    1.1
+# \date       11/11/2025
 #
 # \details
 #   Invokes the RISC-V GNU toolchain to compile and link firmware sources,

@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.0
-# \date       04/11/2025
+# \version    1.1
+# \date       11/11/2025
 #
 # \details
 #   Drives the complete flow:
