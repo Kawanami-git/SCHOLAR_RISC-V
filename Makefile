@@ -34,6 +34,7 @@
 # | Version | Date       | Author     | Description         |
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 04/11/2025 | Kawanami   | Initial version.    |
+# | 1.1     | 11/11/2025 | Kawanami   | Update tools default directories.    |
 # ********************************************************************************
 # */
 
@@ -96,10 +97,10 @@ PLATFORM_DIR 					= $(SOFTWARE_DIR)/platform/
 SIM_FILES_DIR       			= $(ROOT_DIR)simulation/
 
 # Spike directory
-SPIKE_DIR           			= $(HOME)/Desktop/tools/spike/bin/
+SPIKE_DIR           			= /opt/spike/bin/
 
 # Verilator directory
-VERILATOR_DIR       			= $(HOME)/Desktop/tools/verilator/bin/
+VERILATOR_DIR       			= /opt/verilator/bin/
 
 # Working directory
 WORK_DIR            			= $(ROOT_DIR)work/
@@ -533,10 +534,6 @@ loader_firmware: firmware
 loader: FIRMWARE=loader
 loader: dut loader_firmware
 loader: run
-
-
-
-
 
 # Echo firmware target
 .PHONY: echo_firmware

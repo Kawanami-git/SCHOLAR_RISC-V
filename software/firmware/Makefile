@@ -36,6 +36,7 @@
 # | Version | Date       | Author     | Description         |
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 04/11/2025 | Kawanami   | Initial version.    |
+# | 1.1     | 11/11/2025 | Kawanami   | Update tools default directory.    |
 # ********************************************************************************
 # */
 
@@ -49,7 +50,7 @@ CPU_XLEN 	 			?= 32
 ROOT_DIR 				?= $(shell pwd)/
 
 # Path to gcc bin directory
-EGCC_DIR		  		?= $(HOME)/Desktop/tools/$(ISA)/bin/
+EGCC_DIR		  		?= /opt/riscv-gnu-toolchain/$(ISA)/bin/
 
 # gcc
 ECC 					?= $(EGCC_DIR)riscv$(CPU_XLEN)-unknown-elf-gcc
@@ -64,7 +65,7 @@ EOBJDUMP				?= $(EGCC_DIR)riscv$(CPU_XLEN)-unknown-elf-objdump
 EOBJCOPY				?= $(EGCC_DIR)riscv$(CPU_XLEN)-unknown-elf-objcopy
 
 # Path to libgcc
-ELIBGCC_DIR 			?= $(HOME)/Desktop/tools/$(ISA)/lib/gcc/riscv$(CPU_XLEN)-unknown-elf/14.2.0/
+ELIBGCC_DIR 			?= /opt/riscv-gnu-toolchain/$(ISA)/lib/gcc/riscv$(CPU_XLEN)-unknown-elf/14.2.0/
 
 # libgcc (static)
 ELGCC					?= $(ELIBGCC_DIR)libgcc.a
