@@ -398,6 +398,7 @@ help:
 	@printf "  %-35s %s\n" "format"               				"Format HDL & C/C++ sources"
 	@printf "  %-35s %s\n" "lint"                 				"Lint HDL"
 	@printf "  %-35s %s\n" "clean | clean_all"    				"Clean work dirs / purge work directory"
+	@printf "  %-35s %s\n" "mpfs_disco_kit_license"				"Activate Microchip License"
 	@printf "  %-35s %s\n" "mpfs_disco_kit_bitstream"   		"Build the bitstream for the MPFS DISCO KIT"
 	@printf "  %-35s %s\n" "mpfs_disco_kit_program_bitstream"   "Program the bitstream in the MPFS DISCO KIT"
 	@printf "  %-35s %s\n" "mpfs_disco_kit_hss"   				"Build the First Stage Bootoader for the MPFS DISCO KIT"
@@ -419,8 +420,8 @@ help:
 	@echo "  make isa XLEN=XLEN32"
 	@echo "  make cyclemark ITERATIONS=3"
 	@echo "  make documentation"
-	@echo "  make mpfs_disco_kit_setup"
-	@echo "  make mpfs_disco_kit_ssh"
+	@echo "  make mpfs_disco_kit_usb_setup"
+	@echo "  make mpfs_disco_kit_minicom"
 	@echo
 
 
@@ -616,6 +617,11 @@ run:
 
 
 #################################### MPFS_DISCOVERY_KIT ####################################
+# Activate Microchip License
+.PHONY: mpfs_disco_kit_license
+mpfs_disco_kit_license:
+	@$(MPFS_DISCOVERY_KIT_ROOT_DIR)/scripts/run_license_daemon.sh
+
 #Send a file through serial com
 .PHONY: uart_ft
 uart_ft:
