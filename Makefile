@@ -127,25 +127,25 @@ VERILATOR_LOG_DIR  				= $(VERILATOR_WORK_DIR)log/
 SIM_LOG_DIR						= $(WORK_DIR)simulation/
 
 # MPFS DISCOVERY KIT root directory
-MPFS_DISCOVERY_KIT_ROOT_DIR 	= MPFS_DISCOVERY_KIT/
+MPFS_DISCO_KIT_ROOT_DIR 		= MPFS_DISCOVERY_KIT/
 
 # MPFS DISCOVERY KIT scripts directory
-MPFS_DISCOVERY_KIT_SCRIPTS_DIR  = $(MPFS_DISCOVERY_KIT_ROOT_DIR)scripts/
+MPFS_DISCO_KIT_SCRIPTS_DIR  	= $(MPFS_DISCO_KIT_ROOT_DIR)scripts/
 
 # MPFS DISCOVERY KIT HSS directory
-MPFS_DISCOVERY_KIT_HSS_DIR  	= $(MPFS_DISCOVERY_KIT_ROOT_DIR)HSS/
+MPFS_DISCO_KIT_HSS_DIR  		= $(MPFS_DISCO_KIT_ROOT_DIR)HSS/
 
 # MPFS DISCOVERY KIT FPGA directory
-MPFS_DISCOVERY_KIT_FPGA_DIR 	= $(MPFS_DISCOVERY_KIT_ROOT_DIR)FPGA/
+MPFS_DISCO_KIT_FPGA_DIR 		= $(MPFS_DISCO_KIT_ROOT_DIR)FPGA/
 
 # MPFS DISCOVERY KIT Linux directory
-MPFS_DISCOVERY_KIT_LINUX_DIR	= $(MPFS_DISCOVERY_KIT_ROOT_DIR)Linux/
+MPFS_DISCO_KIT_LINUX_DIR		= $(MPFS_DISCO_KIT_ROOT_DIR)Linux/
 
 # MPFS DISCOVERY KIT yocto directory
-MPFS_DISCOVERY_KIT_YOCTO_DIR	= $(MPFS_DISCOVERY_KIT_LINUX_DIR)meta-mchp/
+MPFS_DISCO_KIT_YOCTO_DIR		= $(MPFS_DISCO_KIT_LINUX_DIR)meta-mchp/
 
 # MPFS DISCOVERY KIT meta files directory
-MPFS_DISCOVERY_KIT_LAYER_DIR	= $(MPFS_DISCOVERY_KIT_LINUX_DIR)meta-scholar-risc-v/
+MPFS_DISCO_KIT_LAYER_DIR		= $(MPFS_DISCO_KIT_LINUX_DIR)meta-scholar-risc-v/
 
 # MPFS_DISCOVERY_KIT board directory
 MPFS_DISCO_KIT_BOARD			= $(WORK_DIR)board/
@@ -362,8 +362,10 @@ endif
 
 
 #################################### MPFS DISCOVERY KIT ####################################
+MPFS_DISCO_KIT_LINUX_LINK=https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/core-image-custom-mpfs-disco-kit.rootfs-20251104145941.wic
+MPFS_DISCO_KIT_SDK_LINK=https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/sdk.zip
 # Environnement for MPFS_DISCOVERY_KIT cross-compilation
-SDK_ENV ?= $(WORK_DIR)$(MPFS_DISCOVERY_KIT_LINUX_DIR)sdk/environment-setup-riscv64-oe-linux
+SDK_ENV ?= $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk/environment-setup-riscv64-oe-linux
 
 # Helper to activate the MPFS_DISCOVERY_KIT environment before running the build
 SDK_ACTIVATE = . "$(SDK_ENV)" &&
@@ -404,6 +406,7 @@ help:
 	@printf "  %-35s %s\n" "mpfs_disco_kit_hss"   				"Build the First Stage Bootoader for the MPFS DISCO KIT"
 	@printf "  %-35s %s\n" "mpfs_disco_kit_program_hss"   		"Program the HSS in the MPFS DISCO KIT"
 	@printf "  %-35s %s\n" "mpfs_disco_kit_linux"   			"Build the Linux for the MPFS DISCO KIT"
+	@printf "  %-35s %s\n" "mpfs_disco_kit_get_linux"   		"Retreive the Linux for the MPFS DISCO KIT"
 	@printf "  %-35s %s\n" "mpfs_disco_kit_program_linux"   	"Program the Linux in the SD card"
 	@printf "  %-35s %s\n" "mpfs_disco_kit_ssh_setup"   			"Setup the MPFS DISCO KIT with all the necessary files to run 'loader', 'echo' & 'cyclemark' on the board through ssh"
 	@printf "  %-35s %s\n" "mpfs_disco_kit_usb_setup"   			"Setup the MPFS DISCO KIT with all the necessary files to run 'loader', 'echo' & 'cyclemark' on the board through usb"
@@ -620,7 +623,7 @@ run:
 # Activate Microchip License
 .PHONY: mpfs_disco_kit_license
 mpfs_disco_kit_license:
-	@$(MPFS_DISCOVERY_KIT_ROOT_DIR)/scripts/run_license_daemon.sh
+	@$(MPFS_DISCO_KIT_ROOT_DIR)/scripts/run_license_daemon.sh
 
 #Send a file through serial com
 .PHONY: uart_ft
@@ -637,8 +640,8 @@ uart_ft:
 mpfs_disco_kit_bitstream: work
 	@echo "➡️  Running bitstream building script..."
 	@echo
-	@bash -c "source $(MPFS_DISCOVERY_KIT_ROOT_DIR)/scripts/setup_microchip_tools.sh && \
-	cd $(MPFS_DISCOVERY_KIT_FPGA_DIR) && \
+	@bash -c "source $(MPFS_DISCO_KIT_ROOT_DIR)/scripts/setup_microchip_tools.sh && \
+	cd $(MPFS_DISCO_KIT_FPGA_DIR) && \
 	libero SCRIPT:MPFS_DISCOVERY_KIT_DESIGN.tcl SCRIPT_ARGS:ARCHI:$(CPU_XLEN)"
 	@echo "✅ Done."
 
@@ -648,8 +651,8 @@ mpfs_disco_kit_program_bitstream: work
 	@echo "➡️  Running bitstream building and programming script..."
 	@echo
 	@bash -lc 'export program=1; \
-		source "$(MPFS_DISCOVERY_KIT_ROOT_DIR)/scripts/setup_microchip_tools.sh"; \
-		cd "$(MPFS_DISCOVERY_KIT_FPGA_DIR)"; \
+		source "$(MPFS_DISCO_KIT_ROOT_DIR)/scripts/setup_microchip_tools.sh"; \
+		cd "$(MPFS_DISCO_KIT_FPGA_DIR)"; \
 		libero SCRIPT:MPFS_DISCOVERY_KIT_DESIGN.tcl SCRIPT_ARGS:ARCHI:$(CPU_XLEN)'
 	@echo "✅ Done."
 
@@ -657,7 +660,7 @@ mpfs_disco_kit_program_bitstream: work
 .PHONY: clean_mpfs_disco_kit_bitstream
 clean_mpfs_disco_kit_bitstream:
 	@echo "➡️  Cleaning bitstream directories..."
-	@cd $(WORK_DIR) && rm -rf $(MPFS_DISCOVERY_KIT_FPGA_DIR)
+	@cd $(WORK_DIR) && rm -rf $(MPFS_DISCO_KIT_FPGA_DIR)
 	@echo "✅ Done."
 
 # MPFS_DISCO_KIT: Build the Hart Software Service (First Stage Bootloader)
@@ -665,7 +668,7 @@ clean_mpfs_disco_kit_bitstream:
 mpfs_disco_kit_hss: work
 	@echo "➡️  Running HSS building script..."
 	@echo
-	@bash $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)build_hss.sh $(WORK_DIR) $(MPFS_DISCOVERY_KIT_HSS_DIR) $(MPFS_DISCOVERY_KIT_ROOT_DIR) $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)
+	@bash $(MPFS_DISCO_KIT_SCRIPTS_DIR)build_hss.sh $(WORK_DIR) $(MPFS_DISCO_KIT_HSS_DIR) $(MPFS_DISCO_KIT_ROOT_DIR) $(MPFS_DISCO_KIT_SCRIPTS_DIR)
 	@echo "✅ Done."
 
 # MPFS_DISCO_KIT: Program the Hart Software Service
@@ -673,14 +676,14 @@ mpfs_disco_kit_hss: work
 mpfs_disco_kit_program_hss: work
 	@echo "➡️  Running HSS building and programming script..."
 	@echo
-	@bash $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)build_hss.sh $(WORK_DIR) $(MPFS_DISCOVERY_KIT_HSS_DIR) $(MPFS_DISCOVERY_KIT_ROOT_DIR) $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR) program=1
+	@bash $(MPFS_DISCO_KIT_SCRIPTS_DIR)build_hss.sh $(WORK_DIR) $(MPFS_DISCO_KIT_HSS_DIR) $(MPFS_DISCO_KIT_ROOT_DIR) $(MPFS_DISCO_KIT_SCRIPTS_DIR) program=1
 	@echo "✅ Done."
 
 # MPFS_DISCO_KIT: Clean the Hart Software Service clean
 .PHONY: clean_mpfs_disco_kit_hss
 clean_mpfs_disco_kit_hss:
 	@echo "➡️  Cleaning HSS directories..."
-	@cd $(WORK_DIR) && rm -rf $(MPFS_DISCOVERY_KIT_HSS_DIR)
+	@cd $(WORK_DIR) && rm -rf $(MPFS_DISCO_KIT_HSS_DIR)
 	@echo "✅ Done."
 
 # MPFS_DISCO_KIT: Build the Linux
@@ -688,8 +691,16 @@ clean_mpfs_disco_kit_hss:
 mpfs_disco_kit_linux: work
 	@echo "➡️  Running Linux building script..."
 	@echo
-	@bash $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)build_linux.sh $(WORK_DIR) $(MPFS_DISCOVERY_KIT_LINUX_DIR) $(MPFS_DISCOVERY_KIT_YOCTO_DIR) $(MPFS_DISCOVERY_KIT_LAYER_DIR)
+	@bash $(MPFS_DISCO_KIT_SCRIPTS_DIR)build_linux.sh $(WORK_DIR) $(MPFS_DISCO_KIT_LINUX_DIR) $(MPFS_DISCO_KIT_YOCTO_DIR) $(MPFS_DISCO_KIT_LAYER_DIR)
 	@echo "✅ Done."
+
+# Get Microchip Linux image and sdk
+.PHONY: mpfs_disco_kit_get_linux
+mpfs_disco_kit_get_linux: work
+	@wget $(MPFS_DISCO_KIT_LINUX_LINK) $(MPFS_DISCO_KIT_LINUX_DIR)
+	@wget $(MPFS_DISCO_KIT_SDK_LINK) $(MPFS_DISCO_KIT_LINUX_DIR)
+	cd $(MPFS_DISCO_KIT_LINUX_DIR) && unzip $(MPFS_DISCO_KIT_LINUX_DIR)sdk.zip
+
 
 # MPFS_DISCO_KIT: Program the Linux
 .PHONY: mpfs_disco_kit_program_linux
@@ -697,9 +708,9 @@ mpfs_disco_kit_program_linux:
 	@echo "➡️  Running Linux programming script..."
 	@echo
 ifdef path
-	@bash $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)program_linux.sh $(path)
+	@bash $(MPFS_DISCO_KIT_SCRIPTS_DIR)program_linux.sh $(path)
 else
-	@bash $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)program_linux.sh $(WORK_DIR)$(MPFS_DISCOVERY_KIT_LINUX_DIR)core-image-custom-mpfs-disco-kit.rootfs-*.wic
+	@bash $(MPFS_DISCO_KIT_SCRIPTS_DIR)program_linux.sh $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)core-image-custom-mpfs-disco-kit.rootfs-*.wic
 endif
 	@echo "✅ Done."
 
@@ -707,7 +718,7 @@ endif
 .PHONY: clean_mpfs_disco_kit_linux
 clean_mpfs_disco_kit_linux:
 	@echo "➡️  Cleaning Linux directories..."
-	@cd $(WORK_DIR) && rm -rf $(MPFS_DISCOVERY_KIT_YOCTO_DIR)
+	@cd $(WORK_DIR) && rm -rf $(MPFS_DISCO_KIT_YOCTO_DIR)
 	@echo "✅ Done."
 
 # MPFS_DISCO_KIT: Establish an SSH connection
@@ -760,7 +771,7 @@ mpfs_disco_kit_usb_setup:
 libero:
 	@echo "➡️  Running Libero..."
 	@echo
-	@bash -c "source $(MPFS_DISCOVERY_KIT_SCRIPTS_DIR)setup_microchip_tools.sh && libero"
+	@bash -c "source $(MPFS_DISCO_KIT_SCRIPTS_DIR)setup_microchip_tools.sh && libero"
 	@echo "✅ Done."
 
 
