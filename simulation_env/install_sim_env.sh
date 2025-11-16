@@ -5,8 +5,8 @@
 # \file       install_sim_env.sh
 # \brief      One-shot setup for the simulation toolchain (Verilator, GCC, Spike).
 # \author     Kawanami
-# \version    1.0
-# \date       11/11/2025
+# \version    1.1
+# \date       16/11/2025
 #
 # \details
 #   Installs system dependencies and builds from source the following tools:
@@ -25,6 +25,7 @@
 # | Version | Date       | Author     | Description      |
 # |:-------:|:----------:|:-----------|:-----------------|
 # | 1.0     | 11/11/2025 | Kawanami   | Initial version. |
+# | 1.1     | 16/11/2025 | Kawanami   | Add 'graphviz' package for doxygen. |
 # ********************************************************************************
 # */
 
@@ -32,7 +33,7 @@
 sudo apt update
 
 # --- Documentation tools (Doxygen for code docs) --------------------------------
-sudo apt install -y doxygen
+sudo apt install -y doxygen graphviz
 
 # --- Python & helpers (pyelftools/yaml used by build/util scripts) --------------
 sudo apt install -y \

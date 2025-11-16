@@ -5,8 +5,8 @@
 # \file       install_microchip_env.sh
 # \brief      Automated installer for Microchip Libero/SoftConsole + Yocto deps.
 # \author     Kawanami
-# \version    1.0
-# \date       11/11/2025
+# \version    1.1
+# \date       16/11/2025
 #
 # \details
 #   Installs system dependencies and runs the unattended installers for:
@@ -25,6 +25,7 @@
 # | Version | Date       | Author     | Description      |
 # |:-------:|:----------:|:-----------|:-----------------|
 # | 1.0     | 11/11/2025 | Kawanami   | Initial version. |
+# | 1.1     | 16/11/2025 | Kawanami   | Add missing librairies to drive usb (libusb).<br> Add missing chmod to be able to execute Libero_SoC_2025.1_online_lin.bin. |
 # ********************************************************************************
 # */
 
@@ -51,7 +52,6 @@ sudo apt update
 
 # --- Libero package/runtime prerequisites (general) -----------------------------
 sudo apt install -y \
-      sudo \
       desktop-file-utils \
       udev \
       ca-certificates \
@@ -60,7 +60,11 @@ sudo apt install -y \
       curl \
       xdg-utils \
       build-essential \
-      lsb-release
+      lsb-release \
+      libusb-1.0-0 \
+      libusb-1.0-0-dev \
+      libusb-0.1-4 \
+      usbutils
 
 # Locales (Libero GUIs sometimes expect en_US.UTF-8)
 sudo apt install -y locales && \
@@ -135,6 +139,7 @@ wget https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-1
 
 # --- Run Libero unattended installer -------------------------------------------
 chmod +x "$LIBERO_INSTALL_SCRIPT"
+chmod +x Libero_SoC_2025.1_online_lin.bin
 ./"$LIBERO_INSTALL_SCRIPT" \
       --verbose \
       --accept-licenses \
