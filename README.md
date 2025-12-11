@@ -234,6 +234,11 @@ Install the simulation environment:
 make install_sim_env
 ```
 
+And eventually the Microchip environment:
+```bash
+make install_microchip_env
+```
+
 Check out the desired branch (example: Single-Cycle):
 ```bash
 git checkout Single-Cycle
