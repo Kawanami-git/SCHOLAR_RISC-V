@@ -232,7 +232,13 @@ make mpfs_disco_kit_program_hss
 <br>
 
 ## Building and Programming the FPGA Bitstream
-The FPGA bitstream can be built using the following command:
+
+First, the Microchip license must be activated:
+```bash
+make mpfs_disco_kit_license
+```
+
+Then, the FPGA bitstream can be built using the following command:
 
 ```bash
 make mpfs_disco_kit_bitstream
