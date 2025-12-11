@@ -5,8 +5,8 @@
 # \file       Makefile
 # \brief      Makefile targets to install environments and change branches
 # \author     Kawanami
-# \version    1.0
-# \date       11/11/2025
+# \version    1.1
+# \date       11/12/2025
 #
 # \details
 #   Run the installers using 'make install_sim_env' or 
@@ -19,8 +19,12 @@
 # | Version | Date       | Author     | Description      |
 # |:-------:|:----------:|:-----------|:-----------------|
 # | 1.0     | 11/11/2025 | Kawanami   | Initial version. |
+# | 1.1     | 11/12/2025 | Kawanami   | Add a default target. |
 # ********************************************************************************
 # */
+
+.PHONY: default
+default: install_sim_env install_microchip_env
 
 .PHONY: install_sim_env
 install_sim_env:
