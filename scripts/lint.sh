@@ -5,8 +5,8 @@
 # \file       lint.sh
 # \brief      Lint Verilog/SystemVerilog sources with Verible.
 # \author     Kawanami
-# \version    1.0
-# \date       26/10/2025
+# \version    1.1
+# \date       11/12/2025
 #
 # \details
 #   Discovers repository-tracked HDL sources (*.sv, *.svh, *.v) and runs
@@ -20,6 +20,7 @@
 # | Version | Date       | Author   | Description      |
 # |:-------:|:----------:|:---------|:-----------------|
 # | 1.0     | 26/10/2025 | Kawanami | Initial version. |
+# | 1.1     | 11/12/2025 | Kawanami | Add filter to only apply to modified/added files.    |
 # ********************************************************************************
 # */
 
@@ -29,9 +30,12 @@ set -euo pipefail
 
 RULES_FILE="scripts/verible_lint.rules"
 
-mapfile -t FILES < <(git ls-files '*.sv' '*.svh' '*.v')
+mapfile -t FILES < <(
+  git ls-files -m -o --exclude-standard -- '*.sv' '*.svh' '*.v'
+)
+
 if (( ${#FILES[@]} == 0 )); then
-  echo "No Verilog/SystemVerilog files to lint."
+  echo "No modified/untracked Verilog/SystemVerilog files to lint."
   exit 0
 fi
 

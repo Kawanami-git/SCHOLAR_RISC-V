@@ -3,13 +3,13 @@
 # /*!
 # ********************************************************************************
 # \file       format_hdl.sh
-# \brief      Format Verilog/SystemVerilog sources deterministically with Verible.
+# \brief      Format Verilog/SystemVerilog modified/added sources deterministically with Verible.
 # \author     Kawanami
-# \version    1.0
-# \date       26/10/2025
+# \version    1.1
+# \date       11/12/2025
 #
 # \details
-#   Discovers repository-tracked HDL sources (*.sv, *.svh, *.v) and formats them
+#   Discovers modified/added HDL sources (*.sv, *.svh, *.v) and formats them
 #   in-place using `verible-verilog-format` with the project’s flagfile.
 #
 # \remarks
@@ -20,17 +20,23 @@
 # | Version | Date       | Author   | Description      |
 # |:-------:|:----------:|:---------|:-----------------|
 # | 1.0     | 26/10/2025 | Kawanami | Initial version. |
+# | 1.1     | 11/12/2025 | Kawanami | Add filter to only apply to modified/added files.    |
 # ********************************************************************************
 # */
 
 set -euo pipefail
-# Format all Verilog/SystemVerilog sources deterministically.
-# Requires: verible-verilog-format in PATH.
 
-mapfile -t FILES < <(git ls-files '*.sv' '*.svh' '*.v')
+mapfile -t FILES < <(
+  git ls-files -m -o --exclude-standard -- '*.sv' '*.svh' '*.v'
+)
+
 if (( ${#FILES[@]} == 0 )); then
-  echo "No Verilog/SystemVerilog files to format."
+  echo "No modified/untracked Verilog/SystemVerilog files to format."
   exit 0
 fi
 
-./scripts/verible-verilog-format --flagfile=./scripts/verible_format.flags --inplace "${FILES[@]}"
+./scripts/verible-verilog-format \
+  --flagfile=./scripts/verible_format.flags \
+  --inplace \
+  --failsafe_success \
+  "${FILES[@]}"

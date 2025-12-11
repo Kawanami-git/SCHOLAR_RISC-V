@@ -3,48 +3,38 @@
 # /*!
 # ********************************************************************************
 # \file       format_cxx.sh
-# \brief      Format staged C/C++ files with clang-format and re-stage them.
+# \brief      Format modified/added C/C++ files with clang-format.
 # \author     Kawanami
-# \version    1.0
-# \date       26/10/2025
+# \version    1.1
+# \date       11/12/2025
 #
 # \details
-#   Finds files currently staged in Git whose extensions match common C/C++
-#   suffixes and applies `clang-format -i` to them. Successfully formatted
-#   files are re-staged to keep the index in sync.
+#   Finds files currently modified or added in Git whose extensions match common C/C++
+#   suffixes and applies `clang-format -i` to them.
 #
 # \remarks
-#   - Operates only on **staged** files (ACMR filter).
+#   - Operates only on **modified** or **added** files.
 #   - Requires `clang-format` to be available in PATH.
 #
 # \section format_cxx_sh_version_history Version history
 # | Version | Date       | Author   | Description         |
 # |:-------:|:----------:|:---------|:--------------------|
 # | 1.0     | 26/10/2025 | Kawanami | Initial version.    |
+# | 1.1     | 11/12/2025 | Kawanami | Add filter to only apply to modified/added files.    |
 # ********************************************************************************
 # */
 
 set -euo pipefail
 
-# Format only staged C/C++ files and re-stage them.
-EXTS="c cc cpp cxx h hh hpp hxx"
-
-mapfile -t CANDIDATES < <(git diff --cached --name-only --diff-filter=ACMR || true)
-FILES=()
-for f in "${CANDIDATES[@]}"; do
-  [[ -f "$f" ]] || continue
-  ext="${f##*.}"
-  for e in $EXTS; do
-    if [[ "$ext" == "$e" ]]; then
-      FILES+=("$f")
-      break
-    fi
-  done
-done
+mapfile -t FILES < <(
+  git ls-files -m -o --exclude-standard -- '*.c' '*.cpp' '*.h' '*.hpp'
+)
 
 if (( ${#FILES[@]} == 0 )); then
-  echo "No staged C/C++ files to format."
+  echo "No modified/untracked C/C++ files to format."
   exit 0
 fi
 
 clang-format -i -style=file:scripts/clang-format.flags "${FILES[@]}"
+
+
