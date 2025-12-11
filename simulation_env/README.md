@@ -43,28 +43,34 @@ This environment is available in the different branches of the project, each one
 
 Users will find, in the header of each file, information about the file's purpose. Therefore, only a brief overview is provided here:
 
-- **[`hardware/`](./hardware/)**  
+- **hardware**  
   Main directory holding the RTL design of the SCHOLAR RISC-V core as well as its environment.
 
-  - **[`core/`](./hardware/core/)**  
+  - **core**  
   Verilog source files implementing the SCHOLAR RISC-V processor core.
 
-  - **[`env/`](./hardware/env/)**  
+  - **env**  
   Environment used to simulate and validate the core's functionality.
 
-- **[`software/`](./software/)**  
+- **software**  
   Contains both the firmware runnable on the SCHOLAR RISC-V core and the host-side tools to interact with the environment.
 
-  - **[`firmware/`](./software/firmware/)**  
+  - **firmware**  
   Bare-metal firmware to run on the SCHOLAR RISC-V core.
 
-  - **[`platform/`](./software/platform/)**  
+  - **platform**  
   Host-side software used to communicate with or control the simulation or FPGA platform.
 
-- **[`simulation/`](./simulation/)**  
+- **simulation**  
   C++-based simulation infrastructure used to:
   - Compare the SCHOLAR RISC-V core execution against **Spike** (the official RISC-V ISA simulator).  
   - Run standalone firmware binaries for functional and performance evaluation.
+
+- **scripts**  
+  Usefull scripts use to format files, generate documentations, generate and .hex firmware from an .elf one, etc.
+
+- **img**  
+  Images used in the README.md of the branch.
 
 <br>
 <br>
