@@ -15,11 +15,12 @@ All contributors must follow these rules. Automated formatters/linters are recom
 
 ## 1. Repository Layout
 
-- RTL sources under `hardware/`
+- RTL under `hardware/`
 - Simulation under `simulation/`
 - Platform software under `software/platform/`
 - Firmware under `software/firmware/`
 - Scripts under `scripts/`
+- Images under `img/`
 - Any generated file under `work/`
 
 Use **lowercase_with_underscores** for filenames. One logical unit per file (e.g., 1 module, 1 class, 1 component).
@@ -62,8 +63,8 @@ endmodule
   - Inputs: suffix `_i`  
   - Outputs: suffix `_o`  
   - Inouts: suffix `_io`  
-  - Registered outputs: `_q`  
-  - Next-state signals: `_d`  
+  - Registered signals: `_q`  
+  - Delayed signals: `_d`  
 - **Clock / reset**:  
   - Clock: `clk_i`  
   - Reset: `rstn_i` (active low, synchronous release)  
@@ -149,7 +150,12 @@ initial begin : param_checks
 end
 ```
 
-### A.8 Documentation
+### A.8 Warnings
+All warnings must be documented. A detailed explanation must be provided to describe why each warning has been ignored.
+
+This documentation shall appear in the README.md file of each branch.
+
+### A.9 Documentation
 - English comments.
 - Doxygen-compatible comments (`///` or `/*! ... */`) for parameters/ports.
 - Each file starts with banner:
