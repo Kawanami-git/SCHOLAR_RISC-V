@@ -1,3 +1,6 @@
 [submodule "MPFS_DISCOVERY_KIT"]
 	path = MPFS_DISCOVERY_KIT
 	url = https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT.git
+[submodule "scripts"]
+	path = scripts
+	url = https://github.com/Kawanami-git/scripts.git
