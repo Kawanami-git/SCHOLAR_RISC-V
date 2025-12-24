@@ -5,8 +5,8 @@
 # \file       install_microchip_env.sh
 # \brief      Automated installer for Microchip Libero/SoftConsole + Yocto deps.
 # \author     Kawanami
-# \version    1.1
-# \date       16/11/2025
+# \version    1.2
+# \date       24/12/2025
 #
 # \details
 #   Installs system dependencies and runs the unattended installers for:
@@ -26,6 +26,7 @@
 # |:-------:|:----------:|:-----------|:-----------------|
 # | 1.0     | 11/11/2025 | Kawanami   | Initial version. |
 # | 1.1     | 16/11/2025 | Kawanami   | Add missing librairies to drive usb (libusb).<br> Add missing chmod to be able to execute Libero_SoC_2025.1_online_lin.bin. |
+# | 1.2     | 24/12/2025 | Kawanami   | Update libero install with 2025.2. |
 # ********************************************************************************
 # */
 
@@ -37,8 +38,8 @@ version="${VERSION_ID:-unknown}"
 MICROCHIP_DIR=/opt/microchip
 
 # --- Libero installer & layout -------------------------------------------------
-LIBERO_INSTALL_SCRIPT=Libero_SoC_2025.1_online_lin.sh
-LIBERO_INSTALL_DIR=$MICROCHIP_DIR/Libero_SoC_2025.1
+LIBERO_INSTALL_SCRIPT=Libero_SoC_2025.2_online_lin.sh
+LIBERO_INSTALL_DIR=$MICROCHIP_DIR/Libero_SoC_2025.2
 LIBERO_INSTALL_COMMON_DIR=$HOME/.local/share/microchip/common
 # Pick only the components you need; these match Libero’s internal IDs
 LIBERO_COMPONENTS="Libero_SoC Program_Debug MegaVault PFSoC_MSS_Configurator"
@@ -134,12 +135,12 @@ sudo mkdir -p "$MICROCHIP_DIR"
 sudo chown -R "$USER":"$USER" "$MICROCHIP_DIR"
 
 # --- Retreive installers -------------------------------------------------------
-wget https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/Libero_SoC_2025.1_online_lin.sh
-wget https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/Libero_SoC_2025.1_online_lin.bin
+wget https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/Libero_SoC_2025.2_online_lin.sh
+wget https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/Libero_SoC_2025.2_online_lin.bin
 
 # --- Run Libero unattended installer -------------------------------------------
 chmod +x "$LIBERO_INSTALL_SCRIPT"
-chmod +x Libero_SoC_2025.1_online_lin.bin
+chmod +x Libero_SoC_2025.2_online_lin.bin
 ./"$LIBERO_INSTALL_SCRIPT" \
       --verbose \
       --accept-licenses \
@@ -205,6 +206,7 @@ else
       find "$LIBERO_INSTALL_DIR" -name "libstdc++.so.6" -type f -delete
       find "$LIBERO_INSTALL_DIR" -name "libgcc_s.so.1" -type f -delete
 fi
+
 
 # --- UART/XMODEM helpers for board transfer over serial -------------------------
 sudo apt install -y \
