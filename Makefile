@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.1
-# \date       11/11/2025
+# \version    1.2
+# \date       23/12/2025
 #
 # \details
 #   Drives the complete flow:
@@ -35,6 +35,7 @@
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 04/11/2025 | Kawanami   | Initial version.    |
 # | 1.1     | 11/11/2025 | Kawanami   | Update tools default directories.    |
+# | 1.2     | 23/12/2025 | Kawanami   | Fix Linux/sdk fetching.    |
 # ********************************************************************************
 # */
 
@@ -697,9 +698,9 @@ mpfs_disco_kit_linux: work
 # Get Microchip Linux image and sdk
 .PHONY: mpfs_disco_kit_get_linux
 mpfs_disco_kit_get_linux: work
-	@wget $(MPFS_DISCO_KIT_LINUX_LINK) $(MPFS_DISCO_KIT_LINUX_DIR)
-	@wget $(MPFS_DISCO_KIT_SDK_LINK) $(MPFS_DISCO_KIT_LINUX_DIR)
-	cd $(MPFS_DISCO_KIT_LINUX_DIR) && unzip $(MPFS_DISCO_KIT_LINUX_DIR)sdk.zip
+	@wget -P $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(MPFS_DISCO_KIT_LINUX_LINK)
+	@wget -P $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(MPFS_DISCO_KIT_SDK_LINK)
+	@unzip -d $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk.zip
 
 
 # MPFS_DISCO_KIT: Program the Linux
