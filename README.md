@@ -96,7 +96,8 @@ Parts of this repository (**CycleMark**) are derived from **CoreMark**, which is
 
 **SCHOLAR_RISC‑V** is a learning‑oriented project that walks through the building blocks of a processor using the **RISC‑V architecture** as a foundation. It serves both as a reference and a hands‑on exploration of design, architecture, and optimization.
 
-The repository is organized into multiple branches, each focused on a specific evolution that improves the processor. Every branch includes detailed explanations of *what* was done, *why* it was done, and *what’s next*. Branches are connected in sequence so you can follow the core’s progression.
+The repository is organized into multiple branches, each focused on a specific evolution that improves the processor. Every branch includes detailed explanations of *what* was done, *why* it was done, and *what’s next*. Branches are connected in sequence so you can follow the core’s progression.<br>
+However, each branch is versioned independently. As a result, files that exist in multiple branches may differ from one branch to another.
 
 The initial branch provides the most basic implementation — a **single‑cycle**, **single‑issue** core supporting **RV32I and RV64I**, with `mcycle` CSR (Zicntr) for CycleMark benchmarking. This branch forms the minimum functional/performance baseline and a clear starting point before exploring more advanced microarchitectural features.
 
@@ -173,7 +174,8 @@ The repository follows a microarchitecture‑based branching model:
 Documentation is split between the **main** branch and the **development** branches:
 
 - The **main** branch describes the project, organization, and environment setup.  
-- Each **development** branch documents the specific feature implemented there. Doxygen can be generated with:
+- Each **development** branch documents the specific feature implemented there and also support Doxygen documentation.<br>
+Doxygen documentation can be generated with:
   ```bash
   make documentation
   ```
@@ -192,9 +194,9 @@ Documentation is split between the **main** branch and the **development** branc
 
 ## Dependencies
 
-This project is developed on **Ubuntu 20.04 LTS** to match Microchip’s toolchain. Adjustments are provided for **Ubuntu 24.04 LTS**. Other Ubuntu versions are fine for **simulation** only.
+This project is developed on **Ubuntu 24.04 LTS**. Other Ubuntu versions are fine for **simulation** only.
 
-To build a bitstream and run on the PolarFire SoC/FPGA (**MPFS Discovery Kit**), you must use a supported Ubuntu version: **20.04 LTS** or **24.04 LTS**.
+To build a bitstream and run on the PolarFire SoC/FPGA (**MPFS Discovery Kit**), you must use a supported Ubuntu version: **24.04 LTS**.
 
 ### Simulation Environment
 
