@@ -4,7 +4,7 @@
 \file       csr.sv
 \brief      SCHOLAR RISC-V core control/status registers file module
 \author     Kawanami
-\date       23/09/2025
+\date       29/12/2025
 \version    1.1
 
 \details
@@ -14,10 +14,11 @@
   It currently supports only the `mcycle` register,
   which counts the number of cycles since reset.
   According to the RISC-V specification, `mcycle` can be accessed through:
-    - Address 0xC00 → lower 32 bits (LSB)
-    - Address 0xC80 → upper 32 bits (MSB)
+    - Address 0xB00 → lower 32 bits (LSB)
+    - Address 0xB80 → upper 32 bits (MSB)
 
-  For simplicity, this implementation only provides access
+  For simplicity, for the 32-bit architecture,
+  this implementation only provides access
   to the lower 32 bits (`mcycle[31:0]`), and this value
   is returned through the `csr_val_o` output regardless of the address used.
 
@@ -33,6 +34,7 @@
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 23/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 29/12/2025 | Kawanami   | Update header documentation. |
 ********************************************************************************
 */
 module csr #(
