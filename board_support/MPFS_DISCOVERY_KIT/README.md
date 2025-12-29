@@ -278,11 +278,19 @@ Use one of the following commands to set up the board with either the USB or the
 
 ```bash
 make mpfs_disco_kit_ssh_setup
-
+```
+```bash
 make mpfs_disco_kit_usb_setup
 ```
+
 These commands will compile all the firmware (loader, echo, cyclemark) and the software allowing to load firmware in the RISC-V softcore and to communicate with them.<br>
 It will also copy the built binaries to the board and a Makefile.
+
+> 📝
+>
+> Please note that setting up the boad using usb requires root access for ttyUSBx.<br>
+> Default ttyUSB used is ttyUSB0. It can be changed in the branch Makefile through the variable **TTYUSB**.
+
 
 <br>
 <br>
@@ -297,6 +305,11 @@ Through a USB session:
 ```bash
 make mpfs_disco_kit_minicom
 ```
+
+> 📝
+>
+> Please note that establishing a session through usb requires root access for ttyUSBx.<br>
+> Default ttyUSB used is ttyUSB0. It can be changed in the branch Makefile through the variable **TTYUSB**.
 
 <br>
 <br>
