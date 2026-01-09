@@ -128,7 +128,12 @@ The repository follows a microarchitecture‑based branching model:
 
 | **Branch**       | **Features** | **CycleMark/MHz** | **FPGA (PolarFire MPFS095T)** |
 |------------------|--------------|-------------------|-------------------------------|
-| `Single-Cycle`   | Single‑cycle, single‑issue core; RV32I/RV64I; `mcycle` (Zicntr) | 1.24 | LEs: 3132 (1061 FFs)<br>Fmax: 69 MHz<br>uSRAM: 0 / LSRAM: 0<br>Math blocks: 0 |
+| `Single-Cycle`   | Single‑cycle, single‑issue core; **RV32I/RV64I + `mcycle` (Zicntr)** | 1.24 | LEs: 3132 (1061 FFs)<br>Fmax: 69 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| `pipeline`   | pipelined single‑issue core; **RV32I/RV64I + `CSR*` (Zicntr)** | 0.55 | LEs: 1999 (702 FFs)<br>Fmax: 120 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
+
+> 📝
+>
+> `CSR*`: `mcycle`, `mhpmcounter3` (data hazard counter) and `mhpmcounter4` (branch counter).
 
 <br>
 <br>
