@@ -5,8 +5,8 @@
 \brief      Dual-Port RAM (simulation model + vendor-backed instantiation)
 
 \author     Kawanami
-\date       16/10/2025
-\version    1.1
+\date       19/12/2025
+\version    1.0
 
 \details
   Educational dual-port RAM with two operating modes:
@@ -36,7 +36,6 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/06/2025 | Kawanami   | Initial version of the module.            |
-| 1.1     | 16/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 ********************************************************************************
 */
 

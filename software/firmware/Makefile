@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Firmware build pipeline for SCHOLAR RISC-V (ELF → BIN/DUMP/HEX).
 # \author     Kawanami
-# \version    1.1
-# \date       11/11/2025
+# \version    1.0
+# \date       19/12/2025
 #
 # \details
 #   Invokes the RISC-V GNU toolchain to compile and link firmware sources,
@@ -36,7 +36,6 @@
 # | Version | Date       | Author     | Description         |
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 04/11/2025 | Kawanami   | Initial version.    |
-# | 1.1     | 11/11/2025 | Kawanami   | Update tools default directory.    |
 # ********************************************************************************
 # */
 
@@ -84,8 +83,8 @@ COMMON_FILES_DIR		?= $(ROOT_DIR)common/
 
 # Firmware common files
 COMMON_FILES			?= $(COMMON_FILES_DIR)eprintf.c \
-						  $(COMMON_FILES_DIR)memory.c \
-						  $(COMMON_FILES_DIR)start.s
+						   $(COMMON_FILES_DIR)memory.c \
+						   $(COMMON_FILES_DIR)start.s
 
 # Firmware linker(s) directory
 LINKER_DIR				?= $(ROOT_DIR)linker/
@@ -118,7 +117,6 @@ default: firmware
 #################################### FIRMWARE TARGET ####################################
 .PHONY: firmware
 firmware:
-
 	@echo "➡️  Building firmware..."
 
 	@for source in $(FIRMWARE_FILES); do \

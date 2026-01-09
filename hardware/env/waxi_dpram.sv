@@ -5,8 +5,8 @@
 \brief      Dual-Port RAM (AXI write-only / Core write/read)
 
 \author     Kawanami
-\date       15/10/2025
-\version    1.1
+\date       19/12/2025
+\version    1.0
 
 \details
   Educational dual-port RAM used to store the SCHOLAR RISC-V core
@@ -36,22 +36,29 @@
 \section waxi_dpram_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
-| 1.1     | 15/10/2025 | Kawanami   | Change module name from data_dpram to waxi_dpram.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
 ********************************************************************************
 */
 
+/* verilator lint_off IMPORTSTAR */
+import core_pkg::*;
+/* verilator lint_on IMPORTSTAR */
+
 module waxi_dpram #(
     /// Number of bits in a byte
-    parameter int          ByteLength = 8,
+    parameter  int          ByteLength      = 8,
     /// Address bus width in bits (applies to core and AXI)
-    parameter int unsigned AddrWidth  = 32,
+    parameter  int unsigned AddrWidth       = 32,
     /// Data bus width in bits (applies to core and AXI)
-    parameter int unsigned DataWidth  = 32,
+    parameter  int unsigned DataWidth       = 32,
+    /// Address granularity in bytes (e.g., 4 bytes for 32-bit, 8 for 64-bit)
+    localparam int unsigned AddrOffset      = DataWidth / ByteLength,
+    /// Number of bits needed to encode byte offset within a word
+    localparam int unsigned AddrOffsetWidth = $clog2(AddrOffset),
     /// Dual Port RAM size in bytes
-    parameter int unsigned Size       = 16384,
+    parameter  int unsigned Size            = 16384,
     /// AXI transaction ID width
-    parameter int unsigned IdWidth    = 8
+    parameter  int unsigned IdWidth         = 8
 ) (
 
 `ifdef SIM
@@ -129,10 +136,6 @@ module waxi_dpram #(
   /* parameters verification */
 
   /* local parameters */
-  /// Address granularity in bytes (e.g., 4 bytes for 32-bit, 8 for 64-bit)
-  localparam int unsigned ADDR_OFFSET = DataWidth / ByteLength;
-  /// Number of bits needed to encode byte offset within a word
-  localparam int unsigned ADDR_OFFSET_WIDTH = $clog2(ADDR_OFFSET);
   /// Memory depth
   localparam int unsigned DEPTH = Size / (DataWidth / ByteLength);
   /// Useful number of bits to address the whole memory
@@ -315,14 +318,14 @@ module waxi_dpram #(
 `ifdef SIM
       .mem_o   (mem_o),
 `endif
-      .a_addr_i(s_axi_awaddr_q[USED_ADDR_WIDTH+ADDR_OFFSET_WIDTH-1 : ADDR_OFFSET_WIDTH]),
+      .a_addr_i(s_axi_awaddr_q[USED_ADDR_WIDTH+AddrOffsetWidth-1 : AddrOffsetWidth]),
       .a_clk_i (axi_clk_i),
       .a_din_i (s_axi_wdata_i),
       .a_be_i  (s_axi_wstrb_i),
       .a_wren_i(s_axi_wvalid_i),
       .a_rden_i(1'b0),
       .b_clk_i (core_clk_i),
-      .b_addr_i(core_m_addr_i[USED_ADDR_WIDTH+ADDR_OFFSET_WIDTH-1 : ADDR_OFFSET_WIDTH]),
+      .b_addr_i(core_m_addr_i[USED_ADDR_WIDTH+AddrOffsetWidth-1 : AddrOffsetWidth]),
       .b_din_i (core_m_wdata_i),
       .b_be_i  (core_m_wmask_i),
       .b_wren_i(core_m_wren_i),

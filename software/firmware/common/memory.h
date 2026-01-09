@@ -5,8 +5,8 @@
 \brief      Low-level memory & shared-RAM helpers for bare-metal firmware.
 
 \author     Kawanami
-\version    1.1
-\date       25/10/2025
+\version    1.0
+\date       19/12/2025
 
 \details
   Minimal primitives to read/write memory-mapped regions and to synchronize
@@ -30,9 +30,7 @@
 \section firmware_memory_h_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/06/2025 | Kawanami   | Initial version.                          |
-| 1.1     | 25/10/2025 | Kawanami   | Add RV64I support.<br>Update the whole file for coding style
-compliance.<br>Update the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version.                          |
 ********************************************************************************
 */
 

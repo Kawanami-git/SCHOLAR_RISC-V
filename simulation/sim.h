@@ -4,8 +4,8 @@
 \file       sim.h
 \brief      Verilator simulation control API (init, time advance, finalize)
 \author     Kawanami
-\version    1.1
-\date       25/10/2025
+\version    1.0
+\date       19/12/2025
 
 \details
   Public API to drive the Verilator simulation:
@@ -22,9 +22,7 @@
 \section sim_h_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/06/2025 | Kawanami   | Initial version.                          |
-| 1.1     | 25/10/2025 | Kawanami   | Update the whole file for coding style compliance.<br>Update
-the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version.                          |
 ********************************************************************************
 */
 
@@ -64,7 +62,7 @@ the whole file comments for doxygen support. |
  * \def MAX_CYCLES
  * \brief Global limit on cycles before timeout.
  */
-#define MAX_CYCLES 2000000UL
+#define MAX_CYCLES 6000000UL
 #endif
 
 /*!

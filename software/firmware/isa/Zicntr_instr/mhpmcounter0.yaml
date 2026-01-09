@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
 # /*!
 # ********************************************************************************
-# \file       rdcycle.yaml
-# \brief      ISA test: RDCYCLE
+# \file       mhpmcounter0.yaml
+# \brief      ISA test: csrr rd, 0xB00
 # \author     Kawanami
 # \version    1.0
 # \date       25/10/2025
@@ -11,19 +11,20 @@
 #
 # \remarks
 #
-# \section rdcycle_yaml_version_history Version history
+# \section mhpmcounter0_yaml_version_history Version history
 # | Version | Date       | Author     | Description         |
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 25/10/2025 | Kawanami   | Initial version.    |
+# | 1.1     | 28/12/2025 | Kawanami   | Change rdcycle pseudo instruction to mhpmcounter0.    |
 # ********************************************************************************
 # */
 
-name: rdcycle
-description: Rdcycle instruction test
-instruction_under_test: rdcycle
+name: mhpmcounter3
+description: mhpmcounter3 instruction test
+instruction_under_test: csrr rd, 0xB00
 requires: []
 
 sequence:
-  - op: rdcycle
+  - op: csrr
     rd: random dest_reg
-    format: "{op} {rd}"
+    format: "{op} {rd}, 0xB00"

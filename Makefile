@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.1
-# \date       11/11/2025
+# \version    1.0
+# \date       19/12/2025
 #
 # \details
 #   Drives the complete flow:
@@ -33,8 +33,7 @@
 # \section makefile_toplevel_version_history Version history
 # | Version | Date       | Author     | Description         |
 # |:-------:|:----------:|:-----------|:--------------------|
-# | 1.0     | 04/11/2025 | Kawanami   | Initial version.    |
-# | 1.1     | 11/11/2025 | Kawanami   | Update tools default directories.    |
+# | 1.0     | 19/12/2025 | Kawanami   | Initial version.    |
 # ********************************************************************************
 # */
 
@@ -157,13 +156,26 @@ MPFS_DISCO_KIT_BOARD			= $(WORK_DIR)board/
 
 #################################### Files ####################################
 # Design under test files
-DUT_FILES						= $(DUT_DIR)scholar_riscv_core.sv \
+DUT_FILES						= $(DUT_DIR)common/core_pkg.sv \
+								  $(DUT_DIR)common/if2id_pkg.sv\
+								  $(DUT_DIR)common/id2exe_pkg.sv\
+								  $(DUT_DIR)common/exe2mem_pkg.sv\
+								  $(DUT_DIR)common/exe2pc_pkg.sv\
+								  $(DUT_DIR)common/mem2wb_pkg.sv\
+								  $(DUT_DIR)scholar_riscv_core.sv \
+								  $(DUT_DIR)ctrl/ctrl.sv \
+								  $(DUT_DIR)ctrl/pc.sv \
 								  $(DUT_DIR)gpr/gpr.sv \
 								  $(DUT_DIR)csr/csr.sv \
 								  $(DUT_DIR)fetch/fetch.sv \
 								  $(DUT_DIR)decode/decode.sv \
+								  $(DUT_DIR)decode/decode_unit.sv \
 								  $(DUT_DIR)exe/exe.sv \
-								  $(DUT_DIR)writeback/writeback.sv
+								  $(DUT_DIR)exe/alu.sv \
+								  $(DUT_DIR)mem/mem.sv \
+								  $(DUT_DIR)mem/mem_unit.sv \
+								  $(DUT_DIR)writeback/writeback.sv \
+								  $(DUT_DIR)writeback/writeback_unit.sv
 
 
 # Design under test environment files
@@ -193,6 +205,9 @@ CYCLEMARK_FILES 				= "$(CYCLEMARK_DIR)core_list_join.c \
 								  $(CYCLEMARK_DIR)core_portme.c \
 								  $(CYCLEMARK_DIR)core_state.c \
 								  $(CYCLEMARK_DIR)core_util.c"
+
+# Firmware Linker file
+LINKER=$(FIRMWARE_DIR)linker/linker.ld
 
 # Platform common files
 PLATFORM_FILES					= $(PLATFORM_DIR)args_parser.cpp \
@@ -237,6 +252,7 @@ SIMULATOR						= $(VERILATOR_DIR)verilator
 
 # Verilator hardware flags
 SIM_FLAGS						= -j $(shell nproc) -D$(XLEN) -DSIM \
+								  -I$(DUT_DIR)common/ \
 								  --Wno-TIMESCALEMOD -O3 --threads 4 --unroll-count 5120
 
 # Verilator software flags
@@ -245,7 +261,7 @@ SIM_CXXFLAGS					= "-O3 -DSIM -D$(XLEN) -DMAX_CYCLES=$(MAX_CYCLES) \
 								   -I$(PLATFORM_DIR) -I$(SIM_FILES_DIR)"
 
 # Maximum number of cycles for the simulation. As core is running at 1MHz, it corresponds to three seconds of simulation.
-MAX_CYCLES          			= 3000000
+MAX_CYCLES          			= 10000000
 
 # Parameters used when building the firmware. It can be used, as exemple, to choose the number of iteraton of the CycleMark algorithm.
 ITERATIONS          			= 1
@@ -300,7 +316,9 @@ ISA_YAML_FILES					= $(ISA_YAML_DIR)i/u_instr/lui.yaml \
 								  $(ISA_YAML_DIR)i/r_instr/sra.yaml \
 								  $(ISA_YAML_DIR)i/r_instr/srl.yaml \
 								  $(ISA_YAML_DIR)i/j_instr/jal.yaml \
-								  $(ISA_YAML_DIR)Zicntr_instr/rdcycle.yaml
+								  $(ISA_YAML_DIR)Zicntr_instr/mhpmcounter0.yaml \
+								  $(ISA_YAML_DIR)Zicntr_instr/mhpmcounter3.yaml \
+								  $(ISA_YAML_DIR)Zicntr_instr/mhpmcounter4.yaml
 
 else ifeq ($(XLEN),XLEN64)
 ISA_YAML_FILES					= $(ISA_YAML_DIR)i/u_instr/lui.yaml \
@@ -352,7 +370,9 @@ ISA_YAML_FILES					= $(ISA_YAML_DIR)i/u_instr/lui.yaml \
 								  $(ISA_YAML_DIR)i/r_instr/srl.yaml \
 								  $(ISA_YAML_DIR)i/r_instr/srlw.yaml \
 								  $(ISA_YAML_DIR)i/j_instr/jal.yaml \
-								  $(ISA_YAML_DIR)Zicntr_instr/rdcycle.yaml
+								  $(ISA_YAML_DIR)Zicntr_instr/mhpmcounter0.yaml \
+								  $(ISA_YAML_DIR)Zicntr_instr/mhpmcounter3.yaml \
+								  $(ISA_YAML_DIR)Zicntr_instr/mhpmcounter4.yaml
 
 endif
 #################################### 						   ####################################
@@ -364,11 +384,16 @@ endif
 #################################### MPFS DISCOVERY KIT ####################################
 MPFS_DISCO_KIT_LINUX_LINK=https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/core-image-custom-mpfs-disco-kit.rootfs-20251104145941.wic
 MPFS_DISCO_KIT_SDK_LINK=https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/sdk.zip
+
 # Environnement for MPFS_DISCOVERY_KIT cross-compilation
 SDK_ENV ?= $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk/environment-setup-riscv64-oe-linux
 
+SDK_BIN ?= $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk/sysroots/riscv64-oe-linux/bin/
+
 # Helper to activate the MPFS_DISCOVERY_KIT environment before running the build
-SDK_ACTIVATE = . "$(SDK_ENV)" &&
+define SDK_RUN
+bash -lc 'source "$(SDK_ENV)"; export PATH="$$PATH:$(SDK_BIN)"; $(1)'
+endef
 ####################################					####################################
 
 
@@ -456,7 +481,6 @@ work:
 isa_firmware: work
 
 	@echo "➡️  Building ISA firmware..."
-
 	@for source in $(ISA_YAML_FILES); do \
 		base=$$(basename "$$source" .yaml); \
 		echo Building $$(basename $$source .yaml)...; \
@@ -514,6 +538,7 @@ firmware: work
 	WORK_DIR=$(WORK_DIR) \
 	GLOBAL_DEFINES_DIR=$(SOFTWARE_DIR) \
 	FIRMWARE_FILES=$(FIRMWARE_FILES) \
+	LINKER=$(LINKER) \
 	BUILD_DIR=$(FIRMWARE_BUILD_DIR) \
 	LOG_DIR=$(FIRMWARE_LOG_DIR) \
 	FIRMWARE=$(FIRMWARE) \
@@ -568,12 +593,6 @@ cyclemark_firmware: firmware
 cyclemark: FIRMWARE=cyclemark
 cyclemark: dut cyclemark_firmware
 cyclemark: run
-
-
-
-
-
-
 
 
 
@@ -697,9 +716,9 @@ mpfs_disco_kit_linux: work
 # Get Microchip Linux image and sdk
 .PHONY: mpfs_disco_kit_get_linux
 mpfs_disco_kit_get_linux: work
-	@wget $(MPFS_DISCO_KIT_LINUX_LINK) $(MPFS_DISCO_KIT_LINUX_DIR)
-	@wget $(MPFS_DISCO_KIT_SDK_LINK) $(MPFS_DISCO_KIT_LINUX_DIR)
-	cd $(MPFS_DISCO_KIT_LINUX_DIR) && unzip $(MPFS_DISCO_KIT_LINUX_DIR)sdk.zip
+	@wget -P $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(MPFS_DISCO_KIT_LINUX_LINK)
+	@wget -P $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(MPFS_DISCO_KIT_SDK_LINK)
+	@unzip -d $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk.zip
 
 
 # MPFS_DISCO_KIT: Program the Linux
@@ -753,7 +772,7 @@ mpfs_disco_kit_usb_setup:
 	@$(MAKE) --no-print-directory loader_firmware
 	@$(MAKE) --no-print-directory echo_firmware
 	@$(MAKE) --no-print-directory cyclemark_firmware
-	@$(SDK_ACTIVATE) $$CXX $(CXX_FLAGS) $(PLATFORM_FILES) -o $(MPFS_DISCO_KIT_BOARD)platform
+	@$(call SDK_RUN,$$CXX $(CXX_FLAGS) $(PLATFORM_FILES) -o $(MPFS_DISCO_KIT_BOARD)platform)
 
 	@for f in $(FIRMWARE_BUILD_DIR)/*.hex; do \
 	  $(MAKE) --no-print-directory uart_ft UART_FILE="$$f" \

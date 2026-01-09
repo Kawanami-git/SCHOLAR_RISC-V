@@ -22,7 +22,6 @@
 | 1.0     | 25/10/2025 | Kawanami   | Initial version.        |
 ********************************************************************************
 */
-
     .section .start
     .globl _start
     .globl main
@@ -33,3 +32,4 @@ _start:
 
 1:
     j       1b                   # If main returns, loop forever
+

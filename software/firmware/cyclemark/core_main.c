@@ -27,6 +27,7 @@ Original Author: Shay Gal-on
  * SCHOLAR RISC-V.
  * These files are necessary to reset the core-to-platform shared memory.
  */
+#include "csr.h"
 #include "defines.h"
 #include "memory.h"
 /**/
@@ -115,6 +116,14 @@ MAIN_RETURN_TYPE
 main(int argc, char* argv[])
 {
 #endif
+  /*
+   * SCHOLAR RISC-V
+   * Stall and branch variables declaration.
+   */
+  uint32_t stall  = 0;
+  uint32_t branch = 0;
+  /**/
+
   ee_u16       i, j = 0, num_algorithms = 0;
   ee_s16       known_id = -1, total_errors = 0;
   ee_u16       seedcrc = 0;
@@ -290,6 +299,8 @@ for (i = 0; i < MULTITHREAD; i++)
   /**/
 
   /* perform actual benchmark */
+  stall  = read_mhpmcounter3();
+  branch = read_mhpmcounter4();
   start_time();
 #if (MULTITHREAD > 1)
   if (default_num_contexts > MULTITHREAD)
@@ -310,6 +321,15 @@ for (i = 0; i < MULTITHREAD; i++)
   iterate(&results[0]);
 #endif
   stop_time();
+  /*
+   * SCHOLAR RISC-V
+   * Retreive the number of cycles the core has been stalled
+   * and the number of taken branches.
+   */
+  stall  = read_mhpmcounter3() - stall;
+  branch = read_mhpmcounter4() - branch;
+  /**/
+
   total_time = get_time();
   /* get a function of the input to report */
   seedcrc = crc16(results[0].seed1, seedcrc);
@@ -479,6 +499,16 @@ for (i = 0; i < MULTITHREAD; i++)
               "with results on a known platform.\n");
   }
 
+  /*
+   * SCHOLAR RISC-V
+   *
+   * Display the number of stalled cycles and
+   * the number of taken branches.
+   */
+  ee_printf("Data hazard cost (in cycles): %u\n", stall);
+  ee_printf("Control hazard handled (*3 to get the cost in cycles): %u\n", branch);
+  /*
+   */
 #if (MEM_METHOD == MEM_MALLOC)
   for (i = 0; i < MULTITHREAD; i++)
   {

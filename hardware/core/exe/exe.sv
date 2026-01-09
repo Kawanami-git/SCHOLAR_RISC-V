@@ -2,27 +2,31 @@
 /*!
 ********************************************************************************
 \file       exe.sv
-\brief      SCHOLAR RISC-V core execution module
+\brief      SCHOLAR RISC-V core execution stage
 \author     Kawanami
-\date       21/09/2025
-\version    1.1
+\date       17/12/2025
+\version    1.0
 
 \details
-  This module implements the execution (exe) unit
-  of the SCHOLAR RISC-V processor core.
+  Execution (EXE) stage of the SCHOLAR RISC-V pipeline.
 
-  Its main role is to perform the actual computation
-  specified by each instruction, using the control signal
-  computed by the previous unit.
+  The EXE stage consumes the decoded micro-operation (uop) + operands from ID,
+  performs the arithmetic/logic work through the ALU, and forwards:
+    - ALU result + writeback/memory control to the MEM stage
+    - PC-related information (pc/op3/pc_ctrl + ALU result) to the PC/controller
 
-  This unit typically involves arithmetic and logical operations
-  (performed by the ALU), as well as comparisons used by branch instructions.
+  This stage is split into:
+    - `exe.sv`     : stage wrapper and ID->EXE input register
+    - `alu.sv`     : arithmetic / logic / compare operations
 
-  The operands (`RS1`, `RS2` or immediate) are provided by the decode unit
-  through `op1_i` and `op2_i`.
-  The computed result is then forwarded to the write_back unit,
-  either for memory access, register write-back,
-  or control flow resolution (e.g., branch target).
+  Handshake / back-pressure:
+    - `ready_o` is asserted when the next stage (MEM) is ready (`mem_ready_i`).
+      This means EXE can accept a new ID->EXE payload only when MEM
+      can accept the current one.
+    - The ID->EXE payload register is updated only on `decode_valid_i && mem_ready_i`.
+    - When MEM is ready but ID does not provide a valid payload, EXE injects a
+      bubble (NOP-like uop) by clearing the register. This prevents re-executing
+      the previous uop.
 
 \remarks
   - This implementation complies with [reference or standard].
@@ -31,64 +35,40 @@
 \section exe_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
-| 1.1     | 21/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.0     | 17/12/2025 | Kawanami   | Initial version of the module.            |
 ********************************************************************************
 */
+
+/*!
+* Import useful packages.
+*/
+import id2exe_pkg::id2exe_t;
+import exe2mem_pkg::exe2mem_t;
+import exe2pc_pkg::exe2pc_t;
+import core_pkg::DATA_WIDTH;
+/**/
+
+
 module exe #(
-    /// Width of data paths (in bits)
-    parameter int                          DataWidth    = 32,
-    /// Width of the execution unit control signal
-    parameter int                          ExeCtrlWidth = 5,
-    /// Add operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Add          = 5'b00000,
-    /// Sub operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Sub          = 5'b00001,
-    /// Shift Left Logical operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Sll          = 5'b00010,
-    /// Shift Right Logical operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Srl          = 5'b00011,
-    /// Shift Right Arithmetic operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Sra          = 5'b00100,
-    /// Set on Less Than operation code (signed)
-    parameter logic [ExeCtrlWidth - 1 : 0] Slt          = 5'b00101,
-    /// Set on Less Than operation code (unsigned)
-    parameter logic [ExeCtrlWidth - 1 : 0] Sltu         = 5'b00110,
-    /// Bitwise Xor operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Xor          = 5'b00111,
-    /// Bitwise Or operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Or           = 5'b01000,
-    /// Bitwise And operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] And          = 5'b01001,
-    /// Compare Equal operation code (branch condition)
-    parameter logic [ExeCtrlWidth - 1 : 0] Eq           = 5'b01010,
-    /// Compare Not Equal operation code (branch condition)
-    parameter logic [ExeCtrlWidth - 1 : 0] Ne           = 5'b01011,
-    /// Greater or Equal operation code (signed compare)
-    parameter logic [ExeCtrlWidth - 1 : 0] Ge           = 5'b01100,
-    /// Greater or Equal Unsigned operation code (unsigned compare)
-    parameter logic [ExeCtrlWidth - 1 : 0] Geu          = 5'b01101,
-    /// Add Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Addw         = 5'b10000,
-    /// Sub Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Subw         = 5'b10001,
-    /// Shift Left Logical Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Sllw         = 5'b10010,
-    /// Shift Right Logical Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Srlw         = 5'b10011,
-    /// Shift Right Arithmetic Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Sraw         = 5'b10100
 ) (
-    /* Decode signals */
-    /// First operand
-    input  wire [DataWidth     - 1 : 0] op1_i,
-    /// Second operand
-    input  wire [DataWidth     - 1 : 0] op2_i,
-    /// Operation to perform
-    input  wire [ ExeCtrlWidth - 1 : 0] exe_ctrl_i,
-    /* Output signal */
-    /// Operation result
-    output wire [DataWidth     - 1 : 0] out_o
+    /// System clock
+    input  wire      clk_i,
+    /// System active low reset
+    input  wire      rstn_i,
+    /// ID stage valid flag
+    input  wire      decode_valid_i,
+    /// Mem stage ready flag (back-pressure from the next stage)
+    input  wire      mem_ready_i,
+    /// Exe stage ready (1: can accept a new ID->EXE payload)
+    output wire      ready_o,
+    /// Exe result valid flag (1: ALU result and forwarded fields are valid)
+    output wire      valid_o,
+    /// ID->EXE payload (operands + control micro-ops)
+    input  id2exe_t  id2exe_i,
+    /// EXE->MEM payload (operands + control micro-ops)
+    output exe2mem_t exe2mem_o,
+    /// EXE->PC payload (operands + control micro-ops)
+    output exe2pc_t  exe2pc_o
 );
 
   /******************** DECLARATION ********************/
@@ -99,107 +79,83 @@ module exe #(
   /* functions */
 
   /* wires */
-  /// Operation result
-  logic [DataWidth - 1 : 0] out;
-
+  /// ALU output value
+  wire     [DATA_WIDTH - 1 : 0] alu_out;
+  /// ALU valid flag
+  wire                          valid;
   /* registers */
+  /// ID->EXE payload register
+  id2exe_t                      id2exe_q;
   /********************             ********************/
 
-  /// ALU
+  /// ID->EXE pipeline register
   /*!
-  * This block computes the result of the operation
-  * based on the decoded control signal (`exe_ctrl_i`)
-  * and the two operands (`op1_i`, `op2_i`),
-  * both coming from the decode unit.
+  * Capture when:
+  *  - ID provides a valid uop (`decode_valid_i`)
+  *  - MEM is ready to accept the current EXE output (`mem_ready_i`)
   *
-  * The `exe_ctrl_i` signal selects
-  * the arithmetic or logical operation to apply.
+  * Stall behavior:
+  *  - If `mem_ready_i` is low, EXE holds `id2exe_q` (no overwrite).
   *
-  * - Arithmetic/logical operations (`ADD`, `SUB`, `SLL`, etc.)
-  *   directly apply the operation to `op1_i` and `op2_i`.
-  *
-  * - Shift amounts are truncated to log2(`DataWidth`) bits (as per RISC-V spec).
-  *
-  * - Comparison operations return 1 or 0 depending on
-  *   the result (used in branches or `SLT`/`SLTU`).
-  *
-  * - Signed operations use `$signed()` to enforce correct signed behavior.
-  *
-  * For RV64I, the "word" operations use the 32 less significant bits to
-  * calculate the output.
-  *
-  * If `exe_ctrl_i` does not match a valid operation, the output defaults to zero.
+  * NOP injection:
+  *  - If `mem_ready_i` is high but `decode_valid_i` is low, EXE clears `id2exe_q`
+  *    to propagate a NOP-like uop downstream. This prevents reusing the previous
+  *    uop data when no new instruction is available.
   */
-  generate
-    if (DataWidth == 64) begin : gen_alu_64
-
-      always_comb begin : alu
-        out = '0;
-        case (exe_ctrl_i)
-
-          Add:  out = op1_i + op2_i;
-          Sub:  out = op1_i - op2_i;
-          Sll:  out = op1_i << op2_i[$clog2(DataWidth)-1 : 0];
-          Srl:  out = op1_i >> op2_i[$clog2(DataWidth)-1 : 0];
-          Sra:  out = $signed(op1_i) >>> op2_i[$clog2(DataWidth)-1 : 0];
-          Slt:  out = ($signed(op1_i) < $signed(op2_i)) ? 1 : 0;
-          Sltu: out = (op1_i < op2_i) ? 1 : 0;
-          Xor:  out = op1_i ^ op2_i;
-          Or:   out = op1_i | op2_i;
-          And:  out = op1_i & op2_i;
-
-          Addw: out[31:0] = op1_i[31:0] + op2_i[31:0];
-          Subw: out[31:0] = op1_i[31:0] - op2_i[31:0];
-          Sllw: out[31:0] = op1_i[31:0] << op2_i[4 : 0];
-          Srlw: out[31:0] = op1_i[31:0] >> op2_i[4 : 0];
-          Sraw: out[31:0] = $signed(op1_i[31:0]) >>> op2_i[4 : 0];
-
-          Eq:  out = (op1_i == op2_i) ? 1 : 0;
-          Ne:  out = (op1_i != op2_i) ? 1 : 0;
-          Ge:  out = ($signed(op1_i) >= $signed(op2_i)) ? 1 : 0;
-          Geu: out = (op1_i >= op2_i) ? 1 : 0;
-
-          default: out = '0;
-
-        endcase
-      end
-
-      /// Output driven by alu
-      assign out_o = exe_ctrl_i[4] ? {{DataWidth - 32{out[31]}}, out[31:0]} : out;
-
+  always_ff @(posedge clk_i) begin : id_exe
+    if (!rstn_i) begin
+      id2exe_q <= '0;
     end
-    else begin : gen_alu_32
-
-      always_comb begin : alu
-        out = '0;
-        case (exe_ctrl_i)
-
-          Add:  out = op1_i + op2_i;
-          Sub:  out = op1_i - op2_i;
-          Sll:  out = op1_i << op2_i[$clog2(DataWidth)-1 : 0];
-          Srl:  out = op1_i >> op2_i[$clog2(DataWidth)-1 : 0];
-          Sra:  out = $signed(op1_i) >>> op2_i[$clog2(DataWidth)-1 : 0];
-          Slt:  out = ($signed(op1_i) < $signed(op2_i)) ? 1 : 0;
-          Sltu: out = (op1_i < op2_i) ? 1 : 0;
-          Xor:  out = op1_i ^ op2_i;
-          Or:   out = op1_i | op2_i;
-          And:  out = op1_i & op2_i;
-
-          Eq:  out = (op1_i == op2_i) ? 1 : 0;
-          Ne:  out = (op1_i != op2_i) ? 1 : 0;
-          Ge:  out = ($signed(op1_i) >= $signed(op2_i)) ? 1 : 0;
-          Geu: out = (op1_i >= op2_i) ? 1 : 0;
-
-          default: out = '0;
-
-        endcase
-      end
-
-      /// Output driven by alu
-      assign out_o = out;
-
+    else if (decode_valid_i && mem_ready_i) begin
+      id2exe_q <= id2exe_i;
     end
-  endgenerate
+    else if (mem_ready_i) begin
+      id2exe_q <= '0;
+    end
+  end
+
+  /// EXE is ready if MEM consume current micro-ops
+  assign ready_o            = mem_ready_i;
+  /// Forward op3 to MEM
+  assign exe2mem_o.op3      = id2exe_q.op3;
+  /// Provide ALU out to MEM
+  assign exe2mem_o.exe_out  = alu_out;
+  /// Forward rd to MEM
+  assign exe2mem_o.rd       = id2exe_q.rd;
+  /// Forward MEM control signal to MEM
+  assign exe2mem_o.mem_ctrl = id2exe_q.mem_ctrl;
+  /// Forward GPR control signal to MEM
+  assign exe2mem_o.gpr_ctrl = id2exe_q.gpr_ctrl;
+  /// Forward CSR control signal to MEM
+  assign exe2mem_o.csr_ctrl = id2exe_q.csr_ctrl;
+  /// Forward op3 to PC
+  assign exe2pc_o.op3       = id2exe_q.op3;
+  /// Forward instruction pc to PC
+  assign exe2pc_o.pc        = id2exe_q.pc;
+  /// Forward ALU out to PC
+  assign exe2pc_o.exe_out   = alu_out;
+  /// Forward PC control signal to PC
+  assign exe2pc_o.pc_ctrl   = id2exe_q.pc_ctrl;
+  /// Output driven by ALU
+  assign valid_o            = valid;
+
+  /// ALU instantiation
+  /*!
+  * ALU computes the operation selected by `id2exe_q.exe_ctrl` using op1/op2.
+  *
+  * Note:
+  * - If `id2exe_q` is cleared (bubble), `exe_ctrl` becomes 0.
+  *   Ensure ALU interprets ctrl=0 as a NOP operation and deasserts `valid_o`.
+  */
+  alu #() alu (
+      .rstn_i (rstn_i),
+      .valid_o(valid),
+      .op1_i  (id2exe_q.op1),
+      .op2_i  (id2exe_q.op2),
+      .ctrl_i (id2exe_q.exe_ctrl),
+      .out_o  (alu_out)
+  );
+
 
 
 

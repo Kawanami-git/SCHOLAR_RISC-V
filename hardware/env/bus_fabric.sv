@@ -4,8 +4,8 @@
 \file       bus_fabric.sv
 \brief      Interconnect fabric between SCHOLAR RISC-V core / AXI and memories
 \author     Kawanami
-\date       11/10/2025
-\version    1.1
+\date       19/12/2025
+\version    1.0
 
 \details
   Interconnect fabric that routes memory-mapped transactions from:
@@ -32,8 +32,7 @@
 \section bus_fabric_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
-| 1.1     | 11/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
 ********************************************************************************
 */
 
@@ -57,9 +56,13 @@ module bus_fabric #(
 ) (
     /* Global signals */
     /// AXI clock
-    input  wire                     clk_i,
+    input  wire                     axi_clk_i,
+    /// core clock
+    input  wire                     core_clk_i,
     /// AXI reset, active low
-    input  wire                     rstn_i,
+    input  wire                     axi_rstn_i,
+    /// core reset, active low
+    input  wire                     core_rstn_i,
     /* Core signals */
     /// Core address (byte address)
     input  wire [    AddrWidth-1:0] core_d_m_addr_i,
@@ -319,14 +322,16 @@ module bus_fabric #(
   * RAXI_SHARED_RAM_BURST -> AXI to CTP shared RAM read request.
   */
   typedef enum reg [2:0] {
-    IDLE,
+    AXI_IDLE,
     AXI_DATA_RAM_BURST,
     WAXI_SHARED_RAM_BURST,
     RAXI_SHARED_RAM_BURST
-  } read_states_e;
+  } axi_read_states_e;
 
   /// AXI router Finite State Machine state register
-  read_states_e state_d;
+  axi_read_states_e                     axi_state_q;
+  /// Core memory request address register
+  reg               [AddrWidth - 1 : 0] core_d_m_addr_q;
 
   /* functions */
   /* verilator lint_off UNUSEDSIGNAL */
@@ -372,32 +377,57 @@ module bus_fabric #(
   * This design ensures that only one AXI transaction is processed at a time,
   * avoiding collisions and guaranteeing proper memory access routing.
   */
-  always_ff @(posedge clk_i) begin : axi_fsm
-    if (!rstn_i) state_d <= IDLE;
+  always_ff @(posedge axi_clk_i) begin : axi_fsm
+    if (!axi_rstn_i) axi_state_q <= AXI_IDLE;
     else begin
-      case (state_d)
+      case (axi_state_q)
 
-        IDLE: begin
+        AXI_IDLE: begin
           if (is_matching_tag(s_axi_awaddr_i, DataRamAddrTag) && s_axi_awvalid_i)
-            state_d <= AXI_DATA_RAM_BURST;
+            axi_state_q <= AXI_DATA_RAM_BURST;
           else if (is_matching_tag(s_axi_awaddr_i, PtcSharedRamAddrTag) && s_axi_awvalid_i)
-            state_d <= WAXI_SHARED_RAM_BURST;
+            axi_state_q <= WAXI_SHARED_RAM_BURST;
           else if (is_matching_tag(s_axi_araddr_i, CtpSharedRamAddrTag) && s_axi_arvalid_i)
-            state_d <= RAXI_SHARED_RAM_BURST;
+            axi_state_q <= RAXI_SHARED_RAM_BURST;
         end
 
-        AXI_DATA_RAM_BURST: if (s_axi_bready_i && s_axi_bvalid_o) state_d <= IDLE;
+        AXI_DATA_RAM_BURST: if (s_axi_bready_i && s_axi_bvalid_o) axi_state_q <= AXI_IDLE;
 
-        WAXI_SHARED_RAM_BURST: if (s_axi_bready_i && s_axi_bvalid_o) state_d <= IDLE;
+        WAXI_SHARED_RAM_BURST: if (s_axi_bready_i && s_axi_bvalid_o) axi_state_q <= AXI_IDLE;
 
-        RAXI_SHARED_RAM_BURST: if (axi_shared_ram_rlast_i) state_d <= IDLE;
+        RAXI_SHARED_RAM_BURST: if (axi_shared_ram_rlast_i) axi_state_q <= AXI_IDLE;
 
-        default: state_d <= IDLE;
+        default: axi_state_q <= AXI_IDLE;
 
       endcase
     end
 
   end
+
+  /*!
+  * When a core read request occurs, the data is
+  * provided by the memory at the next cycle.
+  *
+  * However, as the core is pipelined, the core
+  * address will also change at the next cycle.
+  * This means that the mux used to redirect the
+  * memory output (according to the address) may
+  * not redirect the memory data to the core.
+  *
+  * To avoid this behavior, the address is registered
+  * and used for the mux to properly provide to the
+  * core with the data.
+  */
+  always_ff @(posedge core_clk_i) begin : core_address
+    if (!core_rstn_i) begin
+      core_d_m_addr_q <= '0;
+    end
+    else begin
+      core_d_m_addr_q <= core_d_m_addr_i;
+    end
+  end
+
+
 
   assign data_ram_addr_o = is_matching_tag(
       core_d_m_addr_i, DataRamAddrTag
@@ -448,11 +478,11 @@ module bus_fabric #(
   ) ? core_d_m_rden_i : {1{1'b0}};
 
   assign core_d_m_dout_o = is_matching_tag(
-      core_d_m_addr_i, DataRamAddrTag
+      core_d_m_addr_q, DataRamAddrTag
   ) ? data_ram_rdata_i : is_matching_tag(
-      core_d_m_addr_i, PtcSharedRamAddrTag
+      core_d_m_addr_q, PtcSharedRamAddrTag
   ) ? ptc_shared_ram_rdata_i : is_matching_tag(
-      core_d_m_addr_i, CtpSharedRamAddrTag
+      core_d_m_addr_q, CtpSharedRamAddrTag
   ) ? ctp_shared_ram_rdata_i : {DataWidth{1'b0}};
 
   assign core_d_m_hit_o = is_matching_tag(
@@ -490,12 +520,13 @@ module bus_fabric #(
   assign axi_data_ram_awvalid_o = is_matching_tag(
       s_axi_awaddr_i, DataRamAddrTag
   ) ? s_axi_awvalid_i : {1{1'b0}};
-  assign axi_data_ram_wdata_o = state_d == AXI_DATA_RAM_BURST ? s_axi_wdata_i : {DataWidth{1'b0}};
   assign
-      axi_data_ram_wstrb_o = state_d == AXI_DATA_RAM_BURST ? s_axi_wstrb_i : {DataWidth / 8{1'b0}};
-  assign axi_data_ram_wlast_o = state_d == AXI_DATA_RAM_BURST ? s_axi_wlast_i : {1{1'b0}};
-  assign axi_data_ram_wvalid_o = state_d == AXI_DATA_RAM_BURST ? s_axi_wvalid_i : {1{1'b0}};
-  assign axi_data_ram_bready_o = state_d == AXI_DATA_RAM_BURST ? s_axi_bready_i : {1{1'b0}};
+      axi_data_ram_wdata_o = axi_state_q == AXI_DATA_RAM_BURST ? s_axi_wdata_i : {DataWidth{1'b0}};
+  assign axi_data_ram_wstrb_o = axi_state_q == AXI_DATA_RAM_BURST ?
+      s_axi_wstrb_i : {DataWidth / 8{1'b0}};
+  assign axi_data_ram_wlast_o = axi_state_q == AXI_DATA_RAM_BURST ? s_axi_wlast_i : {1{1'b0}};
+  assign axi_data_ram_wvalid_o = axi_state_q == AXI_DATA_RAM_BURST ? s_axi_wvalid_i : {1{1'b0}};
+  assign axi_data_ram_bready_o = axi_state_q == AXI_DATA_RAM_BURST ? s_axi_bready_i : {1{1'b0}};
 
 
 
@@ -526,31 +557,33 @@ module bus_fabric #(
   assign axi_shared_ram_awvalid_o = is_matching_tag(
       s_axi_awaddr_i, PtcSharedRamAddrTag
   ) ? s_axi_awvalid_i : {1{1'b0}};
-  assign
-      axi_shared_ram_wdata_o = state_d == WAXI_SHARED_RAM_BURST ? s_axi_wdata_i : {DataWidth{1'b0}};
-  assign axi_shared_ram_wstrb_o = state_d == WAXI_SHARED_RAM_BURST ?
+  assign axi_shared_ram_wdata_o = axi_state_q == WAXI_SHARED_RAM_BURST ?
+      s_axi_wdata_i : {DataWidth{1'b0}};
+  assign axi_shared_ram_wstrb_o = axi_state_q == WAXI_SHARED_RAM_BURST ?
       s_axi_wstrb_i : {DataWidth / 8{1'b0}};
-  assign axi_shared_ram_wlast_o = state_d == WAXI_SHARED_RAM_BURST ? s_axi_wlast_i : {1{1'b0}};
-  assign axi_shared_ram_wvalid_o = state_d == WAXI_SHARED_RAM_BURST ? s_axi_wvalid_i : {1{1'b0}};
-  assign axi_shared_ram_bready_o = state_d == WAXI_SHARED_RAM_BURST ? s_axi_bready_i : {1{1'b0}};
+  assign axi_shared_ram_wlast_o = axi_state_q == WAXI_SHARED_RAM_BURST ? s_axi_wlast_i : {1{1'b0}};
+  assign
+      axi_shared_ram_wvalid_o = axi_state_q == WAXI_SHARED_RAM_BURST ? s_axi_wvalid_i : {1{1'b0}};
+  assign
+      axi_shared_ram_bready_o = axi_state_q == WAXI_SHARED_RAM_BURST ? s_axi_bready_i : {1{1'b0}};
 
 
 
 
-  assign s_axi_awready_o = state_d == AXI_DATA_RAM_BURST ? axi_data_ram_awready_i :
-      state_d == WAXI_SHARED_RAM_BURST ? axi_shared_ram_awready_i : {1{1'b0}};
+  assign s_axi_awready_o = axi_state_q == AXI_DATA_RAM_BURST ? axi_data_ram_awready_i :
+      axi_state_q == WAXI_SHARED_RAM_BURST ? axi_shared_ram_awready_i : {1{1'b0}};
 
-  assign s_axi_wready_o = state_d == AXI_DATA_RAM_BURST ? axi_data_ram_wready_i :
-      state_d == WAXI_SHARED_RAM_BURST ? axi_shared_ram_wready_i : {1{1'b0}};
+  assign s_axi_wready_o = axi_state_q == AXI_DATA_RAM_BURST ? axi_data_ram_wready_i :
+      axi_state_q == WAXI_SHARED_RAM_BURST ? axi_shared_ram_wready_i : {1{1'b0}};
 
-  assign s_axi_bid_o = state_d == AXI_DATA_RAM_BURST ? axi_data_ram_bid_i :
-      state_d == WAXI_SHARED_RAM_BURST ? axi_shared_ram_bid_i : {8{1'b0}};
+  assign s_axi_bid_o = axi_state_q == AXI_DATA_RAM_BURST ? axi_data_ram_bid_i :
+      axi_state_q == WAXI_SHARED_RAM_BURST ? axi_shared_ram_bid_i : {8{1'b0}};
 
-  assign s_axi_bresp_o = state_d == AXI_DATA_RAM_BURST ? axi_data_ram_bresp_i :
-      state_d == WAXI_SHARED_RAM_BURST ? axi_shared_ram_bresp_i : {2{1'b0}};
+  assign s_axi_bresp_o = axi_state_q == AXI_DATA_RAM_BURST ? axi_data_ram_bresp_i :
+      axi_state_q == WAXI_SHARED_RAM_BURST ? axi_shared_ram_bresp_i : {2{1'b0}};
 
-  assign s_axi_bvalid_o = state_d == AXI_DATA_RAM_BURST ? axi_data_ram_bvalid_i :
-      state_d == WAXI_SHARED_RAM_BURST ? axi_shared_ram_bvalid_i : {1{1'b0}};
+  assign s_axi_bvalid_o = axi_state_q == AXI_DATA_RAM_BURST ? axi_data_ram_bvalid_i :
+      axi_state_q == WAXI_SHARED_RAM_BURST ? axi_shared_ram_bvalid_i : {1{1'b0}};
 
 
 
@@ -586,12 +619,15 @@ module bus_fabric #(
       s_axi_araddr_i, CtpSharedRamAddrTag
   ) ? axi_shared_ram_arready_i : {1{1'b0}};
 
-  assign s_axi_rid_o = state_d == RAXI_SHARED_RAM_BURST ? axi_shared_ram_rid_i : {IdWidth{1'b0}};
   assign
-      s_axi_rdata_o = state_d == RAXI_SHARED_RAM_BURST ? axi_shared_ram_rdata_i : {DataWidth{1'b0}};
-  assign s_axi_rresp_o = state_d == RAXI_SHARED_RAM_BURST ? axi_shared_ram_rresp_i : {2{1'b0}};
-  assign s_axi_rlast_o = state_d == RAXI_SHARED_RAM_BURST ? axi_shared_ram_rlast_i : {1{1'b0}};
-  assign s_axi_rvalid_o = state_d == RAXI_SHARED_RAM_BURST ? axi_shared_ram_rvalid_i : {1{1'b0}};
-  assign axi_shared_ram_rready_o = state_d == RAXI_SHARED_RAM_BURST ? s_axi_rready_i : {1{1'b0}};
+      s_axi_rid_o = axi_state_q == RAXI_SHARED_RAM_BURST ? axi_shared_ram_rid_i : {IdWidth{1'b0}};
+  assign s_axi_rdata_o = axi_state_q == RAXI_SHARED_RAM_BURST ?
+      axi_shared_ram_rdata_i : {DataWidth{1'b0}};
+  assign s_axi_rresp_o = axi_state_q == RAXI_SHARED_RAM_BURST ? axi_shared_ram_rresp_i : {2{1'b0}};
+  assign s_axi_rlast_o = axi_state_q == RAXI_SHARED_RAM_BURST ? axi_shared_ram_rlast_i : {1{1'b0}};
+  assign
+      s_axi_rvalid_o = axi_state_q == RAXI_SHARED_RAM_BURST ? axi_shared_ram_rvalid_i : {1{1'b0}};
+  assign
+      axi_shared_ram_rready_o = axi_state_q == RAXI_SHARED_RAM_BURST ? s_axi_rready_i : {1{1'b0}};
 
 endmodule

@@ -4,8 +4,8 @@
 \file       simulation.h
 \brief      Simulation entry points
 \author     Kawanami
-\version    1.1
-\date       25/10/2025
+\version    1.0
+\date       19/12/2025
 
 \details
   Declarations for the simulation entry points used by the SCHOLAR RISC-V
@@ -22,9 +22,7 @@
 \section simulation_h_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/06/2025 | Kawanami   | Initial version.                          |
-| 1.1     | 24/10/2025 | Kawanami   | Update the whole file for coding style compliance.<br>Update
-the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version.                          |
 ********************************************************************************
 */
 

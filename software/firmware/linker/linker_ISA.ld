@@ -62,6 +62,14 @@ SECTIONS {
         _bss_end = .;
     } > DATA_RAM
 
+    .tohost : {
+        KEEP(*(.tohost))
+    } > DATA_RAM
+
+    .fromhost : {
+        KEEP(*(.fromhost))
+    } > DATA_RAM
+
     _stack_size = 1024;
     .stack (NOLOAD) : {
         . = ORIGIN(DATA_RAM) + LENGTH(DATA_RAM) - _stack_size;

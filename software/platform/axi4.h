@@ -4,8 +4,8 @@
 \file       axi4.h
 \brief      AXI4 memory access interface for the SCHOLAR RISC-V test environment.
 \author     Kawanami
-\version    1.1
-\date       24/10/2025
+\version    1.0
+\date       19/12/2025
 
 \details
   Read and write helpers for the AXI4 memory-mapped bus.
@@ -22,9 +22,7 @@
 \section axi4_h_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 04/06/2025 | Kawanami   | Initial version.                          |
-| 1.1     | 24/10/2025 | Kawanami   | Add RV64I support.<br>Update the whole file for coding style
-compliance.<br>Update the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version.                          |
 ********************************************************************************
 */
 

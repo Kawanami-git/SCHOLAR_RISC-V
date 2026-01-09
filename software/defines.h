@@ -4,8 +4,8 @@
 \file       defines.h
 \brief      Global constants and memory map for the test environment.
 \author     Kawanami
-\date       23/10/2025
-\version    1.1
+\date       19/12/2025
+\version    1.0
 
 \details
   This file provides shared definitions used throughout the SCHOLAR RISC-V
@@ -27,9 +27,7 @@
 \section defines_h_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 04/06/2025 | Kawanami   | Initial version.                          |
-| 1.1     | 23/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style
-compliance.<br>Update the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version.                          |
 ********************************************************************************
 */
 

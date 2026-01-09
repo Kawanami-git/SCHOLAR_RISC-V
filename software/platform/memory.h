@@ -5,8 +5,8 @@
 \file       memory.h
 \brief      Thin, safe helpers on top of the AXI4 backend (reads/writes, mailbox)
 \author     Kawanami
-\date       24/10/2025
-\version    1.1
+\date       19/12/2025
+\version    1.0
 
 \details
   Convenience functions layered atop axi4.h:
@@ -26,9 +26,7 @@
 \section memory_h_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/06/2025 | Kawanami   | Initial version.                          |
-| 1.1     | 24/10/2025 | Kawanami   | Add RV64I support.<br>Update the whole file for coding style
-compliance.<br>Update the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version.                          |
 ********************************************************************************
 */
 

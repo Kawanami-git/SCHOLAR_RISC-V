@@ -17,6 +17,13 @@ limitations under the License.
 Original Author: Shay Gal-on
 */
 
+/*
+ * SCHOLAR RISC-V
+ * Import functions allowing to read CSRs.
+ */
+#include "csr.h"
+/**/
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -113,14 +120,8 @@ volatile ee_s32 seed5_volatile = 0;
  * the total number of clock cycles necessary to realize
  * the specified number of iterations.
  */
-static inline uint32_t read_cycles(void)
-{
-  uint32_t cycles;
-  __asm__ volatile("rdcycle %0" : "=r"(cycles));
-  return cycles;
-}
 #define CORETIMETYPE         uint32_t
-#define GETMYTIME(_t)        (*_t = read_cycles())
+#define GETMYTIME(_t)        (*_t = read_mhpmcounter0())
 #define MYTIMEDIFF(fin, ini) ((fin) - (ini))
 /**/
 

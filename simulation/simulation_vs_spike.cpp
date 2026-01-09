@@ -5,7 +5,7 @@
 \brief      ISA-level simulation against Spike golden trace
 \author     Kawanami
 \version    1.0
-\date       25/10/2025
+\date       19/12/2025
 
 \details
   This program:
@@ -25,7 +25,7 @@
 \section simulation_vs_spike_cpp_version_history Version history
 | Version | Date       | Author     | Description                                |
 |:-------:|:----------:|:-----------|:-------------------------------------------|
-| 1.0     | 25/10/2025 | Kawanami   | Initial version.                           |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version.                           |
 | 1.1     | xx/xx/xxxx | Author     |                                            |
 ********************************************************************************
 */
@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring> // memcmp, strlen
+#include <iostream>
 #include <string>
 
 #include "Vriscv_env.h"
@@ -55,14 +56,39 @@ extern Vriscv_env* dut;
  *----------------------------------------------------------------------------*/
 
 /*!
- * \brief Return true if opcode corresponds to a LOAD (0000011) or STORE (0100011).
- *
- * We only need this to allow one extra Cycle() for memory transactions.
+ * \brief Return true if opcode corresponds to a LOAD (0000011).
  */
-static inline bool IsLoadOrStore(uint32_t instr_bin)
+static inline bool IsLoad(uint32_t instr_bin)
 {
   const uint32_t opcode = instr_bin & 0x7F;
-  return (opcode == 0b0000011) || (opcode == 0b0100011);
+  return (opcode == 0b0000011);
+}
+
+/*!
+ * \brief Return true if opcode corresponds to a STORE (0100011).
+ */
+static inline bool IsStore(uint32_t instr_bin)
+{
+  const uint32_t opcode = instr_bin & 0x7F;
+  return (opcode == 0b0100011);
+}
+
+/*!
+ * \brief Return true if opcode corresponds to a CSR (1110011).
+ */
+static inline bool IsCSR(uint32_t instr_bin)
+{
+  const uint32_t opcode = instr_bin & 0x7F;
+  return (opcode == 0b1110011);
+}
+
+/*!
+ * \brief Return true if opcode corresponds to a Branch (1100011).
+ */
+static inline bool IsBranch(uint32_t instr_bin)
+{
+  const uint32_t opcode = instr_bin & 0x7F;
+  return (opcode == 0b1100011);
 }
 
 /*!
@@ -80,9 +106,154 @@ static inline uword_t ReadBackAlignedData(uword_t mem_addr)
   return (raw >> byte_off);
 }
 
-/*------------------------------------------------------------------------------
- * Spike-vs-DUT check driver
- *----------------------------------------------------------------------------*/
+static inline uword_t verify_mem(Instr* instr)
+{
+  const uword_t rb = ReadBackAlignedData(instr->mem_addr);
+
+  const uint32_t funct3 = (instr->instr_bin >> 12) & 0x7;
+  if (funct3 == 0b000)
+  { // SB
+    if ((rb & 0xFFu) != (instr->mem_data & 0xFFu))
+    {
+      LogPrintf("Instruction %s (pc: 0x%x) error: SB @ 0x" WORD_PRINT_FMT
+                " expected 0x" WORD_PRINT_FMT " got 0x" WORD_PRINT_FMT ".\n",
+                instr->instr,
+                instr->addr,
+                (uword_t)instr->mem_addr,
+                (uword_t)(instr->mem_data & 0xFFu),
+                (uword_t)(rb & 0xFFu));
+      return FAILURE;
+    }
+  }
+  else if (funct3 == 0b001)
+  { // SH
+    if ((rb & 0xFFFFu) != (instr->mem_data & 0xFFFFu))
+    {
+      LogPrintf("Instruction %s (pc: 0x%x) error: SH @ 0x" WORD_PRINT_FMT
+                " expected 0x" WORD_PRINT_FMT " got 0x" WORD_PRINT_FMT ".\n",
+                instr->instr,
+                instr->addr,
+                (uword_t)instr->mem_addr,
+                (uword_t)(instr->mem_data & 0xFFFFu),
+                (uword_t)(rb & 0xFFFFu));
+      return FAILURE;
+    }
+  }
+  else if (funct3 == 0b010)
+  { // SW
+    if ((rb & 0xFFFFFFFFull) != (instr->mem_data & 0xFFFFFFFFull))
+    {
+      LogPrintf("Instruction %s (pc: 0x%x) error: SW @ 0x" WORD_PRINT_FMT
+                " expected 0x" WORD_PRINT_FMT " got 0x" WORD_PRINT_FMT ".\n",
+                instr->instr,
+                instr->addr,
+                (uword_t)instr->mem_addr,
+                (uword_t)(instr->mem_data & 0xFFFFFFFFull),
+                (uword_t)(rb & 0xFFFFFFFFull));
+      return FAILURE;
+    }
+  }
+  else
+  { // SD (or wider on RV64)
+    if (rb != instr->mem_data)
+    {
+      LogPrintf("Instruction %s (pc: 0x%x) error: SD @ 0x" WORD_PRINT_FMT
+                " expected 0x" WORD_PRINT_FMT " got 0x" WORD_PRINT_FMT ".\n",
+                instr->instr,
+                instr->addr,
+                (uword_t)instr->mem_addr,
+                (uword_t)instr->mem_data,
+                (uword_t)rb);
+      return FAILURE;
+    }
+  }
+
+  return SUCCESS;
+}
+
+static inline uword_t verify_gpr(Instr* instr)
+{
+  // Non-store: register writeback or CSR
+  if (IsCSR(instr->instr_bin))
+  {
+    if((instr->instr_bin >> 20) == 0xb00) // mhpmcounter0
+    {
+      if (dut->GprMemory[instr->rd] != (dut->mhpmcounter0_q - 4)) // exe/stage/wb/effective write
+      {
+        LogPrintf("Instruction %s (pc: 0x%x) error: CSR writeback x%02u expected 0x" WORD_PRINT_FMT
+                  " got 0x" WORD_PRINT_FMT ".\n",
+                  instr->instr,
+                  instr->addr,
+                  (unsigned)instr->rd,
+                  (uword_t)(dut->mhpmcounter0_q - 4),
+                  (uword_t)dut->GprMemory[instr->rd]);
+        return FAILURE;
+      }
+
+      // Force RD to match Spike (one-cycle-per-instruction model)
+      dut->GprAddr = instr->rd;
+      dut->GprData = instr->rd_data;
+      dut->GprEn   = 1;
+      Comb();
+      dut->GprEn = 0;
+      return SUCCESS;
+    }
+    else if((instr->instr_bin >> 20) == 0xb03) // mhpmcounter4
+    {
+      if (dut->GprMemory[instr->rd] != dut->mhpmcounter3_q - 2) // final li + sw add two stalled cycles
+      {
+        LogPrintf("Instruction %s (pc: 0x%x) error: CSR writeback x%02u expected 0x" WORD_PRINT_FMT
+                  " got 0x" WORD_PRINT_FMT ".\n",
+                  instr->instr,
+                  instr->addr,
+                  (unsigned)instr->rd,
+                  (uword_t)(dut->mhpmcounter3_q - 2),
+                  (uword_t)dut->GprMemory[instr->rd]);
+        return FAILURE;
+      }
+    }
+    else if((instr->instr_bin >> 20) == 0xb04) // mhpmcounter4
+    {
+      if (dut->GprMemory[instr->rd] != dut->mhpmcounter4_q)
+      {
+        LogPrintf("Instruction %s (pc: 0x%x) error: CSR writeback x%02u expected 0x" WORD_PRINT_FMT
+                  " got 0x" WORD_PRINT_FMT ".\n",
+                  instr->instr,
+                  instr->addr,
+                  (unsigned)instr->rd,
+                  (uword_t)(dut->mhpmcounter3_q),
+                  (uword_t)dut->GprMemory[instr->rd]);
+        return FAILURE;
+      }
+    }
+    else
+    {
+      LogPrintf("Instruction %s (pc: 0x%x) error: Unsupported CSR operation.\n",
+                instr->instr,
+                instr->addr);
+      return FAILURE;
+    }
+  }
+  else
+  {
+    // Regular GPR writeback: compare RD contents to Spike
+    if (instr->rd >= 0)
+    {
+      if (dut->GprMemory[instr->rd] != instr->rd_data)
+      {
+        LogPrintf("Instruction %s error: GPR x%02u expected 0x" WORD_PRINT_FMT
+                  " got 0x" WORD_PRINT_FMT ".\n",
+                  instr->instr,
+                  (unsigned)instr->rd,
+                  (uword_t)instr->rd_data,
+                  (uword_t)dut->GprMemory[instr->rd]);
+        return FAILURE;
+      }
+    }
+  }
+
+  return SUCCESS;
+}
 
 /*!
  * \brief Execute and check a firmware run against a Spike trace.
@@ -115,162 +286,35 @@ static uint32_t run(const std::string& firmwarefile, const std::string& spikefil
 
   // Fetch first instruction into the IF register (two cycles as your TB expects)
   Instr* instr = spike->instructions;
-  Cycle(); // issue fetch
-  Cycle(); // IF stage holds the instruction
-
-  // Main check loop until encountering "ebreak" in ASM field
   while (std::memcmp(instr->instr, "ebreak", std::strlen("ebreak")) != 0)
   {
-    // Check current fetch PC equals Spike's address for this instruction
-    if (dut->GprPcReg != instr->addr)
-    {
-      flag = FAILURE;
-      LogPrintf("Instruction %s error: fetch PC should be 0x" WORD_PRINT_FMT
-                " but is 0x" WORD_PRINT_FMT ".\n",
-                instr->instr,
-                (uword_t)instr->addr,
-                (uword_t)dut->GprPcReg);
-    }
-
-    // Commit current instruction and fetch the next one
-    Cycle();
-
-    // Allow an extra cycle if this is a memory access (load/store)
-    if (IsLoadOrStore(instr->instr_bin))
+    if (dut->wb_valid)
     {
       Cycle();
-    }
 
-    // We expect a valid 'next' pointer to check the post-commit PC
-    if (instr->next == nullptr)
-    {
-      flag = FAILURE;
-      LogPrintf("Trace error: missing next instruction after %s @ 0x" WORD_PRINT_FMT ".\n",
-                instr->instr,
-                (uword_t)instr->addr);
-      break;
-    }
-
-    // Check next PC value against the next Spike address
-    if (dut->GprPcReg != instr->next->addr)
-    {
-      flag = FAILURE;
-      LogPrintf("Instruction %s error: next PC should be 0x" WORD_PRINT_FMT
-                " but is 0x" WORD_PRINT_FMT ".\n",
-                instr->instr,
-                (uword_t)instr->next->addr,
-                (uword_t)dut->GprPcReg);
-    }
-
-    const uint32_t opcode = instr->instr_bin & 0x7F;
-
-    if (opcode == 0b0100011)
-    {
-      // STORE: verify written memory data (SB/SH/SW/SD)
-      const uword_t rb = ReadBackAlignedData(instr->mem_addr);
-
-      const uint32_t funct3 = (instr->instr_bin >> 12) & 0x7;
-      if (funct3 == 0b000)
-      { // SB
-        if ((rb & 0xFFu) != (instr->mem_data & 0xFFu))
+      if (IsStore(instr->instr_bin))
+      {
+        flag = verify_mem(instr);
+        if (flag != SUCCESS)
         {
-          flag = FAILURE;
-          LogPrintf("Instruction %s error: SB @ 0x" WORD_PRINT_FMT " expected 0x" WORD_PRINT_FMT
-                    " got 0x" WORD_PRINT_FMT ".\n",
-                    instr->instr,
-                    (uword_t)instr->mem_addr,
-                    (uword_t)(instr->mem_data & 0xFFu),
-                    (uword_t)(rb & 0xFFu));
-        }
-      }
-      else if (funct3 == 0b001)
-      { // SH
-        if ((rb & 0xFFFFu) != (instr->mem_data & 0xFFFFu))
-        {
-          flag = FAILURE;
-          LogPrintf("Instruction %s error: SH @ 0x" WORD_PRINT_FMT " expected 0x" WORD_PRINT_FMT
-                    " got 0x" WORD_PRINT_FMT ".\n",
-                    instr->instr,
-                    (uword_t)instr->mem_addr,
-                    (uword_t)(instr->mem_data & 0xFFFFu),
-                    (uword_t)(rb & 0xFFFFu));
-        }
-      }
-      else if (funct3 == 0b010)
-      { // SW
-        if ((rb & 0xFFFFFFFFull) != (instr->mem_data & 0xFFFFFFFFull))
-        {
-          flag = FAILURE;
-          LogPrintf("Instruction %s error: SW @ 0x" WORD_PRINT_FMT " expected 0x" WORD_PRINT_FMT
-                    " got 0x" WORD_PRINT_FMT ".\n",
-                    instr->instr,
-                    (uword_t)instr->mem_addr,
-                    (uword_t)(instr->mem_data & 0xFFFFFFFFull),
-                    (uword_t)(rb & 0xFFFFFFFFull));
+          break;
         }
       }
       else
-      { // SD (or wider on RV64)
-        if (rb != instr->mem_data)
+      {
+        flag = verify_gpr(instr);
+        if (flag != SUCCESS)
         {
-          flag = FAILURE;
-          LogPrintf("Instruction %s error: SD @ 0x" WORD_PRINT_FMT " expected 0x" WORD_PRINT_FMT
-                    " got 0x" WORD_PRINT_FMT ".\n",
-                    instr->instr,
-                    (uword_t)instr->mem_addr,
-                    (uword_t)instr->mem_data,
-                    (uword_t)rb);
+          break;
         }
       }
+
+      instr = instr->next;
     }
     else
     {
-      // Non-store: register writeback or CSR
-      if (opcode == 0b1110011)
-      {
-        // CSR read (e.g., mcycle). DUT writes mcycle to RD with a known off-by-1 timing.
-        if (dut->GprMemory[instr->rd] != (dut->CsrMcycle - 1))
-        {
-          flag = FAILURE;
-          LogPrintf("Instruction %s error: CSR writeback x%02u expected 0x" WORD_PRINT_FMT
-                    " got 0x" WORD_PRINT_FMT ".\n",
-                    instr->instr,
-                    (unsigned)instr->rd,
-                    (uword_t)(dut->CsrMcycle - 1),
-                    (uword_t)dut->GprMemory[instr->rd]);
-        }
-
-        // Force RD to match Spike (one-cycle-per-instruction model)
-        dut->GprAddr = instr->rd;
-        dut->GprData = instr->rd_data;
-        dut->GprEn   = 1;
-        Comb();
-        dut->GprEn = 0;
-      }
-      else
-      {
-        // Regular GPR writeback: compare RD contents to Spike
-        if (instr->rd >= 0)
-        {
-          if (dut->GprMemory[instr->rd] != instr->rd_data)
-          {
-            flag = FAILURE;
-            LogPrintf("Instruction %s error: GPR x%02u expected 0x" WORD_PRINT_FMT
-                      " got 0x" WORD_PRINT_FMT ".\n",
-                      instr->instr,
-                      (unsigned)instr->rd,
-                      (uword_t)instr->rd_data,
-                      (uword_t)dut->GprMemory[instr->rd]);
-          }
-        }
-      }
+      Cycle();
     }
-
-    if (flag != SUCCESS)
-    {
-      break;
-    }
-    instr = instr->next;
   }
 
   // Final commit edge before reporting

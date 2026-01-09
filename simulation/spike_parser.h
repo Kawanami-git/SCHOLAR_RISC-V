@@ -4,8 +4,8 @@
 \file       spike_parser.h
 \brief      Spike log parser (load Spike trace into an in-memory linked list).
 \author     Kawanami
-\version    1.1
-\date       25/10/2025
+\version    1.0
+\date       19/12/2025
 
 \details
   Minimal parser for Spike logs to enable step-by-step comparison against the
@@ -25,9 +25,7 @@
 \section spike_parser_h_version_history Version history
 | Version | Date       | Author     | Description                                |
 |:-------:|:----------:|:-----------|:-------------------------------------------|
-| 1.0     | 02/06/2025 | Kawanami   | Initial version.                           |
-| 1.1     | 25/10/2025 | Kawanami   | Add RV64I support.<br>Update the whole file for coding style
-compliance.<br>Update the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version.                           |
 ********************************************************************************
 */
 

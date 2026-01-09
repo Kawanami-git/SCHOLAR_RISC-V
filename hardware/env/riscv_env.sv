@@ -5,8 +5,8 @@
 \brief      SCHOLAR RISC-V Integration Environment (core + RAMs + AXI fabric)
 
 \author     Kawanami
-\date       17/10/2025
-\version    1.1
+\date       19/12/2025
+\version    1.0
 
 \details
   Top-level integration for the SCHOLAR RISC-V core with:
@@ -34,24 +34,25 @@
 \section riscv_env_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/06/2025 | Kawanami   | Initial version of the module.            |
-| 1.1     | 17/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
 ********************************************************************************
 */
 
+
+
 `ifdef XLEN64
-`define ARCHITECTURE 64
+`define ARCHI 64
 `define START_ADDR 64'h0000000080000000
 `else
-`define ARCHITECTURE 32
+`define ARCHI 32
 `define START_ADDR 32'h80000000
 `endif
 
 module riscv_env #(
     /// Number of bits in a byte
     parameter int unsigned             ByteLength = 8,
-    /// XLEN of the core (32 or 64)
-    parameter int unsigned             Archi      = `ARCHITECTURE,
+    /// Address bus width
+    parameter int unsigned             Archi      = `ARCHI,
     /// Core reset vector (byte address)
     parameter logic        [Archi-1:0] StartAddr  = `START_ADDR,
     /// AXI transaction ID width
@@ -59,164 +60,159 @@ module riscv_env #(
 ) (
 `ifdef SIM
     /// Write-enable for GPR poke (testbench)
-    input  wire                           GprEn,
+    input  wire                                    GprEn,
     /// GPR index to write (testbench)
-    input  wire  [RF_ADDR_WIDTH  - 1 : 0] GprAddr,
+    input  wire  [   RISCV_RF_ADDR_WIDTH  - 1 : 0] GprAddr,
     /// GPR value to write (testbench)
-    input  wire  [Archi          - 1 : 0] GprData,
+    input  wire  [         Archi          - 1 : 0] GprData,
     /// Full GPR file view (read-only mirror)
-    output wire  [Archi          - 1 : 0] GprMemory        [              NB_GPR],
-    /// Program counter mirror
-    output wire  [Archi          - 1 : 0] GprPcReg,
-    /// CSR mcycle mirror
-    output wire  [Archi          - 1 : 0] CsrMcycle,
-    /// Instruction RAM contents (exposed to TB)
-    output logic [ INSTR_WIDTH   - 1 : 0] InstrDpramMem    [     INSTR_RAM_DEPTH],
+    output wire  [         Archi          - 1 : 0] GprMemory            [        NB_GPR],
+    /// CSR mhpmcounter0 register
+    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter0_q,
+    /// CSR mhpmcounter3 register
+    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter3_q,
+    /// CSR mhpmcounter4 register
+    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter4_q,
     /// Data RAM contents (exposed to TB)
-    output logic [ Archi         - 1 : 0] DataDpramMem     [      DATA_RAM_DEPTH],
-    /// CTP shared RAM contents (exposed to TB)
-    output logic [ Archi         - 1 : 0] CtpSharedDpramMem[CTP_SHARED_RAM_DEPTH],
-    /// PTC shared RAM contents (exposed to TB)
-    output logic [ Archi         - 1 : 0] PtcSharedDpramMem[PTC_SHARED_RAM_DEPTH],
+    output logic [          Archi         - 1 : 0] DataDpramMem         [DATA_RAM_DEPTH],
+    /// Writeback to GPR write enable
+    output wire                                    wb_valid,
 `endif
-
     /* Global signals*/
     /// Core clock
-    input  wire                                   core_clk_i,
+    input  wire                                    core_clk_i,
     /// AXI clock
-    input  wire                                   axi_clk_i,
+    input  wire                                    axi_clk_i,
     /// Core active-low reset
-    input  wire                                   core_rstn_i,
+    input  wire                                    core_rstn_i,
     /// AXI active-low reset
-    input  wire                                   axi_rstn_i,
+    input  wire                                    axi_rstn_i,
     /* Instructions AXI signals */
     /// AWID (INSTR)
-    input  wire [          IdWidth       - 1 : 0] s_instr_axi_awid_i,
+    input  wire  [          IdWidth       - 1 : 0] s_instr_axi_awid_i,
     /// AWADDR (INSTR)
-    input  wire [         Archi          - 1 : 0] s_instr_axi_awaddr_i,
+    input  wire  [         Archi          - 1 : 0] s_instr_axi_awaddr_i,
     /// AWLEN (INSTR)
-    input  wire [                          7 : 0] s_instr_axi_awlen_i,
+    input  wire  [                          7 : 0] s_instr_axi_awlen_i,
     /// AWSIZE (INSTR)
-    input  wire [                          2 : 0] s_instr_axi_awsize_i,
+    input  wire  [                          2 : 0] s_instr_axi_awsize_i,
     /// AWBURST (INSTR)
-    input  wire [                          1 : 0] s_instr_axi_awburst_i,
+    input  wire  [                          1 : 0] s_instr_axi_awburst_i,
     /// AWLOCK (unused, INSTR)
-    input  wire [                          1 : 0] s_instr_axi_awlock_i,
+    input  wire  [                          1 : 0] s_instr_axi_awlock_i,
     /// AWCACHE (unused, INSTR)
-    input  wire [                          3 : 0] s_instr_axi_awcache_i,
+    input  wire  [                          3 : 0] s_instr_axi_awcache_i,
     /// AWPROT (unused, INSTR)
-    input  wire [                          2 : 0] s_instr_axi_awprot_i,
+    input  wire  [                          2 : 0] s_instr_axi_awprot_i,
     /// AWVALID (INSTR)
-    input  wire                                   s_instr_axi_awvalid_i,
+    input  wire                                    s_instr_axi_awvalid_i,
     /// AWREADY (INSTR)
-    output wire                                   s_instr_axi_awready_o,
+    output wire                                    s_instr_axi_awready_o,
     /// WDATA (INSTR) — fixed 32b words even if Archi=64
-    input  wire [         32             - 1 : 0] s_instr_axi_wdata_i,
+    input  wire  [         32             - 1 : 0] s_instr_axi_wdata_i,
     /// WSTRB (INSTR)
-    input  wire [         4              - 1 : 0] s_instr_axi_wstrb_i,
+    input  wire  [         4              - 1 : 0] s_instr_axi_wstrb_i,
     /// WLAST (INSTR)
-    input  wire                                   s_instr_axi_wlast_i,
+    input  wire                                    s_instr_axi_wlast_i,
     /// WVALID (INSTR)
-    input  wire                                   s_instr_axi_wvalid_i,
+    input  wire                                    s_instr_axi_wvalid_i,
     /// WREADY (INSTR)
-    output wire                                   s_instr_axi_wready_o,
+    output wire                                    s_instr_axi_wready_o,
     /// BID (INSTR)
-    output wire [          IdWidth       - 1 : 0] s_instr_axi_bid_o,
+    output wire  [          IdWidth       - 1 : 0] s_instr_axi_bid_o,
     /// BRESP (INSTR)
-    output wire [                          1 : 0] s_instr_axi_bresp_o,
+    output wire  [                          1 : 0] s_instr_axi_bresp_o,
     /// BVALID (INSTR)
-    output wire                                   s_instr_axi_bvalid_o,
+    output wire                                    s_instr_axi_bvalid_o,
     /// BREADY (INSTR)
-    input  wire                                   s_instr_axi_bready_i,
+    input  wire                                    s_instr_axi_bready_i,
     /* Data AXI signals */
     /// AWID (DATA)
-    input  wire [          IdWidth       - 1 : 0] s_axi_awid_i,
+    input  wire  [          IdWidth       - 1 : 0] s_axi_awid_i,
     /// AWADDR (DATA)
-    input  wire [         Archi          - 1 : 0] s_axi_awaddr_i,
+    input  wire  [         Archi          - 1 : 0] s_axi_awaddr_i,
     /// AWLEN (DATA)
-    input  wire [                          7 : 0] s_axi_awlen_i,
+    input  wire  [                          7 : 0] s_axi_awlen_i,
     /// AWSIZE (DATA)
-    input  wire [                          2 : 0] s_axi_awsize_i,
+    input  wire  [                          2 : 0] s_axi_awsize_i,
     /// AWBURST (DATA)
-    input  wire [                          1 : 0] s_axi_awburst_i,
+    input  wire  [                          1 : 0] s_axi_awburst_i,
     /// AWLOCK (unused, DATA)
-    input  wire [                          1 : 0] s_axi_awlock_i,
+    input  wire  [                          1 : 0] s_axi_awlock_i,
     /// AWCACHE (unused, DATA)
-    input  wire [                          3 : 0] s_axi_awcache_i,
+    input  wire  [                          3 : 0] s_axi_awcache_i,
     /// AWPROT (unused, DATA)
-    input  wire [                          2 : 0] s_axi_awprot_i,
+    input  wire  [                          2 : 0] s_axi_awprot_i,
     /// AWVALID (DATA)
-    input  wire                                   s_axi_awvalid_i,
+    input  wire                                    s_axi_awvalid_i,
     /// AWREADY (DATA)
-    output wire                                   s_axi_awready_o,
+    output wire                                    s_axi_awready_o,
     /// WDATA (DATA)
-    input  wire [         Archi          - 1 : 0] s_axi_wdata_i,
+    input  wire  [         Archi          - 1 : 0] s_axi_wdata_i,
     /// WSTRB (DATA)
-    input  wire [(Archi/ByteLength)      - 1 : 0] s_axi_wstrb_i,
+    input  wire  [(Archi/ByteLength)      - 1 : 0] s_axi_wstrb_i,
     /// WLAST (DATA)
-    input  wire                                   s_axi_wlast_i,
+    input  wire                                    s_axi_wlast_i,
     /// WVALID (DATA)
-    input  wire                                   s_axi_wvalid_i,
+    input  wire                                    s_axi_wvalid_i,
     /// WREADY (DATA)
-    output wire                                   s_axi_wready_o,
+    output wire                                    s_axi_wready_o,
     /// BID (DATA)
-    output wire [          IdWidth       - 1 : 0] s_axi_bid_o,
+    output wire  [          IdWidth       - 1 : 0] s_axi_bid_o,
     /// BRESP (DATA)
-    output wire [                          1 : 0] s_axi_bresp_o,
+    output wire  [                          1 : 0] s_axi_bresp_o,
     /// BVALID (DATA)
-    output wire                                   s_axi_bvalid_o,
+    output wire                                    s_axi_bvalid_o,
     /// BREADY (DATA)
-    input  wire                                   s_axi_bready_i,
+    input  wire                                    s_axi_bready_i,
     /// ARID
-    input  wire [          IdWidth       - 1 : 0] s_axi_arid_i,
+    input  wire  [          IdWidth       - 1 : 0] s_axi_arid_i,
     /// ARADDR
-    input  wire [         Archi          - 1 : 0] s_axi_araddr_i,
+    input  wire  [         Archi          - 1 : 0] s_axi_araddr_i,
     /// ARLEN
-    input  wire [                          7 : 0] s_axi_arlen_i,
+    input  wire  [                          7 : 0] s_axi_arlen_i,
     /// ARSIZE
-    input  wire [                          2 : 0] s_axi_arsize_i,
+    input  wire  [                          2 : 0] s_axi_arsize_i,
     /// ARBURST
-    input  wire [                          1 : 0] s_axi_arburst_i,
+    input  wire  [                          1 : 0] s_axi_arburst_i,
     /// ARLOCK (unused)
-    input  wire [                          1 : 0] s_axi_arlock_i,
+    input  wire  [                          1 : 0] s_axi_arlock_i,
     /// ARCACHE (unused)
-    input  wire [                          3 : 0] s_axi_arcache_i,
+    input  wire  [                          3 : 0] s_axi_arcache_i,
     /// ARPROT (unused)
-    input  wire [                          2 : 0] s_axi_arprot_i,
+    input  wire  [                          2 : 0] s_axi_arprot_i,
     /// ARVALID
-    input  wire                                   s_axi_arvalid_i,
+    input  wire                                    s_axi_arvalid_i,
     /// ARREADY
-    output wire                                   s_axi_arready_o,
+    output wire                                    s_axi_arready_o,
     /// RID
-    output wire [          IdWidth       - 1 : 0] s_axi_rid_o,
+    output wire  [          IdWidth       - 1 : 0] s_axi_rid_o,
     /// RDATA
-    output wire [         Archi          - 1 : 0] s_axi_rdata_o,
+    output wire  [         Archi          - 1 : 0] s_axi_rdata_o,
     /// RRESP
-    output wire [                          1 : 0] s_axi_rresp_o,
+    output wire  [                          1 : 0] s_axi_rresp_o,
     /// RLAST
-    output wire                                   s_axi_rlast_o,
+    output wire                                    s_axi_rlast_o,
     /// RVALID
-    output wire                                   s_axi_rvalid_o,
+    output wire                                    s_axi_rvalid_o,
     /// RREADY
-    input  wire                                   s_axi_rready_i
+    input  wire                                    s_axi_rready_i
 );
 
   /******************** DECLARATION ********************/
   /* parameters verification */
   /// Ensure XLEN is supported by the build (32 or 64)
-  if (Archi != 32 && Archi != 64) begin : gen_archi_check
-    $fatal("FATAL ERROR: Only 32-bit and 64-bit architectures are supported.");
+  if (Archi != 32 && Archi != 64) begin : gen_DATA_WIDTH_check
+    $fatal("FATAL ERROR: Only 32-bit and 64-bit DATA_WIDTHtectures are supported.");
   end
 
   /* local parameters */
-`ifdef SIM
-  /// Number of integer registers
-  localparam int unsigned NB_GPR = 32;
-  /// Address width of the GPR file
-  localparam int unsigned RF_ADDR_WIDTH = $clog2(NB_GPR);
-`endif
-  /// Instruction width (bits)
-  localparam int unsigned INSTR_WIDTH = 32;
+  /// Number of general-purpose registers
+  localparam int RISCV_NB_GPR = 32;
+  /// Address width of the general-purpose register file
+  localparam int RISCV_RF_ADDR_WIDTH = $clog2(RISCV_NB_GPR);
+  /// Instruction width (in bits, usually 32)
+  localparam int RISCV_INSTR_WIDTH = 32;
   /// Address tag most significant bit position (TagMsb)
   localparam int unsigned TAG_MSB = 19;
   /// Address tag least significant bit position (TagMsb)
@@ -224,9 +220,7 @@ module riscv_env #(
   /// Instructions ram depth (word)
   localparam int unsigned INSTR_RAM_DEPTH = 4096;
   /// Instructions ram size (bytes)
-  localparam int unsigned INSTR_RAM_SIZE = INSTR_RAM_DEPTH * (INSTR_WIDTH / ByteLength);
-  /// Instructions ram tag (s_instr_axi_awaddr_i[19:16] = 4'b0000)
-  // localparam logic[TAG_MSB-TAG_LSB:0] INSTR_RAM_ADDR_TAG   = 4'b0000;
+  localparam int unsigned INSTR_RAM_SIZE = INSTR_RAM_DEPTH * (RISCV_INSTR_WIDTH / ByteLength);
   /// Data ram depth (word)
   localparam int unsigned DATA_RAM_DEPTH = 4096;
   /// Data ram size (bytes)
@@ -256,7 +250,7 @@ module riscv_env #(
   /// Core instruction read enable
   wire                            core_i_m_rden;
   /// Core instruction fetch data
-  wire [         INSTR_WIDTH-1:0] core_i_m_dout;
+  wire [   RISCV_INSTR_WIDTH-1:0] core_i_m_dout;
   /// Core instruction hit/ack
   wire                            core_i_m_hit;
   /// Core data address (byte address)
@@ -432,74 +426,33 @@ module riscv_env #(
 
   /// RISC-V core instance
   scholar_riscv_core #(
-      .Archi       (Archi),
       .StartAddress(StartAddr)
   ) scholar_riscv_core (
 `ifdef SIM
-      .gpr_en_i      (GprEn),
-      .gpr_addr_i    (GprAddr),
-      .gpr_data_i    (GprData),
-      .gpr_memory_o  (GprMemory),
-      .gpr_pc_q_o    (GprPcReg),
-      .csr_mcycle_q_o(CsrMcycle),
+      .gpr_en_i        (GprEn),
+      .gpr_addr_i      (GprAddr),
+      .gpr_data_i      (GprData),
+      .gpr_memory_o    (GprMemory),
+      .mhpmcounter0_q_o(mhpmcounter0_q),
+      .mhpmcounter3_q_o(mhpmcounter3_q),
+      .mhpmcounter4_q_o(mhpmcounter4_q),
+      .wb_valid_o      (wb_valid),
 `endif
-      .clk_i         (core_clk_i),
-      .rstn_i        (core_rstn_i),
+      .clk_i           (core_clk_i),
+      .rstn_i          (core_rstn_i),
       // IF
-      .i_m_dout_i    (core_i_m_dout),
-      .i_m_hit_i     (core_i_m_hit),
-      .i_m_addr_o    (core_i_m_addr),
-      .i_m_rden_o    (core_i_m_rden),
+      .i_m_rdata_i     (core_i_m_dout),
+      .i_m_hit_i       (core_i_m_hit),
+      .i_m_addr_o      (core_i_m_addr),
+      .i_m_rden_o      (core_i_m_rden),
       // DF
-      .d_m_dout_i    (core_d_m_dout),
-      .d_m_hit_i     (core_d_m_hit),
-      .d_m_addr_o    (core_d_m_addr),
-      .d_m_rden_o    (core_d_m_rden),
-      .d_m_wren_o    (core_d_m_wren),
-      .d_m_wmask_o   (core_d_m_wmask),
-      .d_m_din_o     (core_d_m_din)
-  );
-
-  /// Instructions RAM: core read-only, AXI write (firmware instructions loader)
-  waxi_dpram #(
-      .AddrWidth(Archi),
-      .DataWidth(INSTR_WIDTH),
-      .Size     (INSTR_RAM_SIZE)
-  ) instr_dpram (
-`ifdef SIM
-      .mem_o          (InstrDpramMem),
-`endif
-      .core_clk_i     (core_clk_i),
-      .axi_clk_i      (axi_clk_i),
-      .rstn_i         (axi_rstn_i),
-      // Core
-      .core_m_addr_i  (core_i_m_addr),
-      .core_m_wren_i  ('0),
-      .core_m_wdata_i ('0),
-      .core_m_wmask_i ('0),
-      .core_m_rden_i  (core_i_m_rden),
-      .core_m_rdata_o (core_i_m_dout),
-      .core_m_hit_o   (core_i_m_hit),
-      // AXI (INSTR)
-      .s_axi_awid_i   (s_instr_axi_awid_i),
-      .s_axi_awaddr_i (s_instr_axi_awaddr_i),
-      .s_axi_awlen_i  (s_instr_axi_awlen_i),
-      .s_axi_awsize_i (s_instr_axi_awsize_i),
-      .s_axi_awburst_i(s_instr_axi_awburst_i),
-      .s_axi_awlock_i (s_instr_axi_awlock_i),
-      .s_axi_awcache_i(s_instr_axi_awcache_i),
-      .s_axi_awprot_i (s_instr_axi_awprot_i),
-      .s_axi_awvalid_i(s_instr_axi_awvalid_i),
-      .s_axi_awready_o(s_instr_axi_awready_o),
-      .s_axi_wdata_i  (s_instr_axi_wdata_i),
-      .s_axi_wstrb_i  (s_instr_axi_wstrb_i),
-      .s_axi_wlast_i  (s_instr_axi_wlast_i),
-      .s_axi_wvalid_i (s_instr_axi_wvalid_i),
-      .s_axi_wready_o (s_instr_axi_wready_o),
-      .s_axi_bid_o    (s_instr_axi_bid_o),
-      .s_axi_bresp_o  (s_instr_axi_bresp_o),
-      .s_axi_bvalid_o (s_instr_axi_bvalid_o),
-      .s_axi_bready_i (s_instr_axi_bready_i)
+      .d_m_rdata_i     (core_d_m_dout),
+      .d_m_hit_i       (core_d_m_hit),
+      .d_m_addr_o      (core_d_m_addr),
+      .d_m_rden_o      (core_d_m_rden),
+      .d_m_wren_o      (core_d_m_wren),
+      .d_m_wmask_o     (core_d_m_wmask),
+      .d_m_wdata_o     (core_d_m_din)
   );
 
   /// data RAM: core R/W, AXI write (firmware data loader)
@@ -544,15 +497,59 @@ module riscv_env #(
       .s_axi_bready_i (axi_data_ram_bready)
   );
 
+
+`ifdef SIM
+  /* verilator lint_off PINMISSING */
+`endif
+
+  /// Instructions RAM: core read-only, AXI write (firmware instructions loader)
+  waxi_dpram #(
+      .AddrWidth(Archi),
+      .DataWidth(RISCV_INSTR_WIDTH),
+      .Size     (INSTR_RAM_SIZE)
+  ) instr_dpram (
+      .core_clk_i     (core_clk_i),
+      .axi_clk_i      (axi_clk_i),
+      .rstn_i         (axi_rstn_i),
+      // Core
+      .core_m_addr_i  (core_i_m_addr),
+      .core_m_wren_i  ('0),
+      .core_m_wdata_i ('0),
+      .core_m_wmask_i ('0),
+      .core_m_rden_i  (core_i_m_rden),
+      .core_m_rdata_o (core_i_m_dout),
+      .core_m_hit_o   (core_i_m_hit),
+      // AXI (INSTR)
+      .s_axi_awid_i   (s_instr_axi_awid_i),
+      .s_axi_awaddr_i (s_instr_axi_awaddr_i),
+      .s_axi_awlen_i  (s_instr_axi_awlen_i),
+      .s_axi_awsize_i (s_instr_axi_awsize_i),
+      .s_axi_awburst_i(s_instr_axi_awburst_i),
+      .s_axi_awlock_i (s_instr_axi_awlock_i),
+      .s_axi_awcache_i(s_instr_axi_awcache_i),
+      .s_axi_awprot_i (s_instr_axi_awprot_i),
+      .s_axi_awvalid_i(s_instr_axi_awvalid_i),
+      .s_axi_awready_o(s_instr_axi_awready_o),
+      .s_axi_wdata_i  (s_instr_axi_wdata_i),
+      .s_axi_wstrb_i  (s_instr_axi_wstrb_i),
+      .s_axi_wlast_i  (s_instr_axi_wlast_i),
+      .s_axi_wvalid_i (s_instr_axi_wvalid_i),
+      .s_axi_wready_o (s_instr_axi_wready_o),
+      .s_axi_bid_o    (s_instr_axi_bid_o),
+      .s_axi_bresp_o  (s_instr_axi_bresp_o),
+      .s_axi_bvalid_o (s_instr_axi_bvalid_o),
+      .s_axi_bready_i (s_instr_axi_bready_i)
+  );
+
+
+
+
   /// PTC RAM: platform→core shared, AXI write path
   waxi_dpram #(
       .AddrWidth(Archi),
       .DataWidth(Archi),
       .Size     (PTC_SHARED_RAM_SIZE)
   ) w_axi_shared_ram (
-`ifdef SIM
-      .mem_o          (PtcSharedDpramMem),
-`endif
       .core_clk_i     (core_clk_i),
       .axi_clk_i      (axi_clk_i),
       .rstn_i         (axi_rstn_i),
@@ -592,9 +589,6 @@ module riscv_env #(
       .DataWidth(Archi),
       .Size     (CTP_SHARED_RAM_SIZE)
   ) r_axi_shared_ram (
-`ifdef SIM
-      .mem_o          (CtpSharedDpramMem),
-`endif
       .core_clk_i     (core_clk_i),
       .axi_clk_i      (axi_clk_i),
       .rstn_i         (axi_rstn_i),
@@ -625,6 +619,9 @@ module riscv_env #(
       .s_axi_rready_i (axi_shared_ram_rready)
   );
 
+`ifdef SIM
+  /* verilator lint_on PINMISSING */
+`endif
 
   /// Interconnect: decodes (TagMsb:TagLsb) and routes core & AXI to the target RAMs
   bus_fabric #(
@@ -637,8 +634,10 @@ module riscv_env #(
       .CtpSharedRamAddrTag(CTP_SHARED_RAM_ADDR_TAG),
       .IdWidth            (IdWidth)
   ) bus_fabric (
-      .clk_i                   (axi_clk_i),
-      .rstn_i                  (axi_rstn_i),
+      .axi_clk_i               (axi_clk_i),
+      .core_clk_i              (core_clk_i),
+      .axi_rstn_i              (axi_rstn_i),
+      .core_rstn_i             (core_rstn_i),
       // Core data path → fabric
       .core_d_m_addr_i         (core_d_m_addr),
       .core_d_m_rden_i         (core_d_m_rden),

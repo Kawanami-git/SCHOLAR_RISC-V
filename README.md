@@ -1,32 +1,28 @@
-# SCHOLAR RISC-V Processor – Single-cycle Microarchitecture
+# SCHOLAR RISC-V Processor – Pipeline Microarchitecture
 
-This document introduces the **SCHOLAR RISC-V** processor in its **single-cycle** version.<br>
-Designed as an educational project, **SCHOLAR RISC-V** illustrates the internal workings of a RISC-V processor while serving as a scalable learning platform for students in computer architecture and digital systems.<br>
+This document introduces the **SCHOLAR RISC-V** processor in its **pipelined** version.<br>
+Designed as an educational project, **SCHOLAR RISC-V** illustrates the internal workings of a RISC-V processor while serving as a scalable learning platform for students in computer architecture and digital systems.
 
-It provides an overview of the **single-cycle** microarchitecture, lists the supported instructions, explains how the processor operates at this stage of development, and discusses both its performance and limitations. Finally, it outlines the next planned steps for the project’s evolution.<br>
+This document provides an overview of the **pipelined** microarchitecture, lists the supported instructions, explains how the processor operates at this stage of development, and discusses both its performance and limitations. Finally, it outlines the next planned steps for the project’s evolution.
 
-The **single-cycle SCHOLAR RISC-V** processor represents the most elementary implementation of the processor — a minimal, yet solid foundation for future architectural enhancements.<br>
-This version is **single-cycle** (each instruction executes in one clock cycle) and **single-issue** (only one instruction is processed at a time).<br>
-At this stage, the processor supports only the **RV32I** and **RV64I** base instruction sets, along with the mcycle **CSR** (used for CycleMark benchmarking).<br>
-This setup defines the minimal functional and performance baseline for a RISC-V processor — an ideal starting point for learning about more advanced architectural optimizations.<br>
+The **pipelined SCHOLAR RISC-V** processor represents the first **enhancement** of the microarchitecture.<br>
+If you have not seen the first version of this core, which explains the processor’s basic operation, please refer to the [Single-Cycle](https://github.com/Kawanami-git/SCHOLAR_RISC-V/tree/Single-Cycle) version.
 
-A **single-cycle** microarchitecture means that the processor completes an entire instruction within one clock tick.<br>
-All stages — **fetch**, **decode**, **execute**, and **writeback** — occur within the same clock cycle.<br>
-This design eliminates the need for **pipelining** or **multi-cycle** microprogramming, greatly simplifying both the data path and the control logic.<br>
-The trade-off is that the clock period must be long enough to accommodate the slowest instruction, which limits the maximum frequency and raw performance.<br>
+This **pipelined** version remains **single-issue** (only one instruction is issued per cycle).<br>
+At this stage, the processor supports the **RV32I** and **RV64I** base instruction sets, along with the `mcycle` and two additional performance counters: `mhpmcounter3` (stall cycles) and `mhpmcounter4` (taken branches). These **CSRs** are used for CycleMark benchmarking.
 
-Despite that limitation, the **single-cycle** design offers an ideal learning platform:<br>
-it is predictable (each instruction takes one cycle), easy to visualize, and straightforward to reason about — making it perfect for understanding the fundamentals of processor microarchitecture before moving toward more complex designs.<br>
+A **pipelined** microarchitecture means that each instruction is completed over multiple clock cycles, while several instructions are overlapped in flight (one per stage).
 
 ![SCHOLAR_RISC-V_architecture](./img/SCHOLAR_RISC-V_architecture.png)
 
-> 📝 
+> 📝
 >
-> Internal microarchitecture of the SCHOLAR RISC-V **single-cycle** processor.<br>
-> The arrows represent the flow of an instruction through the fetch–decode–execute–writeback stages.<br>
-> For readability, clock and reset signals are omitted. <br>
-> A `^` symbol at the bottom of a block indicates a sequential (clocked) element. <br>
-> The General-Purpose Registers (GPRs) and Control and Status Registers (CSRs) are not displayed in this diagram.<br>
+> Internal microarchitecture of the SCHOLAR RISC-V **pipelined** processor.<br>
+> The arrows represent the flow of instructions through the **Fetch**–**Decode**–**Exe**–**Mem**–**Writeback** stages.<br>
+> For readability, clock and reset signals are omitted.<br>
+> A `^` symbol at the bottom of a block indicates a sequential (clocked) element.<br>
+> The Control and Status Registers (CSRs) are not displayed in this diagram but work like the General Purpose Registers (GPRs).<br>
+> White signals represent bundles (i.e. set of signals) used to pass control and data signals from a stage to another.<br>
 
 <br>
 
@@ -43,16 +39,19 @@ it is predictable (each instruction takes one cycle), easy to visualize, and str
 - [License](#license)
 - [Supported RISC-V instructions](#supported-risc-v-instructions)
 - [Instruction Formats](#instruction-formats)
+- [Supported features and results](#supported-features-and-results)
+- [Pedagogical value](#pedagogical-value)
 - [Overview](#overview)
 - [Fetch](#fetch)
 - [Decode](#decode)
 - [Exe](#exe)
+- [Mem](#mem)
 - [Writeback](#writeback)
-- [Execution flow example](#execution-flow-example)
-- [Performances, Costs and Limitations](#performance-cost-and-limitations)
+- [Controller](#controller)
+- [Execution flow examples](#execution-flow-examples)
+- [Performance, Cost and Limitations](#performance-cost-and-limitations)
 - [Conclusion](#conclusion)
 
-<br>
 <br>
 
 ---
@@ -239,7 +238,6 @@ The new instructions introduced by **RV64I** enable explicit 32-bit arithmetic a
 | `SD`         | S-type     | Store double word (64-bit) | `M[rs1 + imm] ← rs2`                   |
 
 <br>
-<br>
 
 ---
 
@@ -283,6 +281,7 @@ Used for large immediates. The immediate value is placed in the upper 20 bits of
 Examples: **LUI**, **AUIPC**.<br>
 
 <br>
+<br>
 
 ### R-type (Register)
 
@@ -293,6 +292,7 @@ Examples: **LUI**, **AUIPC**.<br>
 Used for arithmetic or logical operations that involve two source registers and one destination register.<br>
 Examples: **ADD**, **SUB**, **SLL**, **AND**, **OR**, **XOR**, **SLT**, **SLTU**.<br>
 
+<br>
 <br>
 
 ### I-type (Immediate)
@@ -306,6 +306,7 @@ Includes arithmetic immediates, loads, and control-flow instructions.<br>
 Examples: **ADDI**, **ANDI**, **ORI**, **LW**, **JALR**.<br>
 
 <br>
+<br>
 
 ### S-type (Store)
 
@@ -317,6 +318,7 @@ Used for memory store operations — two source registers are used: **rs1** prov
 Examples: **SB**, **SH**, **SW**, **SD**.
 
 <br>
+<br>
 
 ### B-type (Branch)
 
@@ -327,6 +329,7 @@ Examples: **SB**, **SH**, **SW**, **SD**.
 Used for conditional branches — the target address is computed by adding the immediate offset to the current PC.<br>
 Examples: **BEQ**, **BNE**, **BLT**, **BGE**, **BLTU**, **BGEU**.<br>
 
+<br>
 <br>
 
 ### J-type (Jump)
@@ -350,54 +353,9 @@ Examples: **JAL**.<br>
 <br>
 <br>
 
-## Overview
+## Supported features and results
 
-In modern processor design, instruction execution is typically divided into four main steps:
-  - **Fetch** – Retrieve the instruction from memory.
-  - **Decode** – Analyze the instruction to identify its operands, operation type, and destination.
-  - **Execute** – Perform the required arithmetic or logical operation.
-  - **Writeback** – Store the result in a register or memory.
-
-<br>
-
-For example, in one **single-cycle** processor, during one clock cycle, the processor:
-  - Fetches an instruction from instruction memory,
-  - Decodes it and determines the control signals,
-  - Computes the result in the ALU (Arithmetic Logic Unit),
-  - And writes the result back into a register file — all before the next rising edge of the clock.
-
-<br>
-
-This architecture is simple and ideal for understanding the complete flow of instruction execution, since all hardware components are active together during each clock cycle.<br>
-
-<br>
-
-### Why single-cycle?
-
-The goal of this design is not raw performance, but clarity.<br>
-By executing everything in a single cycle, it becomes much easier to observe and reason about how instructions move through the datapath — which signals are active, when memory is accessed, and how control is established.<br>
-However, this simplicity comes with trade-offs: The clock frequency must be slow enough for the longest instruction to complete within one cycle.<br>
-This limits performance but provides a crystal-clear view of how every instruction interacts with the hardware.<br>
-
-<br>
-
-### Instruction and memory assumptions
-
-To simplify analysis and maintain full visibility:
-  - The instruction and data memories are assumed to be ideal single-cycle memories — any access completes in one clock cycle.
-  - There is no cache or memory hierarchy in this version.
-  - Each instruction executes deterministically in one or two cycles (the latter for load/store operations).
-  - This simplification aligns well with microcontroller-like architectures, where simplicity and predictable execution is often more valuable than high throughput.
-
-<br>
-<br>
-
-### Supported features and results
-
-This first version of **SCHOLAR RISC-V** implements the **RV32I** (and optionally **RV64I**) base integer instruction set, along with the mcycle **CSR** from the **Zicntr** extension, used for performance benchmarking.<br>
-
-The design provides a functional, minimal RISC-V processor suitable for education and early experimentation.<br>
-It forms the foundation upon which more advanced features — such as pipelining, forwarding, and branch prediction — will later be added.<br>
+This version of **SCHOLAR RISC-V** implements the **RV32I** (and optionally **RV64I**) base integer instruction set, along with the `mcycle`, `mhpmcounter3` and `mhpmcounter4` **CSR** from the **Zicntr** extension, used for performance benchmarking.
 
 <br>
 
@@ -405,24 +363,247 @@ Below is a summary of synthesis results on a PolarFire MPFS095T FPGA:
 
 | **Architecture**              | **Features**                                    | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor                   | 1.24              | LEs: 3132 (1061 FFs)<br>Fmax: 69 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor (64-bit datapath) | 1.05              | LEs: 6717 (2118 FFs)<br>Fmax: 62 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `CSR*` (Zicntr)** | single-issue pipelined RISC-V processor | 0.55             | LEs: 1999 (702 FFs)<br>Fmax: 120 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `CSR*` (Zicntr)** | single-issue pipelined RISC-V processor (64-bit datapath) | 0.45              | LEs: 4068 (1247 FFs)<br>Fmax: 106 MHz<br>uSRAM: 12<br>LSRAM: 0<br>Math blocks: 0 |
 
+> 📝
+>
+> `CSR*`: `mcycle`, `mhpmcounter3` and `mhpmcounter4`.
 
+<br>
+
+---
 
 <br>
 <br>
+<br>
+<br>
+<br>
 
-### Pedagogical value
+## Pedagogical value
 
 This implementation intentionally prioritizes transparency over optimization.<br>
-Students can directly observe how every instruction interacts with hardware — from the **fetch** of an instruction to the **writeback** of its result — without the complexity of pipelines or caches.<br>
+The goal is to explain how a pipeline works by implementing a classical pipeline microarchitecture.<br>
 
-In future versions, the same base design will evolve step by step toward higher-performance architectures, showing how each optimization (such as pipelining or multi-issue) builds upon this simple foundation.<br>
+In addition to improving clock frequency, a pipelined core also introduces drawbacks—most notably **data hazards** and **control hazards** (e.g., jumps/branches).<br>
+These drawbacks can be mitigated with techniques such as **bypassing/forwarding** and **branch prediction**, but they are intentionally out of scope for the current design.
 
-The SCHOLAR RISC-V processor follows exactly this structure.<br>
-In its current form, it is a **single-cycle**, **single-issue** implementation — meaning that one instruction is fully executed per clock cycle.<br>
-Each step (**fetch**, **decode**, **execute**, and **writeback**) happens sequentially, but all within the same clock period.<br>
+This makes the trade-offs of pipelining clearly visible and keeps the microarchitecture easier to understand for students.<br>
+Mitigations will be introduced in later branches to preserve the project’s pedagogical progression.<br>
+
+<br>
+
+---
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Overview
+
+As explained in the [Single-Cycle](https://github.com/Kawanami-git/SCHOLAR_RISC-V/tree/Single-Cycle) version, modern processors typically split instruction execution into a few main steps:
+  - **Fetch** – Retrieve the instruction from memory.
+  - **Decode** – Decode the instruction and read its operands.
+  - **Execute** – Perform the required arithmetic or logical operation.
+  - **Writeback** – Write the result back to the register file (or memory, depending on the operation).
+
+<br>
+
+Unlike the **Single-Cycle** microarchitecture, in a **pipeline**, these steps are not all completed within a single clock cycle.<br>
+For example, one cycle may be used to fetch the instruction, another to decode it, another to execute it, and another to write back the result to the GPRs.<br>
+This does **not** mean that the processor completes only one instruction every four cycles. Instead, the **pipeline** overlaps multiple instructions: while the first instruction is in **Decode**, the next one can be in **Fetch**; while the first is in **Execute** and the second in **Decode**, a third can be fetched, and so on.
+
+There are several ways to split the logic into stages. In this design, the classic 5-stage **pipeline** is used:
+  - **Fetch (IF)** – Retrieve the instruction from memory.
+  - **Decode (ID)** – Decode the instruction and read operands.
+  - **Execute (EX)** – Perform ALU operations and compute branch targets.
+  - **Memory (MEM)** – Perform data memory accesses (load/store).
+  - **Writeback (WB)** – Write results back to the register file.
+
+<br>
+
+This choice highlights the main pros and cons of a **pipelined** architecture while keeping the design close to the **Single-Cycle** implementation (i.e., minimizing structural changes).<br>
+
+<br>
+<br>
+
+### Instruction and data memories assumptions
+
+To simplify analysis and maintain full visibility:
+  - The instruction and data memories are assumed to be ideal single-cycle memories — any access completes in one clock cycle.
+  - There is no cache or memory hierarchy in this version.
+  - This simplification aligns well with microcontroller-like architectures, where simplicity and predictable execution is often more valuable than high throughput.
+
+<br>
+<br>
+
+### The pipeline
+
+As shown in the **Single-Cycle** version, one of the main limitations of the core is its maximum operating frequency.<br>
+This limitation comes from a long combinational path that can span from the instruction memory all the way to the data memory (e.g., during a store operation):<br>
+Instruction memory → **Fetch** → **Decode** → **Execute** → **Writeback** → Data memory.
+
+The goal of a **pipelined** microarchitecture is to break this long combinational path by inserting registers between stages.<br>
+With this 5-stage **pipeline**, **pipeline** registers are inserted between:
+  - **Fetch/Decode** (after **Fetch**).
+  - **Decode/Exe** (after **Decode**).
+  - **Exe/Mem** (after **Execute**).
+  - **Mem/Writeback** (after **Memory**).
+
+These registers capture the outputs of one stage so they can be processed by the next stage on the following cycle. As a result, each stage only needs to meet timing for a smaller piece of logic.
+
+This significantly reduces the processor’s **critical path** and enables higher clock frequencies.
+
+<br>
+<br>
+
+### Data-Hazard
+
+One of the two drawbacks introduced by a **pipeline** is the data hazard.<br>
+A data hazard occurs when an instruction depends on a value that is not yet available because it is still being produced by a previous instruction.
+
+In this in-order **pipeline**, we only encounter one type of data hazard: Read After Write (RAW).<br>
+A RAW hazard happens when the result of an instruction n is required as an input by a following instruction n+x (with x ≥ 1).<br>
+Without proper treatment (stalling and/or forwarding), the consumer instruction would read an old value from the register file.
+
+This microarchitecture does not implement any mitigation: instead, the **pipeline** is stalled in **Decode** until the value is available in the GPRs (not optimized, but pedagogical).
+
+<br>
+
+#### RAW: ALU → use (back-to-back arithmetic)
+
+The most common RAW hazard is when an ALU instruction produces a register that is immediately reused:
+```bash
+a: add x3, x1, x2      # produces x3
+b: add x4, x3, x2      # consumes x3 (RAW)
+```
+
+Here, the second instruction needs x3 before the first one has reached the register file **Writeback** stage.
+
+Cycle-by-cycle behavior (5-stage **Fetch**/**Decode**/**Exe**/**Mem**/**Writeback**):
+  - Cycle 1: `a` is fetched (**Fetch**).
+  - Cycle 2: `a` is decoded (**Decode**) and `b` is fetched (**Fetch**).
+  - Cycle 3: `a` is executed (**Exe**). `b` enters decode (**Decode**) and the RAW hazard is detected (`b`.rs1 == `a`.rd == x3).
+  - Cycle 4: `a` goes to **Mem** (even though it does not access data memory). `b` is stalled in **Decode**.
+  - Cycle 5: `a` reaches **Writeback** and writes x3 into the GPRs. `b` is still stalled during the cycle.
+  - Cycle 6: the writeback of x3 is now effective and visible by **Decode**. `b` can resume at the next rising edge of the clock.
+  - Cycle 7: `b` leaves **Decode** go to **Exe**.
+  - Cycle 8: `b` goes to **Mem**
+  - Cycle 9: `b` goes to **Writeback** and writes x4 into the GPRs
+  - Cycle 10: x4 is visible for subsequent instructions
+
+
+`b` is stalled in **Decode** from cycle 4 to cycle 6, meaning three cycles are lost due to this data hazard.<br>
+However, not all ALU RAW hazards have the same cost. For example:
+```bash
+a: add x3, x1, x2      # produces x3
+c: add x7, x5, x6      # independent instruction
+b: add x4, x3, x2      # consumes x3 (RAW)
+```
+
+In this case, only two cycles are lost, because instruction `c` executes while waiting for x3 to be written back.<br>
+In general, the farther the consumer instruction is from its producer, the smaller the penalty, because independent instructions can fill the gap.
+
+For this design (no forwarding, stall in **Decode**), the same reasoning applies to other RAW hazards (e.g., load-use, store-data, branch operand): the **pipeline** is blocked until the required value becomes visible in the register file.
+
+<br>
+
+#### RAW: Load → use (load-use hazard)
+
+Another RAW hazard can occur with loads:
+```bash
+lw  x3, 0(x2)       # loads x3 from memory
+add x4, x3, x1      # consumes x3 immediately (RAW)
+```
+
+Like the RAW(ALU) hazard, the loaded data must be written in the GPRs to be available for the next instruction.<br>
+The `add` instruction has to wait 3 cycles for the `lw` to complete and provide the result in the GPRs.
+
+<br>
+
+#### RAW on store data
+
+A store also consumes register data, so it can be the consumer side of a RAW hazard:
+```
+lw  x3, 0(x2)       # produces x3
+sw  x3, 0(x5)       # consumes x3 as store data (RAW)
+```
+
+Even though the store does not write a destination register, it still needs the value of x3 to write it to memory.<br>
+
+<br>
+
+#### RAW on address / branch operands (common variants)
+
+RAW hazards also appear when a register is reused as an address base or as a branch operand:
+```bash
+add x2, x2, x1
+lw  x3, 0(x2)       # consumes updated x2 as address base (RAW)
+```
+
+```bash
+add x3, x1, x2
+beq x3, x0, label   # consumes x3 for comparison (RAW)
+```
+
+In both cases, the consumer needs the most recent value, which require stalling the **pipeline** until the GPRs are updated (3 cycles, like the other RAWs).
+
+<br>
+
+#### Note on WAR / WAW hazards
+
+Other data hazard types exist in general (WAR, WAW), but they do not occur in a simple in-order **pipeline** where:
+  - registers are read in program order.
+  - register writes are committed in program order.
+
+<br>
+
+### Instruction flow changes (control hazards)
+
+The other drawback introduced by a **pipeline** is the loss of cycles caused by instruction flow changes (also called control hazards).<br>
+A flow change occurs on jumps (jal, jalr) and on taken branches (beq, bne, ...).
+
+In a **single-cycle** core, when the flow changes, the Program Counter (PC) is updated in the same cycle and the next instruction is fetched directly from the correct target address.
+
+In this **pipeline**, the next PC value is only known once the instruction reaches the **Exe** stage.<br>
+Therefore, while the jump/branch is being executed, **Fetch** and **Decode** have already speculatively fetched the sequential instructions at `PC + 4` and `PC + 8`.
+
+Example:
+
+```bash
+a: jal function
+b: add x1, x2, x3
+c: add x4, x5, x6
+d: sub ...
+e: sub ...
+
+function:
+f: add x7, x8, x9
+```
+
+Pipeline fill before the redirection:
+  - Cycle 1: `a` is fetched (**Fetch**).
+  - Cycle 2: `a` is decoded (**Decode**) and `b` is fetched (**Fetch**).
+  - Cycle 3: `a` is executed (**Exe**) and the jump target PC is computed (in the **controller** using the ALU output). Meanwhile, `b` is decoded and `c` is fetched.
+
+At this point, the target instruction `f` cannot be fetched yet (the new PC becomes effective on the next rising edge of the clock), so `b` and `c` are already in the pipeline.
+
+To prevent executing `b` and `c`, the microarchitecture implements a pipeline flush using the asynchronous `softresetn` control signal.
+`softresetn` is an active-low flush request for **Fetch**, **Decode** and **Exe** (the request may be asynchronous, but it is sampled synchronously by all stages).
+
+This mechanism clears the front of the pipeline and restarts fetching from the computed PC.<br>
+Flush sequence:
+  - Cycle 3: `a` is executed (**Exe**) and the jump target PC is computed (in the **controller** using the ALU output). Meanwhile, `b` is decoded and `c` is fetched **and `softresetn` is asserted (`softresetn` = 0) for one cycle**.
+  - Cycle 4: **Fetch**, **Decode** and **Exe** are synchronously flushed by `softresetn`, while the new PC is computed from the ALU output and provided to **Fetch**.<br>
+  During the flush, memory requests are not blocked: the instruction memory is still addressed with the correct PC. Only the stage valid signals are cleared so wrong-path instructions are discarded.<br>
+  In parallel, `a` continues to **Mem**.
+  - Cycle 5: the instruction memory provides `f`. `a` continues to **Writeback** and will eventually update the GPRs.
+  - Cycle 6: `f` enters **Decode**, and the pipeline continues normally from the jump target.
+
+This control hazard introduces a fixed penalty for taken branches/jumps in this design, because the pipeline must be flushed whenever the PC is redirected.<br>
+With this organization, the first correct-path instruction (`f`) reaches **Decode** at cycle 6 instead of cycle 3 (where a sequential instruction would normally be decoded), resulting in a 3-cycle penalty.
 
 <br>
 
@@ -436,48 +617,80 @@ Each step (**fetch**, **decode**, **execute**, and **writeback**) happens sequen
 
 ## Fetch
 
-**Fetch** is responsible for retrieving one instruction per cycle from the instruction memory.<br>
-It uses the `pc_next_i` signal from the **writeback** stage to determine the address of the next instruction to execute.<br>
-Its role is to ensure a continuous flow of valid instructions into **decode** — keeping the processor busy every cycle.<br>
+**Fetch** (IF) retrieves one instruction per cycle from the instruction memory and forwards it to **Decode** (ID).<br>
+It uses the `pc` generated by the **controller** to address the next instruction to fetch, and it is designed to keep a continuous flow of valid instructions into the pipeline whenever downstream stages are ready.
 
-**Fetch** is made up of two simple but essential blocks:
-  - *mem_controller* – handles communication with the instruction memory.
-  - *instr_mux* – selects and forwards the instruction to **decode**.
+**Fetch** is composed of three small blocks:
+  - *mem_ack*    – Registers `i_m_hit` to generate a `fetch_valid` aligned with the instruction data.
+  - *pc_reg*     – Registers the request PC so the PC forwarded to decode matches the returned instruction.
+  - *pre-decode* – Extracts `rs1`, `rs2`, and `rd` early (from the fetched instruction) for hazard handling in the controller.
+
+<br>
+
+### mem_ack
+
+*mem_ack* is a synchronous register stage that captures `i_m_hit`.<br>
+As a reminder, in this design, the instruction memory is assumed 1-cycle synchronous:
+  - `i_m_hit` is asserted in the request cycle to indicate the instruction will be available in the next rising edge of the clock.
+  - `i_m_rdata` is therefore consumed in the following cycle.
+
+By registering `i_m_hit` into `hit_q`, **Fetch** produces `fetch_valid` aligned with the instruction visible on `i_m_rdata` and the associated PC held in `pc_q`.<br>
+When under reset (either a real reset or a softreset), `hit_q` is forced to `0`, forcing `fetch_valid` to `0`.
+
+**Fetch** does not require any additional handshake signals for instruction memory:
+  - `i_m_rden` is driven by `decode_ready` (**Fetch** issues a request only if **Decode** can accept progress).
+  - `i_m_addr` is directly driven by the next PC.
+
+Finally, the fetched instruction (`i_m_rdata`) and its PC are forwarded to **Decode** through the `if2id` bundle.
+
+<br>
+
+### pc_reg
+
+*pc_reg* registers the request address (`pc`) into `pc_q`.
+This is required because `pc` may advance every cycle to request the next instruction, while the memory returns the previous request one cycle later.
+
+Registering the PC guarantees that **Decode** receives a consistent pair:
+  - `if2id.pc` = `pc_q`.
+  - `if2id.instr` = `i_m_rdata`.
+
+<br>
+
+### pre-decode
+
+*pre-decode* is a lightweight combinational extractor that reads `rs1`, `rs2`, and `rd` directly from the fetched instruction (`i_m_rdata`).<br>
+It is used exclusively for data-hazard detection in the **controller**.
+
+A key detail is that *pre-decode* also masks unused fields (sets them to x0) depending on the opcode:
+  - Instructions like LUI/AUIPC/JAL do not use rs1 → `rs1` = `0`.
+  - Many I-type instructions do not use rs2 → `rs2` = `0`.
+  - Stores and branches do not write rd → `rd` = `0`.
+
+This avoids creating false dependencies in the hazard logic.
+
+This early extraction lets the **controller** register the operand indices while the instruction is entering **Decode**, without routing full decode outputs back into the **controller**, which helps avoid a tight critical path of the form:
+**controller** → **decode** → *data_hazard* → **controller**.
 
 <br>
 <br>
 
-### mem_controller
+### Outputs
 
-The *mem_controller* is a synchronous block that manages when and how the instruction memory is accessed.<br>
-In this **single-cycle** processor, the control logic is intentionally minimal:
-  - Every clock cycle, it requests a new instruction by asserting `m_rden_o` = `1`.
-  - The address used for this fetch (`m_addr_o`) comes directly from `pc_next_i`, provided by **writeback**.
-  - The memory’s response (`m_hit_i`) indicates when valid instruction is available.
-
-When the memory signals a hit, **fetch** raises its `valid_o` flag to confirm that the instruction on `instr_o` is valid and ready for decoding.<br>
-
-This simple handshake guarantees that the processor always works with correct, synchronized instruction data.<br>
+**Fetch** provides to **Decode** with `if2id`:
+  - The instruction.
+  - The instruction address (PC).
 
 <br>
-
-### instr_mux
-
-The *instr_mux* is a combinational block that chooses which value is presented as the current instruction:
-  - During reset, it outputs `0` to avoid executing invalid or uninitialized instruction.
-  - Once reset is released and memory responds, it forwards the instruction word from `m_dout_i` directly to **decode**.
-
-Because this path is purely combinational, the instruction becomes immediately visible at **decode** — no clock cycle is lost.
-
 <br>
-
 
 ### Summary
 
-This simple **fetch** design provides a clear and predictable mechanism for instruction flow:
-  - One instruction is fetched per cycle.
-  - The next instruction address is determined by **writeback**.
-  - No buffering, caching, or speculation is used.
+Compared to the **Single-Cycle** core, this **Fetch** stage adds a small amount of logic to support pipeline control:
+  - *mem_ack* aligns instruction validity with returned memory data.
+  - *pc_reg* preserves the request PC for the returned instruction.
+  - *pre-decode* provides early register indices for hazard handling.
+
+Despite these additions, **Fetch** remains intentionally simple and achieves its primary goal: deliver one instruction per cycle whenever the pipeline is not stalled.
 
 <br>
 
@@ -494,60 +707,86 @@ This simple **fetch** design provides a clear and predictable mechanism for inst
 **Decode** is the central “control hub” of the processor.<br>
 Its purpose is to translate the binary instruction fetched from memory into meaningful hardware actions — determining what operation to perform, which operands to use, and where the result should go.<br>
 
-In other words, **decode** transforms the instruction word into control signals that drive the rest of the processor.<br>
+**Decode** is composed of the following sub-blocks:
+  - *if_id* - registers the stage inputs.
+  - *ctrl* – generates the stage `ready`/`valid` handshake and stalls on RAW hazards (rs*_dirty).
+  - *instr_decoder* – extracts instruction fields (`opcode`, `funct3`, `funct7`, `rs1`, `rs2`, `rd`, `csr_raddr`).
+  - *operands_gen* – builds operand values (`op1`, `op2`, `op3`) and expands immediates.
+  - *exe_ctrl_gen* – selects the *alu* / comparison operation (`exe_ctrl`).
+  - *mem_ctrl_gen* – identifies load/store operations and access width/sign (`mem_ctrl`).
+  - *gpr_ctrl_gen* – selects the writeback source and whether a GPR write occurs (`gpr_ctrl`).
+  - *csr_ctrl_gen* – CSR writeback control (`csr_ctrl`); currently constant because CSRs are read-only.
+  - *pc_ctrl_gen* – defines how the program counter is updated (`pc_ctrl`).
 
-**Decode** is composed of six sub-blocks, each handling a specific aspect of instruction interpretation:
-instr_decoder – extracts instruction fields.
-  - *operands_gen* – builds operand values.
-  - *exe_ctrl_gen* – selects the arithmetic or logical operation.
-  - *mem_ctrl_gen* – identifies load/store operations.
-  - *gpr_ctrl_gen* – decides what gets written to registers.
-  - *pc_ctrl_gen*  – defines how the program counter is updated.
+<br>
 
-Each block works in parallel within the same cycle, producing all the information required for the next stages.<br>
+### if_id
 
+The *Fetch–Decode* pipeline register breaks the combinational path between **Fetch** and **Decode** by saving the `if2id` bundle (instruction + PC) into registers.<br>
+When the stage is stalled, this register holds its previous value so the same instruction remains until it can be passed to **Exe**.
+
+<br>
+<br>
+
+### ctrl
+
+The *ctrl* block generates the `ready` and `valid` signals used to:
+  - indicate to **Fetch** whether **Decode** can accept a new instruction (`ready`).
+  - indicate to **Exe** whether the current decoded bundle is valid (`valid`).
+
+This interlock mechanism is required because on RAW hazards, **Decode** must stall until the register file provides a non-dirty value.<br>
+In practice, the stage stalls whenever `rs1_dirty` or `rs2_dirty` is asserted, or when **Exe** applies back-pressure (`exe_ready` = `0`).<br>
+Unsupported/unknown opcodes are treated as bubbles (`valid` = `0`) while keeping `ready` = `1`.
+
+<br>
 <br>
 
 ### instr_decoder
 
 This block extracts the main instruction fields:
-  - `opcode` determines the general instruction type (arithmetic, memory, branch, etc.).
-  - `funct3` and `funct7` refine the operation (e.g., distinguishing ADD from SUB).
-  - `rs1_o`, `rs2_o`, and `rd_o` identify which registers will be read or written.
-  - For `CSR` operations, the `CSR` address (`csr_raddr_o`) is also extracted.
+  - `opcode` determines the general instruction type.
+  - `funct3` and `funct7` refine the operation (e.g., `ADD` vs `SUB`, `SRL` vs `SRA`).
+  - `rs1`, `rs2`, and `rd` select GPR operands and destination.
+  - `csr_raddr` is extracted for CSR accesses.
 
-By isolating these fields, the rest of the decode logic can interpret instructions independently of their binary layout.<br>
-
+<br>
 <br>
 
 ### operands_gen
 
-The *operands_gen* block produces the data inputs for the ALU and memory:
-  - `op1_o` is usually the value from register `rs1`, unless the instruction type specifies otherwise (for example, **JALR** uses the PC).
-  - `op2_o` is either the value from `rs2` or an immediate constant extracted from the instruction.
-  - `op3_o` carries auxiliary information (e.g., immediate branch offsets, **CSR** data, or store values).
+The *operands_gen* block produces the data inputs for the **Exe** and **Mem** stages:
+  - op1: usually `rs1_data`.
+  - op2: `rs2_data` or an expanded immediate (I/S/U/J formats).
+  - op3: auxiliary operand depending on instruction class:
+      - STORE: store data (`rs2_data`).
+      - BRANCH: branch offset immediate.
+      - JAL/JALR: current PC (used to generate the link value).
+      - CSR: CSR read data.
 
-All immediates are properly sign-extended or zero-extended according to the instruction type, ensuring consistent behavior across all operations.<br>
+All immediates are properly sign-extended (or zero-extended when required).
 
+<br>
 <br>
 
 ### exe_ctrl_gen
 
-The *exe_ctrl_gen* block determines which ALU operation will be executed in **exe**.
-It uses `opcode`, `funct3`, and `funct7` to generate a compact 5-bit control signal (`exe_ctrl_o`) that directly selects the operation inside **exe** — such as addition, subtraction, comparison, or logical shift.<br>
+The *exe_ctrl_gen* block determines which ALU operation will be executed in **Exe**.
+It uses `opcode`, `funct3`, and `funct7` to generate a compact 5-bit control signal (`exe_ctrl`) that directly selects the operation inside **Exe** — such as addition, subtraction, comparison, or logical shift.<br>
 
 This design follows the RISC-V specification exactly, allowing new instructions to be added by simply extending the control table.<br>
 
 <br>
+<br>
 
 ### mem_ctrl_gen
 
-This block defines how **writeback** should interact with memory:
+This block defines how **Mem** and **Writeback** should interact with memory:
   - It identifies whether the instruction is a load, store, or no-memory operation.
   - It encodes the access width (byte, halfword, word, or doubleword) and the sign-extension rule.
 
-The generated 5-bit `mem_ctrl_o` signal is used by **writeback** to manage data memory reads and writes deterministically.<br>
+The generated 5-bit `mem_ctrl` signal is used by **Mem** and **Writeback** to manage data memory reads and writes deterministically.<br>
 
+<br>
 <br>
 
 ### gpr_ctrl_gen
@@ -555,29 +794,45 @@ The generated 5-bit `mem_ctrl_o` signal is used by **writeback** to manage data 
 The *gpr_ctrl_gen* block defines how the result of the current instruction will be written back into the General Purpose Registers (GPRs).<br>
 It specifies:
   - Whether a register write should occur.
-  - The data source (**exe** result, memory value, PC, or **CSR**).
+  - The data source (**Exe** result, memory value, PC, or **CSR**).
 
-This allows **writeback** to correctly route results to their destination register, ensuring data consistency.
+This allows **Writeback** to correctly route results to their destination register, ensuring data consistency.
 
+<br>
 <br>
 
 ### pc_ctrl_gen
 
-Finally, the *pc_ctrl_gen* block determines how the Program Counter (`pc_i`) is updated for the next instruction.
+Finally, the *pc_ctrl_gen* block determines how the Program Counter (`pc`) is updated for the next instruction.
 Depending on the control flow instruction:
   - Sequential (`PcInc`) → next PC = PC + 4.
   - Jump (`PcSet` or `PcAdd`) → PC replaced with or added to an offset.
   - Conditional branch (`PcCond`) → next PC depends on **exe** comparison results.
 
-This mechanism provides full support for jumps, calls, and branches without requiring a pipeline.<br>
+This mechanism provides full support for jumps, calls, and branches.<br>
 
+<br>
+<br>
+
+### Outputs
+
+All decoded information (PC, operands and control fields) is provided to **Exe** through the `id2exe` bundle:
+  - `pc`, `rd`.
+  - `op1`, `op2`, `op3`.
+  - `exe_ctrl`, `mem_ctrl`, `gpr_ctrl`, `csr_ctrl`, `pc_ctrl`.
+
+<br>
 <br>
 
 ### Summary
 
-**Decode** serves as the brain of the **single-cycle** processor.
-It transforms the instruction bits into actionable signals that orchestrate every part of the datapath — all within a single clock cycle.<br>
-Thanks to this modular design, new instructions or addressing modes can be added easily, making it an excellent foundation for more advanced microarchitectures.
+**Decode** transforms the instruction bits into actionable signals that orchestrate the datapath in the subsequent stages.<br>
+It is almost identical to the **single-cycle** version, with two pipeline-specific additions:
+  - *if_id*, which registers the incoming instruction/PC bundle and breaks the combinational path from **Fetch** to **Decode**.
+  - *ctrl*, which implements the stage handshake and interlock, allowing **Decode** to stall on RAW hazards (dirty operands) or when **Exe** applies back-pressure.
+
+
+<br>
 
 ---
 
@@ -589,16 +844,46 @@ Thanks to this modular design, new instructions or addressing modes can be added
 
 ## Exe
 
-**exe** (execute) performs the actual computation requested by the instruction.<br>
-It receives the operands and control signals from **decode**, executes the required arithmetic or logical operation, and produces a result that will later be stored or written back.<br>
+**Exe** (Execute) performs the actual computation requested by the instruction.<br>
+It receives operands and control fields from **Decode** through the `id2exe` bundle, executes the selected arithmetic / logical / comparison operation, and produces an output result.
 
-As for **decode**, everything is purely combinational: there are no registers or sequential elements.<br>
-**Exe** unit reacts instantly to its inputs — `op1_i`, `op2_i`, and the operation selector `exe_ctrl_i`.<br>
+**Exe** is composed of three logical parts:
+  - *id_exe* – registers the stage inputs (id2exe) and injects NOPs when needed.
+  - *handshake* – propagates back-pressure from **Mem** to previous stages.
+  - *alu* – performs the actual computation.
 
-The 5-bit control signal `exe_ctrl_i`, generated by **decode**, determines which operation is performed.<br>
-This design keeps **exe** simple, modular, and easy to extend with new operations in the future.<br>
 
-The ALU supports all arithmetic, logical, and comparison operations defined in the **RV32I** (and **RV64I**) instruction set:
+### id_exe
+
+The *Decode–Exe* **pipeline** register breaks the combinational path between **Decode** and **Exe** by saving the `id2exe` bundle into `id2exe_q` registers.<br>
+
+This register is updated only when **Mem** is ready to accept the current **Exe** output:
+  - If `decode_valid` && `mem_ready` → capture a new `id2exe`.
+  - If `mem_ready` && `!decode_valid` → clear `id2exe_q` to `'0` (NOP injection)
+  - If `!mem_ready_i` → hold the previous `id2exe_q` (stall)
+
+NOP injection is important: it prevents reusing the previous micro-op when no new instruction is available, and naturally deasserts `valid` (since `exe_ctrl`=`0` is interpreted as “no operation”).
+
+<br>
+<br>
+
+### ctrl
+
+This stage implements a standard `ready`/`valid` handshake:
+  - `ready` is directly driven by `mem_ready`, so any back-pressure from **Mem** automatically stalls **Exe**, and consequently stalls **Decode** and **Fetch** upstream.
+  - `valid` is driven by the *alu* and reflects whether the currently registered operation is supported (see next section).
+
+In the current configuration, the memories are modeled as “perfect” (no back-pressure), so `mem_ready` is typically always asserted. The handshake is still kept to make the stage compatible with future extensions (wait-states, caches, bus interfaces, etc.).
+
+<br>
+<br>
+
+### alu
+
+The *alu* uses the `id2exe_q.exe_ctrl` control field generated by **Decode** to select the operation to perform.<br>
+All computations are performed on the registered operands (`id2exe_q.op1` and `id2exe_q.op2`), and the result is produced on `exe_out`.
+
+Supported operation families include (RV32I and RV64I):
 
 | **Category** | **Examples**                                | **Description**                                |
 | ------------ | ------------------------------------------- | ---------------------------------------------- |
@@ -607,26 +892,155 @@ The ALU supports all arithmetic, logical, and comparison operations defined in t
 | Shifts       | `SLL`, `SRL`, `SRA`, `SLLW`, `SRLW`, `SRAW` | Logical and arithmetic shifts (32 or 64 bits). |
 | Comparisons  | `SLT`, `SLTU`, `EQ`, `NE`, `GE`, `GEU`      | Signed and unsigned comparisons.               |
 
-All computations are performed directly on the input operands (`op1_i` and `op2_i`), and the result is produced on the `out_o` output bus.<br>
-No internal state is stored: the next clock edge will directly propagate this result to **writeback**.<br>
+The *alu* asserts its internal valid flag only when the control code is recognized (exe_ctrl_is_valid(`ctrl_i`)). Unsupported or cleared control codes behave like a NOP and deassert `valid`.
 
-When the 64-bit mode is enabled, the same control logic is reused, but **exe** operates on extended 64-bit datapaths.<br>
-Additional operations (**ADDW**, **SUBW**, **SLLW**, etc.) handle 32-bit word arithmetic by computing on the lower 32 bits and sign-extending the result to 64 bits.<br>
-This ensures full compatibility with the **RV64I** specification while minimizing redundant hardware.<br>
+RV64 “word” operations (*W) compute using the lower 32 bits and then sign-extend the result to 64 bits before outputting it, ensuring RV64I semantics.
 
+<br>
+<br>
+
+### Outputs
+
+  - `exe2mem` forwards: `exe_out`, `op3`, `rd`, `mem_ctrl`, `gpr_ctrl`, `csr_ctrl`.
+  - `exe2pc` forwards: `exe_out`, `op3`, `pc`, `pc_ctrl` (used by the controller to update the PC on branches/jumps).
+
+<br>
 <br>
 
 ### Summary
 
 **Exe** is where the processor’s computation happens.<br>
-It directly reflects the core’s mathematical capabilities — everything else (**fetch**, **decode**, memory, etc.) exists to feed it the right inputs.<br>
-
 From a design perspective:
-  - **decode** decides what operation to perform,
-  - **exe** performs how it is done,
-  - **writeback** decides where the result goes.
+  - **Decode** decides what operation must be performed,
+  - **Exe** performs it and produces `exe_out`,
+  - **Mem** uses `exe_out` for memory addressing / data access,
+  - **Writeback** uses control fields to select where the final result is written.
 
 <br>
+
+---
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Mem
+
+**Mem** (memory) is responsible for executing the data-memory side effects of an instruction.<br>
+It receives the `exe2mem` bundle from **Exe**, and, depending on `mem_ctrl`, it:
+  - issues a LOAD or STORE request to the external data memory.
+  - generates the byte enable mask and aligned write data for stores.
+  - forwards all required fields to **Writeback** through the `mem2wb` bundle.
+
+This stage also implements a `ready`/`valid` handshake to support back-pressure (even though the current memories are modeled as “perfect”).
+
+**Mem** is composed of four blocks:
+  - *exe_mem* – registers the incoming `exe2mem` payload and injects NOPs when no valid uop is provided.
+  - *exe_valid_registration* - Registers the `valid` signal for exe to use it as a `valid` signal for **Writeback** if no memory operation is needed.
+  - *ctrl* – produces the stage `ready`/`valid` signals.
+  - *mem_controller* - generates the actual memory control signals. 
+
+<br>
+
+### exe_mem
+
+The *Exe–Mem* pipeline register breaks the combinational path between **Exe** and **Mem** by capturing the `exe2mem` bundle into `exe2mem_q`.<br>
+
+This register is updated only when **Mem** is ready to accept a new micro-operation:
+  - If `exe_valid` && `ready` → capture `exe2mem`.
+  - If `ready` && `!exe_valid` → NOP injection: clear control fields to avoid any side effect:
+    - `mem_ctrl` <= `0` (no memory access).
+    - `gpr_ctrl` <= `0` (no GPR writeback).
+    - `csr_ctrl` <= `0` (no CSR writeback).
+  - If `!ready` → hold the previous `exe2mem_q` to preserve the pending transaction.
+
+<br>
+<br>
+
+### exe_valid_registration
+
+If no memory transaction is required by the instruction, the `valid` signal from **Exe** is registered to drive the `valid` signal of **Mem**.<br>
+
+This registration allows to synchronize the `valid` signal of **Mem** with its output bundle.
+
+<br>
+<br>
+
+### ctrl
+
+The **Mem** stage uses a standard handshake:
+  - `ready` indicates whether **Mem** can accept a new `exe2mem` payload.
+  - `valid` indicates when the current **Mem** stage operation is complete and its `mem2wb` output is valid.
+
+Back-pressure is supported: if the external memory does not acknowledge a transaction, `Mem` deasserts `ready`, which stalls **Exe** (and therefore stalls upstream stages).
+
+<br>
+<br>
+
+### mem_controller
+
+The *mem_controller* block performs the actual memory access control.<br>
+It uses:
+  - `exe_out` as the address (*alu* result from **Exe**).
+  - `op3` as the store data.
+  - `mem_ctrl` to decide load/store, size, and (later in **Writeback**) sign/zero extension policy.
+
+
+The external memory is addressed with a word-aligned address:
+  - `d_m_addr` = { addr[ADDR_WIDTH-1:ADDR_OFFSET_WIDTH], 0...0 }.
+
+The low bits `exe_out`[ADDR_OFFSET_WIDTH-1:0] are used as a byte offset inside the word to:
+  - shift store data into the correct byte lane.
+  - generate the byte-level write mask (d_m_wmask_o).
+
+Note: this implementation assumes naturally aligned accesses as expected by most RV32I/RV64I software. Misaligned exception/trap behavior is not implemented here.
+
+The memory direction is encoded in `mem_ctrl`:
+  - `mem_ctrl` == `MEM_IDLE` → no memory access.
+
+Otherwise:
+  - `mem_ctrl[3]` == `0` → READ (load).
+  - `mem_ctrl[3]` == `1` → WRITE (store).
+
+For loads, the unit asserts:
+  - `d_m_rden` = `1`, `d_m_wren` = `0`.
+  - d_m_wmask = all ones (some memory macros reuse this path).
+
+For stores, the unit asserts:
+  - `d_m_rden` = `0`, `d_m_wren` = `1`.
+  - `d_m_wdata` is `op3` shifted according to the byte offset.
+  - `d_m_wmask` selects the targeted bytes (byte/halfword/word/…).
+
+RV32: supports byte/halfword/word masks
+RV64: also supports word masks (MEM_WW) in addition to byte/halfword/full-width
+
+The external memory is modeled as a 1-cycle perfect memory with an acknowledge (`d_m_hit`):
+  - If a memory transaction is required (`mem_ctrl` != `MEM_IDLE`):
+    - `ready` = `d_m_hit`.
+    - `valid` = `d_m_hit`.
+  - If no memory transaction is required:
+    - `ready` = `1`.
+    - `valid` is asserted one cycle later using a registered `exe_valid_q`.
+
+This `exe_valid_q` register preserves the **Mem** -> **Writeback** “one-stage latency” even for non-memory instructions, so every uop still takes a full **Mem** stage before reaching **Writeback**.
+
+<br>
+<br>
+
+### Outputs
+
+`mem2wb` forwards: `exe_out`, `op3`, `rd`, `mem_ctrl`, `gpr_ctrl`, `csr_ctrl`
+
+<br>
+<br>
+
+### Summary
+
+**Mem** performs the external data memory transaction for loads and stores, while forwarding all required control fields to **Writeback**.<br>
+It also provides the necessary `ready`/`valid` handshake for future memories that may introduce wait states, and it enforces store alignment through byte masks and data shifting.
+
 <br>
 
 ---
@@ -640,93 +1054,71 @@ From a design perspective:
 ## Writeback
 
 **Writeback** is the final step in the instruction flow.<br>
-Its role is to apply the results of the executed instruction to the processor’s visible state — that is, to update the register file, data memory, and program counter.<br>
-It ensures that every operation performed by the core has a lasting architectural effect.<br>
+Its role is to apply the results of the executed instruction to the processor’s architectural state — primarily by updating the General Purpose Registers (GPRs).<br>
+It ensures that every valid micro-operation eventually produces a visible effect (when applicable).
+
+Internally, it contains two main functional parts:
+  - *mem_wb* - registers the incoming `mem2wb` payload and injects NOPs when no valid uop is provided.
+  - *rd_gen* – computes the final data to commit (GPR path).
 
 <br>
 
-**Writeback** receives all its inputs from the decode and execute stages:
-  - From **decode**: control signals and operan value (`mem_ctrl_i`, `gpr_ctrl_i`, `pc_ctrl_i`, `op3_i`, etc.) that specify what must be updated.
-  - From **exe**: the computed result (`exe_out_i`).
+### mem_wb
 
-Internally, it contains three main functional parts:
-  - Memory access controller – manages LOAD and STORE operations.
-  - Register file writer (*rd_gen*) – handles updates to general-purpose registers.
-  - Program counter generator (*pc_gen*) – computes the address of the next instruction.
+The *Mem–Writeback* pipeline register breaks the combinational path between **Mem** and **Writeback** by capturing the `mem2wb` bundle into `mem2wb_q`.<br>
 
-<br>
-<br>
+This stage is always ready (there is no back-pressure from the register files in this design). It behaves as follows:
+  - If `mem_valid` == `1`:
+    - `mem2wb_q` <= `mem2wb`.
+    - `valid_q`  <= `1`.
+  - Otherwise (NOP injection):
+    - `valid_q`     <= `0`.
+    - `mem2wb_q.rd` <= `0` (extra safety to prevent unintended writes).
 
-### Memory access controller
-
-This synchronous logic governs communication with the data memory.<br>
-It determines whether the current instruction involves a read, a write, or no memory access at all is composed of three main blocks:
-  - *mem_controller*.
-  - *mem_offset_gen*.
-  - *mem_ack_gen*.
+The stage output `valid` is directly driven by `valid_q` and indicates when the writeback payload is valid toward the register files.
 
 <br>
-
-For LOAD instructions:<br>
-It asserts the memory read enable (`m_rden_o`), sends the computed address (`exe_out_i`) through `m_addr_o`, and waits for the memory to acknowledge via `m_hit_i`.<br>
-Once acknowledged, the data is captured and at the next cycle written to the destination register (while the next instruction is executed).<br>
-To ensure correct data alignment, the address offset `m_addr_offset` is stored in the register `m_addr_offset_q`, allowing the `writeback` stage to properly align the loaded data in the GPRs.
-
-For STORE instructions:<br>
-It asserts `m_wren_o`, drives m_din_o with the value from `op3_i`, and configures the byte write mask (`m_wmask_o`) according to the access size (byte, half-word, word, or doubleword).<br>
-
-This controller also keeps track of request completion using an internal flag (`m_req_done_q`), ensuring that memory operations never overlap or conflict.<br>
-
 <br>
 
-### Register file writer (*rd_gen*)
+### rd_gen
 
-Once the memory or **exe** result is available, it is routed to the correct destination register through the **GPR** write path.<br>
-The control signal `gpr_ctrl_i` determines the data source:
+Once the **Mem** stage payload is registered, the *rd_gen* computes the data to write into the destination register.<br>
+The control signal `gpr_ctrl` selects the source:
 
-| **Control** | **Data Source**                                   |
-| ----------- | ------------------------------------------------- |
-| `GprAlu`    | Result from the ALU (`exe_out_i`)                 |
-| `GprMem`    | Data loaded from memory (`m_dout_i`)              |
-| `GprPrgmc`  | Return address (`pc_i + 4`) for jump instructions |
-| `GprOp3`    | Third operand (used for CSR-related operations)   |
+| **gpr_ctrl** | **Data Source**                                              |
+| ------------ | ------------------------------------------------------------ |
+| `GPR_ALU`    | ALU/Exe result (`exe_out`)                                   |
+| `GPR_MEM`    | Data loaded from memory (`d_m_rdata_i`) with formatting      |
+| `GPR_PRGMC`  | Return address for jumps (`op3 + 4`, where `op3` carries PC) |
+| `GPR_OP3`    | Direct `op3` path (used for CSR-related read paths)          |
 
-Register writes are synchronous, meaning they occur at the next rising clock edge.<br>
-However, register reads are asynchronous, which means that once a register is updated, its new value propagates immediately through the combinational read path — while the next instruction is executed.
+When `gpr_ctrl` == `GPR_MEM`, the writeback unit formats the memory read data using:
+  - `mem_ctrl` to select the access width and sign/zero extension policy.
+  - the address byte offset exe_out[ADDR_OFFSET_WIDTH-1:0] to extract the correct byte/halfword/word inside the aligned memory word.
 
-This design choice ensures:
-  - Immediate operand availability for subsequent instructions,
-  - No read-after-write (RAW) hazard within a single cycle,
-  - Simpler control logic without needing forwarding paths or stalls.
+Supported LOAD modes:
+  - `MEM_RB` / `MEM_RBU` : load byte (signed / unsigned).
+  - `MEM_RH` / `MEM_RHU` : load halfword (signed / unsigned).
+  - `MEM_RW` / `MEM_RWU` : load word (signed / unsigned, RV64 mode).
+  - default : full-width read (word on RV32, doubleword on RV64).
 
-As a result, the processor maintains correct data flow without additional pipeline logic, keeping the **single-cycle implementation both simple and efficient for educational purposes.<br>
+This ensures correct RISC-V load semantics while keeping the external memory interface word-aligned.
 
-<br>
-
-### Program counter generator (*pc_gen*)
-
-The `pc_gen` block determines the next instruction address.<br>
-It uses `pc_ctrl_i` from decode to decide how the program counter (`pc_next_o`) should be updated:
-
-| **Control** | **Description**                                            |
-| ----------- | ---------------------------------------------------------- |
-| `PcInc`     | Sequential execution → `PC + 4`.                           |
-| `PcSet`     | Absolute jump → new PC = `exe_out_i`.                      |
-| `PcAdd`     | PC-relative jump → new PC = `pc_i + exe_out_i`.            |
-| `PcCond`    | Conditional branch → depends on the ALU comparison result. |
-
-If a memory operation is still pending (`m_req_done_q` = `0`), the PC is held until the transaction completes — ensuring correct memory synchronization and avoiding premature instruction fetches.<br>
+General purpose Registers writes are synchronous (committed on the rising clock edge).<br>
+General purpose Registers reads are asynchronous in this design, meaning that once a register is written, its updated value becomes immediately visible through the combinational read ports for subsequent **Decode** stages.
 
 <br>
 
 ### Summary
 
 At a high level:
-  - **Exe** computes results.
-  - **Writeback** applies those results to memory, registers, and the PC.
-  - The next **fetch** then uses the updated PC to begin the next instruction.
+  - **Exe** computes results (`exe_out`).
+  - **Mem** optionally accesses data memory for loads/stores and forwards the payload.
+  - **Writeback** selects the correct result source and commits it to the register file.
 
-This stage closes the loop of instruction execution — completing the **single-cycle** flow.
+This stage closes the instruction execution loop and makes results architecturally visible, completing the pipeline flow.
+
+<br>
 
 ---
 
@@ -736,392 +1128,315 @@ This stage closes the loop of instruction execution — completing the **single-
 <br>
 <br>
 
+## Controller
 
-## Execution flow example
+The **Controller** is the global orchestration logic of the core.<br>
+Unlike **Fetch**/**Decode**/**Exe**/**Mem**/**Writeback**, it is not a pipeline stage producing an *_2_* bundle. Instead, it supervises the whole pipeline by:
+  - handling control-flow changes (jumps and taken branches) through a pipeline flush request.
+  - tracking RAW dependencies using a lightweight scoreboard and exposing “dirty” flags to **Decode**.
+  - driving the Program Counter (PC) update logic.
 
-This following program has been executed on the core:
-```
+It receives information from multiple places:
+  - from **Fetch**: pre-decoded register indices (`rs1`, `rs2`, `rd`) used for early hazard tracking.
+  - from **Decode**: stage handshake (`decode_ready`, `decode_valid`) to align scoreboard updates.
+  - from **Exe**: `pc_ctrl` and operands/results used to decide the next PC (and whether a branch is taken).
+  - from **Writeback**: the destination register being written (`wb_rd`) to clear dependencies.
+
+The **controller** has 4 blocks:
+  - *pc_gen* - handles the PC generation.
+  - *fetch_reg* - register the rs1/rs2/rd from **Fetch**.
+  - *data_hazard* - Handles data hazard.
+  - *control_hazard* - handles control hazard. 
+
+<br>
+
+### pc_gen
+
+The *pc_gen* block determines the next instruction address.<br>
+It uses `exe2pc.pc_ctrl` from **Exe** to decide how the program counter (`pc`) should be updated:
+
+| **Control** | **Description**                                            |
+| ----------- | ---------------------------------------------------------- |
+| Default     | Sequential execution → `PC + 4`.                           |
+| `PcInc`     | Sequential execution → `PC + 4`.                           |
+| `PcSet`     | Absolute jump → new PC = `exe2pc.exe_out`.                 |
+| `PcAdd`     | PC-relative jump → new PC = `exe2pc.pc + exe2pc.exe_out`.  |
+| `PcCond`    | Conditional branch → depends on the ALU comparison result. |
+
+The PC is updated only when it makes sense architecturally:
+  - normally: when the instruction fetch is acknowledged (`i_m_hit`).
+  - during a redirection/flush: PC update is forced so the pipeline can restart immediately from the correct address.
+
+This prevents the PC from advancing when the instruction memory has not delivered a valid instruction, while still allowing fast recovery after a taken branch/jump.
+
+By default, PC is incremented to fetch the next instruction (PC + `4`) to prevent blocking the pipeline as `pc_ctrl` is not available until the first instruction after a reset reaches the **Exe** stage.
+
+<br>
+<br>
+
+### fetch_reg
+
+To keep the timing clean and aligned with the pipeline, the controller registers the pre-decoded `rs1`/`rs2`/`rd` coming from **Fetch** when **Decode** is ready to accept a new instruction. This ensures hazard checks always match the instruction currently sitting in **Decode** and avoid a critical path between **Decode** and the **controller**.
+
+<br>
+<br>
+
+### data_hazard
+
+To handle RAW (Read After Write) hazards without forwarding, the controller implements a small scoreboard called dirty table.<br>
+Each GPR has an associated small counter (dirty[reg]), meaning:
+  - dirty[reg] == `0` → the register is clean (safe to read).
+  - dirty[reg] != `0` → the register is dirty (a previous instruction will write it later).
+
+The controller exposes two flags to **Decode**:
+  - rs1_dirty = (dirty counter of current rs1 is non-zero).
+  - rs2_dirty = (dirty counter of current rs2 is non-zero).
+
+Those flags are exactly what **Decode**.`ctrl` uses to stall the stage until operands become valid.
+
+The controller updates counters using only architectural events:
+  - Increment on decode/accept: when an instruction is accepted into the pipeline and has a destination register `rd` != `x0`, its destination becomes dirty.
+  - Decrement on writeback: when an instruction reaches **Writeback** and commits a destination register `wb_rd` != `x0`, the dependency is resolved.
+
+Important notes:
+  - `x0` is never written and must always remain clean.
+  - A small counter (instead of a single bit) allows multiple pending writers to the same register (useful as the pipeline evolves).
+
+<br>
+<br>
+
+### control_hazard
+
+A pipeline cannot know the correct next PC immediately when executing a jump or a conditional branch.<br>
+In this microarchitecture, the branch/jump decision is only resolved in **Exe**, therefore **Fetch** and **Decode** may already contain wrong-path instructions (as default behavior is to fetch the next instruction at `PC + 4`).
+
+To prevent these wrong-path instructions from being executed, the controller generates a flush request named `softresetn`:
+  - `softresetn` is active-low (0 means “flush requested”).
+  - the signal may be asynchronous, but it is sampled synchronously by pipeline stages.
+
+The flush is asserted when the PC must be redirected:
+  - unconditional redirections (e.g., jal, jalr) trigger a flush.
+  - conditional branches trigger a flush only if taken.
+
+Conceptually:
+  - PC_SET and PC_ADD always mean “PC redirection” → flush asserted.
+  - PC_COND means “branch” → flush asserted only if the comparison result indicates taken (stored in `exe2pc.exe_out[0]`).
+
+This “soft reset” clears the front-end stages so the next fetch restarts from the correct PC.
+
+<br>
+<br>
+
+### Summary
+
+The Controller provides the glue that makes the pipeline correct:
+  - it flushes the front-end on jumps and taken branches (`softresetn`).
+  - it prevents RAW hazards using a small scoreboard (`rs1_dirty`/`rs2_dirty`).
+  - it drives PC updates based on execution results (`pc_ctrl` + operands from **Exe**).
+
+With this organization, the pipeline remains simple and pedagogical, while still enforcing correct program order and architectural state updates.
+
+<br>
+
+---
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Execution flow examples
+
+For these exemples, the `start.s` bootloader has been executed on the core:
+
+```bash
 80000000 <_start>:
-  80000000:	00010097          	auipc	x1, 0x10
-  80000004:	0e00a103          	lw	  x2, 224(x1)
-  80000008:	00011e63          	bne	  x2, x0, 0x80000024
-  8000000c:	00510193          	addi	x3, x2, 5
-  80000010:	0e30a023          	sw	  x3, 224(x1)
-  80000014:	0100006f          	jal	  x0, 0x80000024
-  80000018:	00014117          	auipc	x1, 0x14
-  8000001c:	be810113          	addi	x1, x1, -1048
-  80000020:	374000ef          	jal	  x0, 394
+  80000000:  00014117            auipc   x2, 0x14
+  80000004:  c0010113            addi    x2, x2, -1024  # 13c00 <_stack_start>
+  80000008:  458000ef            jal     x1, 460 <main>
+  8000000c:  0000006f            j       c <_start+0xc>
 
-80000024 <loop>:
-  80000024:	0000006f          	jal   x0, 0x80000024
+80000460 <main>:
+  80000460:  ff010113            addi    x2, x2, -16
+  80000464:  00000613            li      x12, 0
+  80000468:  40000593            li      x11, 1024
+ ...
 ```
 
-This small program demonstrates the processing of several instruction types (arithmetic, memory access, and control flow).<br>
+This small program demonstrates the handling of a data hazard and a control hazard.<br>
 Its execution flow can be summarized as follows:
-  - Compute an address from the PC and store it in `x1` (**auipc**).
-  - Load the data from this address + offset and place it into `x2` (**lw**).
-  - Compare the loaded value (`x2`) with `0` (`x0`). If equal, continue to the next instruction; if not equal, jump directly to the end loop (**bne**).
-  - If the comparison passes, set `x3` = `5` (**addi**).
-  - Store the value of `x3` back into memory at the computed address (**sw**).
-  - Jump to the loop at `0x80000024` (**jal**).
+  - Initialize the stack pointer (**auipc** + **addi**) -> data hazard
+  - Jump to the main function (**jal**) -> control hazard
+  - After the execution of main, loop to keep a known step (**j**)
 
-Instructions between the jump and the loop are not executed. They are only here to demonstrate that the jump correctly skips over them.
+### Data hazard
 
-![SCHOLAR_RISC-V_execution_flow](./img/SCHOLAR_RISC-V_execution_flow.png)
+![SCHOLAR_RISC-V_data_hazard](./img/SCHOLAR_RISC-V_data_hazard.png)
+
+<br>
+
+#### Cycle 1
+
+When reset is released (**@1**), the pipeline stages become ready and **Fetch** can start requesting instructions.<br>
+**Fetch** asserts the instruction memory read enable `i_m_rden` (**@2**) at the reset PC (0x8000_0000), requesting the first instruction (**auipc**).<br>
+
+The instruction memory acknowledges the request with `i_m_hit` (**@3**). The instruction is considered valid on the next cycle, once `fetch_valid` asserts.`i_m_hit` is registered by the *mem_ack* block to build `fetch_valid` on the next rising edge of the clock to stay synchronized with instruction validity.
+
+<br>
+
+#### Cycle 2
+
+At this point, the memory output `i_m_rdata` already shows the first instruction (the address is stable early, even during reset).<br>
+However, the instruction is considered architecturally valid only when `fetch_valid` asserts (registered from `i_m_hit`).<br>
+The *pre-decode* block extract `rs1`, `rs2` and `rd` from the instruction to provide them to the **controller** to be registered.
+
+Meanwhile, the controller updates the Program Counter to `PC + 4` (**@4**) so **Fetch** can request the next instruction (**addi**).
+
+<br>
+
+#### Cycle 3
+
+`fetch_valid` is now visible by **Decode**, meaning the first instruction (**auipc**) is officially valid for the pipeline.<br>
+**Decode** captures the `if2id` bundle (instruction + PC) into its *if_id* register and starts decoding it (**@5**). The stage becomes valid.
+
+In parallel, the controller *fetch_reg* block captures the `rs1`, `rs2`, and `rd` fields of the **current** instruction visible in **Fetch** (here: **auipc**) so they can be used on the next rising edge for scoreboard updates (**@6**).<br>
+Right after reset, these fields may appear one cycle “too soon” because `i_m_rdata` is already stable. This is harmless: scoreboard updates are gated by `decode_valid`, so no incorrect dependency is created.
+
+At the same time, the next instruction (**addi**) becomes visible on the memory output and is pre-decoded combinationally by **Fetch**.<br>
+However, its `rs1/rs2/rd` fields will only be captured by *fetch_reg* on the **next** rising edge (i.e., at the Cycle 4 → Cycle 5 boundary).
+
+In other words: *fetch_reg* always stores the register indices of the instruction currently being presented to **Decode**, not the ‘next’ instruction that is only becoming visible on the memory bus.
+
+<br>
+
+#### Cycle 4
+
+Because **Decode** is valid and **Exe** is ready, the instruction is accepted into **Exe**: **Exe** captures the `id2exe` bundle and executes the operation.
+
+At the same time, when `decode_valid` is asserted and the instruction is accepted (**Exe** ready), the **controller** updates the RAW hazard scoreboard.<br>
+Since **auipc** will write to `x2` (`fetch_rd_q` = `x2`), the controller increments the dirty counter for `x2` (**@7**).<br>
+From this point, the value currently present in the GPR file for `x2` is considered dirty and must not be used by younger instructions.
+
+Also in this cycle, **Fetch** provides the next instruction (**addi**) to **Decode**, so **Decode** captures its `if2id` bundle.<br>
+However, this **addi** reads `x2` as `rs1`. Because `dirty_q[x2]` != `0`, the `rs1_dirty` signal from the **controller** is asserted and **Decode** is stalled (**@9**).<br>
+**Decode**.`ready` is deasserted, preventing **Fetch** from committing further instructions into the pipeline.
+
+Even if the instruction memory may already output subsequent instructions, they are not accepted because the front-end is stalled.
+
+<br>
+
+#### Cycle 5
+
+The producer instruction (**auipc**) continues through **Mem**.<br>
+The consumer instruction (**addi**) remains blocked in **Decode**, waiting for `x2` to become clean.
+
+No architectural progress can be made by the stalled instruction during this cycle.
+
+<br>
+
+#### Cycle 6
+
+**auipc** reaches **Writeback** and requests a register write to `x2` (**@10**). The written value is visible on the **Writeback** bus (`rd` = `2`, `gpr_wdata` = `0x80014000`).<br>
+
+This **Writeback** event is also observed by the **controller**, which will decrement the dirty counter of `x2` at the next rising edge (**@11**).<br>
+
+<br>
+
+#### Cycle 7
+
+The write to `x2` is now effective inside the GPR file, and asynchronous reads see the updated value immediately.<br>
+`dirty_q[x2]` is back to zero, so `rs1_dirty` deasserts (**@12**) and **Decode** becomes valid again.
+
+The pipeline can resume: **Exe** can accept the `id2exe` bundle for **addi**.
+
+<br>
+
+#### Cycle 8
+
+Normal pipeline flow is restored:
+  - **Exe** executes the previously stalled **addi**.
+  - **Decode** can accept the next instruction (**jal**).
+  - **Fetch** can resume fetching (**j**).
+
+<br>
+
+#### Conclusion
+
+This trace illustrates the core’s interlock strategy: once a destination register is marked dirty when an instruction enters the pipeline, Decode stalls any dependent instruction until **Writeback** clears the dirty flag and the new value becomes visible in the register file.
 
 <br>
 <br>
 
-### Instruction 1 — auipc x1, 0x10 (00010097)
+### Control hazard
 
-**auipc**: `rd = PC + (imm << 12)`.<br>
-**Purpose**: Build a base address relative to the current program counter (PC).<br>
-
-The **AUIPC** instruction adds the current program counter (PC) to a 20-bit immediate value (shifted left by `12`) and stores the result in a register.<br>
-Here, the PC (`0x80000000`) is added to `0x10` << `12` = `0x00010000`, producing `0x80010000`, which is then written into **GPR** `x1`.<br>
+![SCHOLAR_RISC-V_control_hazard](./img/SCHOLAR_RISC-V_control_hazard.png)
 
 <br>
 
-#### Reset release and instruction fetch
+#### Cycle 8
 
-While the processor is under reset, **fetch**'s output address (`m_addr_o`) already points to the start address (`0x80000000`).<br>
-This is why the first instruction is visible on `instr_o` even before reset is released.<br>
+For the control hazard demonstration, we resume at cycle 8, right after the data hazard has been resolved.
 
-When the reset signal is deasserted (@1), the **fetch**/*instr_mux* block — being purely combinational — immediately forwards the fetched instruction word to **decode**.<br>
-However, the architectural state (PC, GPRs, and memory) remains frozen.<br>
+At this point, the pipeline contains four consecutive instructions:
+  - **addi** is in **Exe** (it can now execute because `x2` is no longer dirty).
+  - **jal** is in **Decode** (being decoded **@1**).
+  - **j** is in **Fetch** (being fetched **@2**).
+  - **Mem** and **Writeback** are idle (the previous **auipc** is already committed).
 
-This is enforced by the valid mechanism:
-  - **decode**.`valid_o` depends on **fetch**.`valid_o`.
-  - All **writeback** operations (PC update, memory access, register writes) depend on **decode**.`valid_o`.
+**jal** is a PC-relative jump: its target is computed as `PC + immediate` (where PC is the address of the **jal** instruction).
+Therefore, the decode logic sets `pc_ctrl` = `PC_ADD` for this instruction (**@3**).
 
-As long as `valid_o` is low, no state change occurs, preventing any unintended updates during reset release.<br>
+#### Cycle 9
 
-<br>
+On the next rising edge, instructions naturally advance one stage:
+  - **addi** moves to **Mem**.
+  - **jal** moves to **Exe**.
+  - **j** moves to **Decode**.
+  - **Fetch** requests the next sequential instruction (`PC + 4`).
 
-#### Instruction validation
-
-**Fetch**/`mem_controller` is synchronous.<br>
-It detects the reset release only on the next rising edge of the clock and asserts `m_rden_o` (@2) to request the first instruction.<br>
-Because the instruction memory responds in a single cycle, the valid instruction is available at the following clock edge (@3), and **fetch**.`valid_o` is asserted.<br>
-
-<br>
-
-#### Decode and execute
-
-**Decode** extracts operands and control signals:
-  - Operands:
-    - PC = `0x80000000`
-    - Immediate = `0x00010000`
-  - Control:
-    - `exe_ctrl_o` = `Add` (@4)
-    - `gpr_ctrl_o` = `GprAlu`
-    - `pc_ctrl_o` = `PcInc`
-    - `mem_ctrl_o` = `MemIdle`
+Now **jal** is in **Exe**, meaning the redirection information becomes available to the controller through the `exe2pc` bundle and is used to detect the control hazard (`softresetn` **@4**).
 
 <br>
 
-**Exe** performs the addition:
-`0x80000000` + `0x00010000` = `0x80010000` (@5).<br>
+#### Cycle 10
+
+On the next rising edge:
+  - **addi** moves to **Writeback**
+  - **jal** moves to **Mem**
+
+`softresetn` is sampled by the front-end stages (**Fetch**, **Decode**, **Exe**) and they flush their internal bundles, discarding wrong-path instructions (such as **j**).
+
+While the front-end is being flushed, **Fetch** still issues a memory request, but now using the new PC computed by *pc_gen* (the jump target **(@5)**).<br>
+This is the first cycle where the instruction at the jump destination can be requested.
+
+#### Cycle 11
+
+At this point:
+  - **addi** has updated the GPRs (committed in **Writeback**).
+  - **jal** reaches **Writeback** to commit its architectural effect (writing the return address into `x1` **@6**).
+  - The pipeline front-end is empty/idle because it has just been flushed.
+  - **Fetch** receives the first instruction from the jump target on the memory output (**@7**), and also requests the following instruction at `pc + 4`.
+
+From here, the pipeline resumes normal sequential execution starting at the jump target, until another data hazard or control hazard occurs.
 
 <br>
 
-#### Writeback and PC update
+#### Conclusion
 
-In **writeback**, the **exe** result is selected (`gpr_ctrl_i` = `GprAlu`) and directed to **GPR** `x1` (@6).<br>
-Register writes are synchronous, so the actual update occurs at the next rising clock edge — while the next instruction is already being decoded.<br>
-
-Meanwhile, **GPR** reads are asynchronous, meaning the new value propagates immediately through the combinational read path.<br>
-As a result, the upcoming instruction (**lw**) can directly use the freshly computed value of `x1` without delay.<br>
-
-No memory access occurs in this instruction (`mem_ctrl_i` = `MemIdle`).<br>
-
-Finally, the PC is updated according to `pc_ctrl_i` = `PcInc`, producing `pc_next_o` = `0x80000004` (@7).<br>
-This allows **fetch** to present the next instruction address before the next clock edge — maintaining the **single-cycle** flow.<br>
+This trace illustrates the control-hazard strategy of the core: whenever a jump or a taken branch is resolved in **Exe**, the controller flushes the front-end using `softresetn` and restarts fetching from the redirected PC, resulting in a fixed control-flow penalty of 3 cycles.
 
 <br>
-
-### Instruction 2 — lw x2, 224(x1) (0e00a103)
-
-**lw**: `rd = M[rs1 + imm]`.<br>
-**Purpose**: Load a 32-bit word from memory into a register.<br>
-
-The **LW** instruction reads a 32-bit value from memory and stores it into a destination register.<br>
-Here:
-  - The base address is taken from register `x1` (computed by **AUIPC**).
-  - The offset is `224` (`0xE0`).
-  - The loaded value is written into register `x2`.
-
-Thus, the effective memory address is `x1` + `0xE0`.
-
-<br>
-
-#### Fetch and decode
-
-At the next cycle, **fetch** updates its memory output (`m_dout_i`) with the new instruction — **LW**.<br>
-As soon as **fetch**.`valid_o` is asserted, **decode** takes over to extract the instruction fields and determine the operands.<br>
-
-**Decode** provides:
-  - Operands (@8):
-    - **exe**.`op1_i` = `x1` value (`0x80010000`).
-    - **exe**.`op2_i` = immediate (`0x000000E0`).
-  - Control signals:
-    - `exe_ctrl_o` = `Add`.
-    - `gpr_ctrl_o` = `GprMem` (result comes from memory).
-    - `mem_ctrl_o` = `MemRb` (read word operation).
-    - `pc_ctrl_o` = `PcInc` (increment PC).
-
-<br>
-
-**Exe** then computes the effective address: `0x80010000` + `0x000000E0` = `0x800100E0`.<br>
-This result is sent to **writeback** as `exe_out_i`.<br>
-
-<br>
-
-#### Memory request and data return
-
-In the same cycle, **writeback** issues a read request to data memory (@9):
-  - It asserts `m_rden_o` = `1`,
-  - Sends the computed address (`0x800100E0`) via `m_addr_o`,
-  - And waits for an acknowledgment from the memory (`m_hit_i`).
-
-One cycle later, the memory responds with the data and asserts `m_hit_i`, which in turn sets `m_req_done_q` = `1` (@10).<br>
-
-Because the memory is synchronous and single-cycle, this one-cycle delay ensures correct data timing without requiring any stalling mechanism.<br>
-
-<br>
-
-#### Writeback to GPR
-
-Since **decode** configured `gpr_ctrl_i` = `GprMem`, **writeback** captures the data returned by the memory (`m_dout_i`) and writes it into **GPR** `x2` at the next clock edge (@11).<br>
-In this specific example, the data memory was initialized to zero, so `x2` receives the value `0x00000000`.<br>
-
-Meanwhile, the next instruction (**BNE**) is already being decoded and executed — maintaining the single-cycle illusion while respecting the synchronous read latency of the memory.<br>
-
-<br>
-
-### Instruction 3 — bne x2, x0, 0x24 (00011e63)
-
-**bne**: `if (rs1 != rs2) PC += offset`.<br>
-**Purpose**: Conditionally branch to a new address if the two registers are not equal.<br>
-
-<br>
-
-The **BNE** (Branch if Not Equal) instruction compares two registers and updates the program counter (PC) based on the result.<br>
-If the registers differ, the branch is taken and execution jumps to the target address (PC + offset).<br>
-Otherwise, the branch is not taken, and the processor simply increments the PC by `4` to continue sequential execution.<br>
-
-<br>
-
-#### Decode and execution
-
-Here, the instruction compares the contents of register `x2` and register `x0`:
-  - `x2` = `0x00000000` (loaded from memory by the previous **LW** instruction),
-  - `x0` = `0x00000000` (hardwired constant zero).
-
-**Decode** extracts operands and generates the control signals:
-  - Operands:
-    - **exe**.`op1_i` = `x2` = `0x00000000`.
-    - **exe**.`op2_i` = `x0` = `0x00000000`.
-    - **writeback**.`op3_i` = branch offset (`0x24`).
-  - Control:
-    - `exe_ctrl_o` = `Ne` (`0x0B`) — comparison “not equal”.
-    - `pc_ctrl_o` = `PcCond` — conditional branch.
-    - `mem_ctrl_o` = `MemIdle` — no memory operation.
-    - `gpr_ctrl_o` = `GprIdle` — no register write.
-
-<br>
-
-**Exe** evaluates the condition by performing the comparison: `0x00000000` != `0x00000000` → false.<br>
-Therefore, **exe**.`out_o` (and thus **writeback**.`exe_out_i`) is set to `0x00000000` (@12).<br>
-
-<br>
-
-#### Conditional PC update
-
-In **writeback**, `pc_ctrl_i` = `PcCond` tells the *pc_gen* block to choose between two possible next PC values:
-  - If the branch is taken → `pc_next_o` = `pc_i` + `op3_i`.
-  - If the branch is not taken → `pc_next_o` = `pc_i` + `4`.
-
-Since **exe**.`out_i` = `0x00000000` (condition false), the branch is not taken.<br>
-As a result, `pc_next_o` = `pc_i` + `4` (@13), so the next instruction (**addi**) will be fetched sequentially.<br>
-
-All other control signals are set to `Idle`, ensuring that neither registers nor memory are modified during this operation.<br>
-
-<br>
-
-### Instruction 4 — addi x3, x2, 5 (00510193)
-
-**addi**: `rd = rs1 + imm`.<br>
-**Purpose**: Add a 12-bit immediate value to a register and store the result in another register.<br>
-
-<br>
-
-The **ADDI** instruction performs an addition between a register value and a small immediate constant.<br>
-Here:
-  - The base value is taken from register `x2` (which currently holds `0x00000000`, loaded by the **LW** instruction).
-  - The immediate is `5`.
-  - The result is stored in register `x3`.
-
-Therefore, the expected result is `x3` = `0x00000000` + `0x00000005` = `0x00000005`.<br>
-
-<br>
-
-#### Decode and execution
-
-**Decode** extracts operands and control signals:
-  - Operands:
-    - **exe**.`op1_i` = `x2` = `0x00000000`.
-    - **exe**.`op2_i` = `imm` = `0x00000005`.
-  - Control:
-    - `exe_ctrl_o` = `Add` — perform addition.
-    - `gpr_ctrl_o` = `GprAlu` — write ALU result to the register file.
-    - `pc_ctrl_o` = `PcInc` — increment PC.
-    - `mem_ctrl_o` = `MemIdle` — no memory access.
-
-<br>
-
-**Exe** performs the computation: `0x00000000` + `0x00000005` = `0x00000005` (@14).<br>
-This result is forwarded to **writeback** as `exe_out_i`.<br>
-
-<br>
-
-#### Writeback to GPRs
-
-In **writeback**, the **exe** result is selected (`gpr_ctrl_i` = `GprAlu`) and directed to **GPR** `x3` (@15).<br>
-Since register writes are synchronous, the update occurs at the next rising clock edge, while the next instruction (**SW**) is already executing.<br>
-
-Because **GPR** reads are asynchronous, the new value (`0x00000005`) propagates immediately through the read path.<br>
-This ensures that decode can already use the correct `x3` value in the very next cycle, avoiding any read-after-write hazard — a key principle in **single-cycle** microarchitectures.<br>
-
-No memory operation is triggered (`mem_ctrl_i` = `MemIdle`).<br>
-
-<br>
-
-### Instruction 5 — sw x3, 224(x1) (0e30a023)
-
-**sw**: `M[rs1 + imm] = rs2`.<br>
-**Purpose**: Store a 32-bit word from a register into memory.<br>
-
-The **SW** (Store Word) instruction writes a 32-bit value from a register into memory.<br>
-Here:
-  - The base address is taken from register `x1` (computed by the previous **AUIPC**).
-  - The offset is `224` (`0xE0`).
-  - The value to write comes from register `x3`, which currently contains `0x00000005` (result of **ADDI**).
-
-Thus, the effective memory address is `x1` + `0xE0`, and the stored data is `0x00000005`.<br>
-
-<br>
-
-#### Decode and address computation
-
-**Decode** extracts operands and generates control signals:
-  - Operands:
-    - **exe**.`op1_i` = `x1` value.
-    - **exe**.`op2_i` = immediate `0x000000E0`.
-    - **writeback**.`op3_i` = value to store (`x3`).
-  - Control:
-    - `exe_ctrl_i` = `Add` — compute the effective address.
-    - `gpr_ctrl_i` = `GprIdle` — no register write.
-    - `mem_ctrl_i` = `MemWw` — store word.
-    - `pc_ctrl_i` = `PcInc` — increment PC.
-
-<br>
-
-**Exe** computes the effective address: `0x80010000` + `0x000000E0` = `0x800100E0`.<br>
-This address is sent to **writeback** as `exe_out_i`.<br>
-
-<br>
-
-#### Memory write and acknowledgment
-
-In **writeback**:
-  - `m_wren_o` is asserted to initiate the write operation (@16).
-  - `m_addr_o` is driven with the computed address (`0x800100E0`) (@16).
-  - `m_din_o` receives the data from `op3_i` (`0x00000005`) (@17).
-
-The write mask (`m_wmask_o`) is configured according to the access size (word).<br>
-
-One cycle later, the memory acknowledges the completed operation by asserting `m_hit_i`, which sets `m_req_done_q` = 1.<br>
-This confirms that the data has been successfully stored.<br>
-
-<br>
-
-#### Design choice: simplifying the timing
-
-Eventually, a store operation could complete immediately at the same clock edge.<br>
-However, in this educational design, store operations are modeled over two cycles, mirroring the timing of load operations.<br>
-This symmetry helps students clearly understand how read and write memory transactions follow similar paths — even though, in practice, stores do not return data to the core.<br>
-
-<br>
-
-### Instruction 6 — jal x0, 24 (0100006f)
-
-**jal**: `rd = PC + 4; PC = PC + offset`.<br>
-**Purpose**: Jump to a new address and optionally save the return address.<br>
-
-<br>
-
-The **JAL** (Jump And Link) instruction is used to transfer control to a new location in the program.<br>
-It adds an immediate offset to the current program counter (PC) to form the target address, and writes the return address (PC + 4`) into a destination register.<br>
-If the destination register is `x0`, as in this case, the return address is discarded — effectively turning this into an unconditional jump.<br>
-
-This mechanism is frequently used to implement infinite loops or unconditional branches at the end of simple programs.<br>
-
-<br>
-
-#### Decode and execute
-
-At this stage, the program has reached the end of its functional sequence.<br>
-**Decode** processes the **JAL** instruction and provides the following signals:
-  - Operands:
-    - **exe**.`op1_i` = `0x00000000` (unused).
-    - **exe**.`op2_i` = immediate offset (`0x00000010`).
-  - Control:
-    - `exe_ctrl_i` = `Add` — prepare offset addition.
-    - `gpr_ctrl_i` = `GprPrgmc` — (normally) write PC + `4` into `rd`.
-    - `pc_ctrl_i` = `PcAdd` — compute PC = PC + offset.
-    - `mem_ctrl_i` = `MemIdle` — no memory access.
-
-Since the destination register is `x0`, the result of the addition is not written anywhere.<br>
-To prevent any unwanted write, **decode** sets `rd_o` = `0x00` (register zero), which effectively disables the register write path.<br>
-
-<br>
-
-**Exe** computes `exe_out_o` = `op1_i` + `op2_i` = `0x00000000` + `0x00000010` = `0x00000010`.<br>
-By this mechanism, **exe** provides to **writeback** the immediate to add to PC.<br>
-
-<br>
-
-#### PC update
-
-Because `pc_ctrl_i` = `PcAdd`, the **writeback**.*pc_gen* block updates the next program counter as: PC (`0x80000014`, @18) + `0x00000010` (@19) = `0x80000024` (@20).<br>
-
-This value is sent back to **fetch**, which immediately begins fetching from the new address — creating the infinite loop.<br>
-
-<br>
-
-#### Infinite loop
-
-The instruction located at address `0x80000024` is another **JAL x0, 24**, so the same sequence repeats forever — creating an infinite loop.<br>
-Since the destination register is x0, no state change ever occurs.<br>
-This is a common technique in bare-metal embedded systems: when there is no operating system or exit handler, the processor simply loops at the end of execution, remaining active and predictable.<br>
-
 <br>
 
 ### Execution Flow - Conclusion
 
-Through this sequence of six instructions, the **SCHOLAR RISC-V** processor demonstrates the complete life cycle of instruction execution — from fetching and decoding to execution, memory access, and program counter update.<br>
+This short boot sequence highlights the two main drawbacks introduced by a basic pipelined microarchitecture and the simple mechanisms used in **SCHOLAR RISC-V** to handle them.<br>
 
-Each instruction showcases a different aspect of the datapath:
-  - **AUIPC** illustrates address computation and immediate handling.
-  - **LW** introduces memory read operations and the two-cycle access model.
-  - **BNE** shows conditional branching and PC control.
-  - **ADDI** and **SW** highlight arithmetic and memory write operations.
-  - **JAL** concludes with program control transfer and infinite looping.
+- **Data hazards (RAW)** are handled by interlocking **Decode** using a small “dirty” scoreboard: dependent instructions are stalled until the producer commits its result in **Writeback**.
+- **Control hazards** are handled by flushing the front-end when a jump or taken branch is resolved in **Exe**, then restarting fetch from the redirected PC.
 
-<br>
-
-This detailed exploration also highlights the inherent trade-offs in **single-cycle** designs: high clarity and low hardware cost but a limited frequency and performance.<br>
+In both cases, correctness is preserved at the cost of **lost cycles**: cycles that could have been used to retire useful instructions are instead spent stalling or flushing, reducing the overall throughput of the core.
 
 <br>
 
@@ -1135,71 +1450,80 @@ This detailed exploration also highlights the inherent trade-offs in **single-cy
 
 ## Performance, Cost and Limitations
 
-![SCHOLAR_RISC-V_ressources](./img/SCHOLAR_RISC-V_32bit_ressources.png)
+![SCHOLAR_RISC-V_resources](./img/SCHOLAR_RISC-V_32bit_resources.png)
 
-The performance of the **SCHOLAR RISC-V** processor is evaluated using three key indicators:
-  - CycleMark/MHz — a normalized performance score derived from CoreMark.
-  - Maximum frequency (Fmax) — the highest achievable clock rate on the FPGA.
-  - Parallelism — the number of threads that can be executed simultaneously.
+As for the **single-cycle** version, the performance of the **SCHOLAR RISC-V** processor is evaluated using three key indicators:
+  - **CycleMark/MHz** — a normalized performance score derived from CoreMark.
+  - **Maximum frequency (Fmax)** — the highest achievable clock rate on the FPGA.
+  - **Parallelism** — the number of hardware threads that can be executed simultaneously.
 
 <br>
 
-| **Architecture**              | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
-| ----------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `mcycle` (Zicntr)** | 1.24              | LEs: 3132 (1061 FFs)<br>Fmax: 69 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `mcycle` (Zicntr)** | 1.05              | LEs: 6717 (2118 FFs)<br>Fmax: 62 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **Architecture**                  | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
+|----------------------------------|------------------:|--------------------------------------------------------------------------------|
+| **RV32I + `CSR*` (Zicntr)**      | 0.55              | LEs: 1999 (702 FFs)<br>Fmax: 120 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `mcycle` (Zicntr)**    | 0.45              | LEs: 4068 (1247 FFs)<br>Fmax: 106 MHz<br>uSRAM: 12<br>LSRAM: 0<br>Math blocks: 0 |
 
+> 📝 `CSR*`: `mcycle`, `mhpmcounter3` and `mhpmcounter4`.
+
+<br>
 <br>
 
 ### CycleMark/MHz
 
-The CycleMark/MHz score represents the average number of benchmark iterations achieved per MHz of clock frequency. It is an image of the **IPC**.<br>
-The **RV32I** core achieves **1.24** CycleMark/MHz, while the **RV64I** version scores **1.05** CycleMark/MHz — slightly lower due to its wider datapath and additional logic depth.<br>
+The CycleMark/MHz score represents the average number of benchmark iterations achieved per MHz of clock frequency.  
+It can be seen as a practical indicator of the achieved **IPC** (instructions per cycle) under the benchmark workload.<br>
 
-Comparison data (CoreMark scores, which CycleMark is derived from) can be found here: [ARM Cortex-M Comparison Table](https://developer.arm.com/-/media/Arm%20Developer%20Community/PDF/Cortex-A%20R%20M%20datasheets/Arm%20Cortex-M%20Comparison%20Table_v3.pdf).<br>
+The **RV32I** pipelined core achieves **0.55** CycleMark/MHz (versus **1.24** for the **single-cycle** version), which corresponds to a significant performance drop (**~56%**) in terms of “useful work per cycle”.
 
-> 📝 CycleMark is a derivative benchmark based on CoreMark, using a different timing method (CPU cycle counting). Its score is comparable to CoreMark in relative performance terms but should not be considered an official CoreMark validated score.<br>
+![cyclemark](./img/cyclemark.png)
+
+This is the trade-off of increasing the maximum operating frequency.<br>
+As shown in the plot, among the **1,829,338** cycles required to execute one CycleMark iteration:
+- **672,010** cycles are lost due to **data hazard** handling (**Decode** stalls),
+- **145,975 × 3 = 437,925** cycles are lost due to **control hazard** handling (front-end flush on taken control-flow).
+
+This represents **1,109,935** cycles (more than half the total) where the core is not retiring useful instructions, explaining why CycleMark/MHz is significantly lower than in the **single-cycle** version.
+
+Comparison data (CoreMark scores, which CycleMark is derived from) can be found in the [ARM Cortex-M Comparison Table](https://developer.arm.com/-/media/Arm%20Developer%20Community/PDF/Cortex-A%20R%20M%20datasheets/Arm%20Cortex-M%20Comparison%20Table_v3.pdf).
+
+> 📝 CycleMark is a derivative benchmark based on CoreMark, using a different timing method (CPU cycle counting). Its score is comparable to CoreMark in relative performance terms but should not be considered an official CoreMark validated score.
 
 <br>
 
 ### Maximum Frequency
 
-Although the frequencies may seem modest, they are typical for FPGA-based implementations of **single-cycle** processors.<br>
+In return to a lower CycleMark/MHz score, this microarchitecture provides a higher frequency (**120 MHz**) than the **single-cycle** version (**69 MHz**), allowing more cycles per second.
 
-To execute an instruction, the following path must be completed within one clock cycle: `Instruction memory → Fetch → Decode → Execute → Writeback → Data memory`.<br>
+The current critical path is:  
+`data memory → Writeback → GPRs`  
+This path is exercised when load data must be written into the register file.
 
-This full sequence forms the **critical path** of the processor — the longest combinational route between two synchronous elements.<br>
-The longer this path, the slower the clock must be to ensure signals have enough time to propagate and settle before the next rising edge.<br>
+This can be optimized. For example, introducing an additional **Mem2** stage to register memory read data before writing it into the GPRs would break this path and improve Fmax.
 
-Because this design executes all instruction stages in a single clock, its **critical path** necessarily spans almost the entire datapath.<br>
-This makes it extremely easy to understand and simulate, but inherently limits its operating frequency.<br>
-
-In ASIC, where gate delays are far smaller, similar designs would easily exceed few hundred MHz.<br>
+This kind of optimization will be studied in the **super pipeline** version of the core.
 
 <br>
 
 ### Parallelism
 
-Since this is a **single-issue**, **single-cycle** processor, only one instruction can be in flight at a time.<br>
-However, memory operations (LOAD and STORE) require two cycles to complete, which means the average **IPC** (Instructions Per Cycle) is slightly below 1 in practice.<br>
+Like the **single-cycle** version, this is a **single-thread**, **single-issue** processor: only one instruction is *issued* per cycle in the best case.<br>
+However, the pipeline allows multiple instructions to be **in flight** simultaneously (one per stage), and the achieved throughput depends on stalls and flushes.<br>
+As shown earlier, the current implementation has an IPC below `1` due to hazard penalties.
 
 <br>
 
 ### Resource Utilization and Cost Insights
 
-From a resource perspective, the processor remains relatively compact:
-  - 3132 logic elements (1061 flip-flops) for **RV32I**.
-  - 6717 logic elements (2118 flip-flops) for **RV64I**.
-  - No block RAMs (uSRAM/LSRAM).
+From a resource perspective, the processor appears more compact than the **single-cycle** version:
+  - 1999 logic elements (702 as flip-flops) for **RV32I**.
+  - 4068 logic elements (1247 as flip-flops) for **RV64I**.
+  - A few uSRAM blocks for the GPRs.
   - No hardware multipliers or DSP blocks.
 
-At first glance, this seems lightweight.<br>
-However, a closer look reveals that a third of these logic elements are used solely for the General-Purpose Registers (**GPR**) — the 32 × 32-bit register file required by the RISC-V ISA.<br>
-
-That’s 1024 flip-flops dedicated to storage alone — not counting additional control logic.<br>
-This highlights a common reality in digital design: **Memory structures, even small ones, are among the most resource-expensive components in digital systems — especially on FPGAs**.<br>
-
-This is why most practical architectures, whether in ASICs or FPGAs, use dedicated memory blocks (BRAMs, uSRAMs, etc.) instead of generic logic for register files and caches.<br>
+This may seem counter-intuitive, but the explanation is simple: in the **single-cycle** version, the GPRs were intentionally implemented using LUTs to highlight their cost (roughly one third of the core).<br>
+In the **pipelined** version, the GPRs are implemented using the FPGA uSRAM, which removes a large LUT cost (e.g., **~1024 LUTs** for a 32×32 register file).<br>
+The remaining flip-flops are mostly used to register bundles between pipeline stages.
 
 <br>
 
@@ -1213,13 +1537,18 @@ This is why most practical architectures, whether in ASICs or FPGAs, use dedicat
 
 ## Conclusion
 
-This first version of the **SCHOLAR RISC-V** processor deliberately focuses on implementing a simple and accessible **RISC-V** design.<br>
-It prioritizes clarity, visibility, and simplicity over performance, providing a clear introduction to the inner workings of a processor through detailed diagrams and execution flow examples.<br>
+The **pipelined** version of the **SCHOLAR RISC-V** processor focuses on improving clock frequency.  
+Even though this goal is achieved (**~74%** improvement), overall benchmark throughput decreases:
 
-Its limited performance will later be improved through future enhancements, each explained in terms of both benefits and trade-offs.<br>
-These evolutions will serve as a foundation to introduce well-known optimization techniques such as **pipelining**, **hazard management**, and **out-of-order execution**.<br>
+- Pipeline: `120 MHz × 0.55 ≈ 66 CycleMark/s`
+- Single-cycle: `69 MHz × 1.24 ≈ 86 CycleMark/s`
 
-In the next iteration of this project, we will explore how **pipelining** can significantly increase performance — and analyze the cost of these improvements — while building upon the solid foundation established by this **single-cycle** design.<br>
+This performance loss is mainly caused by the drawbacks of this simple pipeline implementation: **RAW data hazards** (stalls) and **control hazards** (flushes).
+
+This does not mean pipelining is a wrong optimization strategy — it is simply incomplete on its own.<br>
+The next iteration of this project will focus on mitigating data hazards (e.g., forwarding/bypassing), and studying the implementation cost, benefits, and trade-offs.<br>
+The primary goal will be to reduce the number of stall cycles, increase CycleMark/MHz, and therefore improve the overall CycleMark/s of the pipelined core.
+
 
 <br>
 

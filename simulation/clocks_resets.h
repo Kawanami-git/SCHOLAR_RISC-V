@@ -4,8 +4,8 @@
 \file       clocks_resets.h
 \brief      Clock and reset control API for the Verilator DUT (Vriscv_env)
 \author     Kawanami
-\version    1.1
-\date       25/10/2025
+\version    1.0
+\date       19/12/2025
 
 \details
   Lightweight helpers to drive the DUT clocks and resets from the simulation
@@ -22,9 +22,7 @@
 \section clocks_resets_h_version_history Version history
 | Version | Date       | Author     | Description      |
 |:-------:|:----------:|:-----------|:-----------------|
-| 1.0     | 02/06/2025 | Kawanami   | Initial version. |
-| 1.1     | 25/10/2025 | Kawanami   | Update the whole file for coding style compliance.<br>Update
-the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version. |
 ********************************************************************************
 */
 

@@ -4,8 +4,8 @@
 \file       args_parser.h
 \brief      Command-line argument parser for simulation runtime.
 \author     Kawanami
-\date       23/10/2025
-\version    1.1
+\date       19/12/2025
+\version    1.0
 
 \details
   Lightweight parser used to process command-line inputs at simulation runtime.
@@ -18,9 +18,7 @@
 \section args_parser_h_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/06/2025 | Kawanami   | Initial version.                          |
-| 1.1     | 23/10/2025 | Kawanami   | Update the whole file for coding style compliance.<br>Update
-the whole file comments for doxygen support. |
+| 1.0     | 19/12/2025 | Kawanami   | Initial version.                          |
 ********************************************************************************
 */
 
