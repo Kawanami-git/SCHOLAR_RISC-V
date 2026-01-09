@@ -111,8 +111,8 @@ static inline char* ParseInstrAsm(Instr* ins, char* p, const char* end)
   const size_t n    = static_cast<size_t>(end - p);
   const size_t copy = (n < sizeof(ins->instr) - 1) ? n : (sizeof(ins->instr) - 1);
   std::memset(ins->instr, 0, sizeof(ins->instr));
-  std::memcpy(ins->instr, p, copy);
-  ins->instr[copy] = '\0';
+  std::memcpy(ins->instr, p, copy - 1); // -1 to remove \n
+  ins->instr[copy - 1] = '\0';          // -1 to remove \n
   return const_cast<char*>(end);
 }
 
