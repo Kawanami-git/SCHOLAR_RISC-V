@@ -1121,7 +1121,7 @@ This detailed exploration also highlights the inherent trade-offs in **single-cy
 
 ## Performance, Cost and Limitations
 
-![SCHOLAR_RISC-V_ressources](./img/SCHOLAR_RISC-V_32bit_ressources.png)
+![SCHOLAR_RISC-V_resources](./img/SCHOLAR_RISC-V_32bit_resources.png)
 
 The performance of the **SCHOLAR RISC-V** processor is evaluated using three key indicators:
   - CycleMark/MHz — a normalized performance score derived from CoreMark.
