@@ -383,12 +383,12 @@ endif
 
 #################################### MPFS DISCOVERY KIT ####################################
 MPFS_DISCO_KIT_LINUX_LINK=https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/core-image-custom-mpfs-disco-kit.rootfs-20251104145941.wic
-MPFS_DISCO_KIT_SDK_LINK=https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/sdk.zip
+MPFS_DISCO_KIT_SDK_LINK=https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/oecore-core-image-custom-x86_64-riscv64-mpfs-disco-kit-toolchain-nodistro.0.sh
 
 # Environnement for MPFS_DISCOVERY_KIT cross-compilation
 SDK_ENV ?= $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk/environment-setup-riscv64-oe-linux
 
-SDK_BIN ?= $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk/sysroots/riscv64-oe-linux/bin/
+SDK_BIN ?= $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk/sysroots/x86_64-oesdk-linux/usr/bin/riscv64-oe-linux/
 
 # Helper to activate the MPFS_DISCOVERY_KIT environment before running the build
 define SDK_RUN
@@ -718,7 +718,8 @@ mpfs_disco_kit_linux: work
 mpfs_disco_kit_get_linux: work
 	@wget -P $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(MPFS_DISCO_KIT_LINUX_LINK)
 	@wget -P $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(MPFS_DISCO_KIT_SDK_LINK)
-	@unzip -d $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk.zip
+	chmod +x $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)oecore-core-image-custom-x86_64-riscv64-mpfs-disco-kit-toolchain-nodistro.0.sh
+	$(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)oecore-core-image-custom-x86_64-riscv64-mpfs-disco-kit-toolchain-nodistro.0.sh -y -d "$(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)/sdk/"
 
 
 # MPFS_DISCO_KIT: Program the Linux
