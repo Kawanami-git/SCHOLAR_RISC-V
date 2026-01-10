@@ -4,8 +4,8 @@
 \file       scholar_riscv_core.sv
 \brief      SCHOLAR RISC-V Core Module
 \author     Kawanami
-\date       19/12/2025
-\version    1.0
+\date       10/01/2026
+\version    1.1
 
 \details
   This module is the top-level module of the SCHOLAR RISC-V core.
@@ -34,6 +34,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 10/01/2026 | Kawanami | Add non-perfect memory support in the controller by checking `mem_ready_i` before triggering the softreset. |
 ********************************************************************************
 */
 
