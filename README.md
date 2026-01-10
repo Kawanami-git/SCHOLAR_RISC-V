@@ -22,7 +22,7 @@ A **pipelined** microarchitecture means that each instruction is completed over 
 > For readability, clock and reset signals are omitted.<br>
 > A `^` symbol at the bottom of a block indicates a sequential (clocked) element.<br>
 > The Control and Status Registers (CSRs) are not displayed in this diagram but work like the General Purpose Registers (GPRs).<br>
-> White signals represent bundles (i.e. set of signals) used to pass control and data signals from a stage to another.<br>
+> White signals represent bundles (i.e. set of signals) used to pass control and data signals from a stage to another.
 
 <br>
 
@@ -81,20 +81,20 @@ However, part of this repository (CycleMark) is derived from the [CoreMark repos
 ## Supported RISC-V Instructions 
 
 This section lists all base integer instructions implemented in the **SCHOLAR RISC-V** processor, including both **RV32I** and **RV64I** sets.<br>
-Each instruction is presented with its mnemonic, format, description, and pseudocode operation.<br>
+Each instruction is presented with its mnemonic, format, description, and pseudocode operation.
 
 These instructions form the foundation of the processor’s execution capabilities — covering arithmetic, logic, control flow, and memory operations.<br>
-Together, they define the minimum working instruction set that allows a program to execute entirely on the SCHOLAR processor.<br>
+Together, they define the minimum working instruction set that allows a program to execute entirely on the SCHOLAR processor.
 
 > 💡 Tip:
 >
-> You can think of R-type instructions as operations between two registers, I-type instructions as operations involving immediates, and S/B/U/J-types as handling memory access or control flow.<br>
+> You can think of R-type instructions as operations between two registers, I-type instructions as operations involving immediates, and S/B/U/J-types as handling memory access or control flow.
 
 > 🧠 Note:
 >
 > Arithmetic instructions in **RV32I** always operate on 32-bit values.<br>
 > When working in **RV64I**, the same logic applies — but operands and results are sign-extended to 64 bits.<br>
-> Additional instructions introduced by **RV64I** specifically handle 32-bit operations within a 64-bit architecture.<br>
+> Additional instructions introduced by **RV64I** specifically handle 32-bit operations within a 64-bit architecture.
 
 <br>
 
@@ -103,7 +103,7 @@ Together, they define the minimum working instruction set that allows a program 
 The RV32I instruction set includes 32-bit integer operations — the core of every RISC-V implementation.<br>
 These instructions operate on 32-bit registers and memory addresses.
 
-The following tables group instructions by category for easier understanding.<br>
+The following tables group instructions by category for easier understanding.
 
 <br>
 
@@ -114,7 +114,6 @@ The following tables group instructions by category for easier understanding.<br
 | `LUI`        | U-type     | Load upper immediate      | `rd ← imm << 12`        |
 | `AUIPC`      | U-type     | Add upper immediate to PC | `rd ← PC + (imm << 12)` |
 
-<br>
 <br>
 
 #### Arithmetic and Logic (Register)
@@ -133,7 +132,6 @@ The following tables group instructions by category for easier understanding.<br
 | `AND`        | R-type     | Bitwise AND                 | `rd ← rs1 ∧ rs2`            |
 
 <br>
-<br>
 
 #### Arithmetic and Logic (Immediate)
 
@@ -150,7 +148,6 @@ The following tables group instructions by category for easier understanding.<br
 | `SRAI`       | I-type     | Shift right arithmetic immediate   | `rd ← rs1 >>> shamt`       |
 
 <br>
-<br>
 
 #### Memory Access (Load and Store)
 
@@ -166,7 +163,6 @@ The following tables group instructions by category for easier understanding.<br
 | `SW`         | S-type     | Store word                     | `M[rs1 + imm] ← rs2[31:0]`             |
 
 <br>
-<br>
 
 #### Control Transfer (Branch and Jump)
 
@@ -181,7 +177,6 @@ The following tables group instructions by category for easier understanding.<br
 | `BLTU`       | B-type     | Branch if less than (unsigned)      | `if (rs1 < rs2) PC ← PC + offset`    |
 | `BGEU`       | B-type     | Branch if greater/equal (unsigned)  | `if (rs1 ≥ rs2) PC ← PC + offset`    |
 
-<br>
 <br>
 
 #### Miscellaneous and System Instructions (not implemented)
@@ -200,7 +195,7 @@ The following tables group instructions by category for easier understanding.<br
 
 The **RV64I** extension adds 64-bit register and memory operations to the base ISA.<br>
 All previous 32-bit instructions remain valid, but their results are now zero- or sign-extended to 64 bits.<br>
-The new instructions introduced by **RV64I** enable explicit 32-bit arithmetic and logical operations, allowing software to efficiently manipulate 32-bit data within a 64-bit processing environment.<br>
+The new instructions introduced by **RV64I** enable explicit 32-bit arithmetic and logical operations, allowing software to efficiently manipulate 32-bit data within a 64-bit processing environment.
 
 <br>
 
@@ -215,7 +210,6 @@ The new instructions introduced by **RV64I** enable explicit 32-bit arithmetic a
 | `SRAW`       | R-type     | Arithmetic shift right (word)        | `rd ← sign_extend(rs1[31:0] >>> (rs2 & 0x1F))` |
 
 <br>
-<br>
 
 #### Arithmetic and Logic (Immediate)
 
@@ -226,7 +220,6 @@ The new instructions introduced by **RV64I** enable explicit 32-bit arithmetic a
 | `SRLIW`      | I-type     | Logical shift right immediate    | `rd ← sign_extend(rs1[31:0] >> shamt)`  |
 | `SRAIW`      | I-type     | Arithmetic shift right immediate | `rd ← sign_extend(rs1[31:0] >>> shamt)` |
 
-<br>
 <br>
 
 #### Memory Access (Load and Store)
@@ -250,10 +243,10 @@ The new instructions introduced by **RV64I** enable explicit 32-bit arithmetic a
 ## Instruction Formats
 
 Every RISC-V instruction follows one of a few standardized formats that define how its bits are organized.<br>
-Understanding these formats is key to interpreting instructions and designing the **decode** stage of a processor.<br>
+Understanding these formats is key to interpreting instructions and designing the **decode** stage of a processor.
 
 Each format divides the 32-bit instruction word into fields that identify operands, immediates, and operation types.<br>
-Depending on the instruction type, some fields may be reused or interpreted differently.<br>
+Depending on the instruction type, some fields may be reused or interpreted differently.
 
 | **Field**          | **Purpose**                                                                 |
 | ------------------ | --------------------------------------------------------------------------- |
@@ -267,7 +260,7 @@ Depending on the instruction type, some fields may be reused or interpreted diff
 
 > 🧠 Note:
 >
-> RISC-V uses fixed 32-bit instruction length (for the base ISA), which simplifies decoding logic — every instruction is exactly one word.<br>
+> RISC-V uses fixed 32-bit instruction length (for the base ISA), which simplifies decoding logic — every instruction is exactly one word.
 
 <br>
 
@@ -278,7 +271,7 @@ Depending on the instruction type, some fields may be reused or interpreted diff
 | imm[31:12] | rd   | opcode |
 
 Used for large immediates. The immediate value is placed in the upper 20 bits of the destination register.<br>
-Examples: **LUI**, **AUIPC**.<br>
+Examples: **LUI**, **AUIPC**.
 
 <br>
 <br>
@@ -290,7 +283,7 @@ Examples: **LUI**, **AUIPC**.<br>
 | funct7 | rs2   | rs1   | funct3 | rd   | opcode |
 
 Used for arithmetic or logical operations that involve two source registers and one destination register.<br>
-Examples: **ADD**, **SUB**, **SLL**, **AND**, **OR**, **XOR**, **SLT**, **SLTU**.<br>
+Examples: **ADD**, **SUB**, **SLL**, **AND**, **OR**, **XOR**, **SLT**, **SLTU**.
 
 <br>
 <br>
@@ -303,7 +296,7 @@ Examples: **ADD**, **SUB**, **SLL**, **AND**, **OR**, **XOR**, **SLT**, **SLTU**
 
 Used for operations with one source register and a 12-bit immediate value.<br>
 Includes arithmetic immediates, loads, and control-flow instructions.<br>
-Examples: **ADDI**, **ANDI**, **ORI**, **LW**, **JALR**.<br>
+Examples: **ADDI**, **ANDI**, **ORI**, **LW**, **JALR**.
 
 <br>
 <br>
@@ -327,7 +320,7 @@ Examples: **SB**, **SH**, **SW**, **SD**.
 | imm[12] | imm[10:5] | rs2   | rs1   | funct3 | imm[4] | imm[3:1] | imm[11] | opcode |
 
 Used for conditional branches — the target address is computed by adding the immediate offset to the current PC.<br>
-Examples: **BEQ**, **BNE**, **BLT**, **BGE**, **BLTU**, **BGEU**.<br>
+Examples: **BEQ**, **BNE**, **BLT**, **BGE**, **BLTU**, **BGEU**.
 
 <br>
 <br>
@@ -338,10 +331,8 @@ Examples: **BEQ**, **BNE**, **BLT**, **BGE**, **BLTU**, **BGEU**.<br>
 | ------- | --------- | ------- | ---------- | ---- | ------ |
 | imm[20] | imm[10:1] | imm[11] | imm[19:12] | rd   | opcode |
 
-
-
 Used for unconditional jumps. The destination register stores the return address (PC + 4).<br>
-Examples: **JAL**.<br>
+Examples: **JAL**.
 
 <br>
 
@@ -363,8 +354,8 @@ Below is a summary of synthesis results on a PolarFire MPFS095T FPGA:
 
 | **Architecture**              | **Features**                                    | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `CSR*` (Zicntr)** | single-issue pipelined RISC-V processor | 0.55             | LEs: 1999 (702 FFs)<br>Fmax: 120 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `CSR*` (Zicntr)** | single-issue pipelined RISC-V processor (64-bit datapath) | 0.45              | LEs: 4068 (1247 FFs)<br>Fmax: 106 MHz<br>uSRAM: 12<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `CSR*` (Zicntr)** | single-issue pipelined RISC-V processor | 0.55             | LEs: 1963 (702 FFs)<br>Fmax: 127 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `CSR*` (Zicntr)** | single-issue pipelined RISC-V processor (64-bit datapath) | 0.45              | LEs: 4003 (1247 FFs)<br>Fmax: 101 MHz<br>uSRAM: 12<br>LSRAM: 0<br>Math blocks: 0 |
 
 > 📝
 >
@@ -383,13 +374,13 @@ Below is a summary of synthesis results on a PolarFire MPFS095T FPGA:
 ## Pedagogical value
 
 This implementation intentionally prioritizes transparency over optimization.<br>
-The goal is to explain how a pipeline works by implementing a classical pipeline microarchitecture.<br>
+The goal is to explain how a pipeline works by implementing a classical pipeline microarchitecture.
 
 In addition to improving clock frequency, a pipelined core also introduces drawbacks—most notably **data hazards** and **control hazards** (e.g., jumps/branches).<br>
 These drawbacks can be mitigated with techniques such as **bypassing/forwarding** and **branch prediction**, but they are intentionally out of scope for the current design.
 
 This makes the trade-offs of pipelining clearly visible and keeps the microarchitecture easier to understand for students.<br>
-Mitigations will be introduced in later branches to preserve the project’s pedagogical progression.<br>
+Mitigations will be introduced in later branches to preserve the project’s pedagogical progression.
 
 <br>
 
@@ -424,7 +415,7 @@ There are several ways to split the logic into stages. In this design, the class
 
 <br>
 
-This choice highlights the main pros and cons of a **pipelined** architecture while keeping the design close to the **Single-Cycle** implementation (i.e., minimizing structural changes).<br>
+This choice highlights the main pros and cons of a **pipelined** architecture while keeping the design close to the **Single-Cycle** implementation (i.e., minimizing structural changes).
 
 <br>
 <br>
@@ -531,7 +522,7 @@ lw  x3, 0(x2)       # produces x3
 sw  x3, 0(x5)       # consumes x3 as store data (RAW)
 ```
 
-Even though the store does not write a destination register, it still needs the value of x3 to write it to memory.<br>
+Even though the store does not write a destination register, it still needs the value of x3 to write it to memory.
 
 <br>
 
@@ -595,7 +586,7 @@ To prevent executing `b` and `c`, the microarchitecture implements a pipeline fl
 
 This mechanism clears the front of the pipeline and restarts fetching from the computed PC.<br>
 Flush sequence:
-  - Cycle 3: `a` is executed (**Exe**) and the jump target PC is computed (in the **controller** using the ALU output). Meanwhile, `b` is decoded and `c` is fetched **and `softresetn` is asserted (`softresetn` = 0) for one cycle**.
+  - Cycle 3: `a` is executed (**Exe**) and the jump target PC is computed (in the **controller** using the ALU output). Meanwhile, `b` is decoded and `c` is fetched **and `softresetn` is asserted (`softresetn` = `0`) for one cycle**.
   - Cycle 4: **Fetch**, **Decode** and **Exe** are synchronously flushed by `softresetn`, while the new PC is computed from the ALU output and provided to **Fetch**.<br>
   During the flush, memory requests are not blocked: the instruction memory is still addressed with the correct PC. Only the stage valid signals are cleared so wrong-path instructions are discarded.<br>
   In parallel, `a` continues to **Mem**.
@@ -773,7 +764,7 @@ All immediates are properly sign-extended (or zero-extended when required).
 The *exe_ctrl_gen* block determines which ALU operation will be executed in **Exe**.
 It uses `opcode`, `funct3`, and `funct7` to generate a compact 5-bit control signal (`exe_ctrl`) that directly selects the operation inside **Exe** — such as addition, subtraction, comparison, or logical shift.<br>
 
-This design follows the RISC-V specification exactly, allowing new instructions to be added by simply extending the control table.<br>
+This design follows the RISC-V specification exactly, allowing new instructions to be added by simply extending the control table.
 
 <br>
 <br>
@@ -784,7 +775,7 @@ This block defines how **Mem** and **Writeback** should interact with memory:
   - It identifies whether the instruction is a load, store, or no-memory operation.
   - It encodes the access width (byte, halfword, word, or doubleword) and the sign-extension rule.
 
-The generated 5-bit `mem_ctrl` signal is used by **Mem** and **Writeback** to manage data memory reads and writes deterministically.<br>
+The generated 5-bit `mem_ctrl` signal is used by **Mem** and **Writeback** to manage data memory reads and writes deterministically.
 
 <br>
 <br>
@@ -809,7 +800,7 @@ Depending on the control flow instruction:
   - Jump (`PcSet` or `PcAdd`) → PC replaced with or added to an offset.
   - Conditional branch (`PcCond`) → next PC depends on **exe** comparison results.
 
-This mechanism provides full support for jumps, calls, and branches.<br>
+This mechanism provides full support for jumps, calls, and branches.
 
 <br>
 <br>
@@ -830,7 +821,6 @@ All decoded information (PC, operands and control fields) is provided to **Exe**
 It is almost identical to the **single-cycle** version, with two pipeline-specific additions:
   - *if_id*, which registers the incoming instruction/PC bundle and breaks the combinational path from **Fetch** to **Decode**.
   - *ctrl*, which implements the stage handshake and interlock, allowing **Decode** to stall on RAW hazards (dirty operands) or when **Exe** applies back-pressure.
-
 
 <br>
 
@@ -1065,7 +1055,7 @@ Internally, it contains two main functional parts:
 
 ### mem_wb
 
-The *Mem–Writeback* pipeline register breaks the combinational path between **Mem** and **Writeback** by capturing the `mem2wb` bundle into `mem2wb_q`.<br>
+The *Mem–Writeback* pipeline register breaks the combinational path between **Mem** and **Writeback** by capturing the `mem2wb` bundle into `mem2wb_q`.
 
 This stage is always ready (there is no back-pressure from the register files in this design). It behaves as follows:
   - If `mem_valid` == `1`:
@@ -1224,6 +1214,9 @@ Conceptually:
 
 This “soft reset” clears the front-end stages so the next fetch restarts from the correct PC.
 
+The flush is asserted only when **Mem** is ready (`mem_ready_i`).<br>
+If the memory stage applies back-pressure, the control-flow instruction cannot leave **Exe** yet. Flushing too early would discard the branch/jump before it is allowed to progress, potentially losing its architectural effect and corrupting program flow.
+
 <br>
 <br>
 
@@ -1279,7 +1272,7 @@ Its execution flow can be summarized as follows:
 #### Cycle 1
 
 When reset is released (**@1**), the pipeline stages become ready and **Fetch** can start requesting instructions.<br>
-**Fetch** asserts the instruction memory read enable `i_m_rden` (**@2**) at the reset PC (0x8000_0000), requesting the first instruction (**auipc**).<br>
+**Fetch** asserts the instruction memory read enable `i_m_rden` (**@2**) at the reset PC (0x8000_0000), requesting the first instruction (**auipc**).
 
 The instruction memory acknowledges the request with `i_m_hit` (**@3**). The instruction is considered valid on the next cycle, once `fetch_valid` asserts.`i_m_hit` is registered by the *mem_ack* block to build `fetch_valid` on the next rising edge of the clock to stay synchronized with instruction validity.
 
@@ -1337,9 +1330,9 @@ No architectural progress can be made by the stalled instruction during this cyc
 
 #### Cycle 6
 
-**auipc** reaches **Writeback** and requests a register write to `x2` (**@10**). The written value is visible on the **Writeback** bus (`rd` = `2`, `gpr_wdata` = `0x80014000`).<br>
+**auipc** reaches **Writeback** and requests a register write to `x2` (**@10**). The written value is visible on the **Writeback** bus (`rd` = `2`, `gpr_wdata` = `0x80014000`).
 
-This **Writeback** event is also observed by the **controller**, which will decrement the dirty counter of `x2` at the next rising edge (**@11**).<br>
+This **Writeback** event is also observed by the **controller**, which will decrement the dirty counter of `x2` at the next rising edge (**@11**).
 
 <br>
 
@@ -1397,6 +1390,8 @@ On the next rising edge, instructions naturally advance one stage:
 
 Now **jal** is in **Exe**, meaning the redirection information becomes available to the controller through the `exe2pc` bundle and is used to detect the control hazard (`softresetn` **@4**).
 
+In our design, the memory is supposed to be perfect. `mem_valid_i` value is `1`.
+
 <br>
 
 #### Cycle 10
@@ -1431,7 +1426,7 @@ This trace illustrates the control-hazard strategy of the core: whenever a jump 
 
 ### Execution Flow - Conclusion
 
-This short boot sequence highlights the two main drawbacks introduced by a basic pipelined microarchitecture and the simple mechanisms used in **SCHOLAR RISC-V** to handle them.<br>
+This short boot sequence highlights the two main drawbacks introduced by a basic pipelined microarchitecture and the simple mechanisms used in **SCHOLAR RISC-V** to handle them.
 
 - **Data hazards (RAW)** are handled by interlocking **Decode** using a small “dirty” scoreboard: dependent instructions are stalled until the producer commits its result in **Writeback**.
 - **Control hazards** are handled by flushing the front-end when a jump or taken branch is resolved in **Exe**, then restarting fetch from the redirected PC.
@@ -1461,8 +1456,8 @@ As for the **single-cycle** version, the performance of the **SCHOLAR RISC-V** p
 
 | **Architecture**                  | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 |----------------------------------|------------------:|--------------------------------------------------------------------------------|
-| **RV32I + `CSR*` (Zicntr)**      | 0.55              | LEs: 1999 (702 FFs)<br>Fmax: 120 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `mcycle` (Zicntr)**    | 0.45              | LEs: 4068 (1247 FFs)<br>Fmax: 106 MHz<br>uSRAM: 12<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `CSR*` (Zicntr)**      | 0.55              | LEs: 1963 (702 FFs)<br>Fmax: 127 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `mcycle` (Zicntr)**    | 0.45              | LEs: 4003 (1247 FFs)<br>Fmax: 101 MHz<br>uSRAM: 12<br>LSRAM: 0<br>Math blocks: 0 |
 
 > 📝 `CSR*`: `mcycle`, `mhpmcounter3` and `mhpmcounter4`.
 
@@ -1472,7 +1467,7 @@ As for the **single-cycle** version, the performance of the **SCHOLAR RISC-V** p
 ### CycleMark/MHz
 
 The CycleMark/MHz score represents the average number of benchmark iterations achieved per MHz of clock frequency.  
-It can be seen as a practical indicator of the achieved **IPC** (instructions per cycle) under the benchmark workload.<br>
+It can be seen as a practical indicator of the achieved **IPC** (instructions per cycle) under the benchmark workload.
 
 The **RV32I** pipelined core achieves **0.55** CycleMark/MHz (versus **1.24** for the **single-cycle** version), which corresponds to a significant performance drop (**~56%**) in terms of “useful work per cycle”.
 
@@ -1493,7 +1488,7 @@ Comparison data (CoreMark scores, which CycleMark is derived from) can be found 
 
 ### Maximum Frequency
 
-In return to a lower CycleMark/MHz score, this microarchitecture provides a higher frequency (**120 MHz**) than the **single-cycle** version (**69 MHz**), allowing more cycles per second.
+In return to a lower CycleMark/MHz score, this microarchitecture provides a higher frequency (**127 MHz**) than the **single-cycle** version (**69 MHz**), allowing more cycles per second.
 
 The current critical path is:  
 `data memory → Writeback → GPRs`  
@@ -1516,8 +1511,8 @@ As shown earlier, the current implementation has an IPC below `1` due to hazard 
 ### Resource Utilization and Cost Insights
 
 From a resource perspective, the processor appears more compact than the **single-cycle** version:
-  - 1999 logic elements (702 as flip-flops) for **RV32I**.
-  - 4068 logic elements (1247 as flip-flops) for **RV64I**.
+  - 1963 logic elements (702 as flip-flops) for **RV32I**.
+  - 4003 logic elements (1247 as flip-flops) for **RV64I**.
   - A few uSRAM blocks for the GPRs.
   - No hardware multipliers or DSP blocks.
 
@@ -1540,7 +1535,7 @@ The remaining flip-flops are mostly used to register bundles between pipeline st
 The **pipelined** version of the **SCHOLAR RISC-V** processor focuses on improving clock frequency.  
 Even though this goal is achieved (**~74%** improvement), overall benchmark throughput decreases:
 
-- Pipeline: `120 MHz × 0.55 ≈ 66 CycleMark/s`
+- Pipeline: `127 MHz × 0.55 ≈ 70 CycleMark/s`
 - Single-cycle: `69 MHz × 1.24 ≈ 86 CycleMark/s`
 
 This performance loss is mainly caused by the drawbacks of this simple pipeline implementation: **RAW data hazards** (stalls) and **control hazards** (flushes).
@@ -1548,7 +1543,6 @@ This performance loss is mainly caused by the drawbacks of this simple pipeline 
 This does not mean pipelining is a wrong optimization strategy — it is simply incomplete on its own.<br>
 The next iteration of this project will focus on mitigating data hazards (e.g., forwarding/bypassing), and studying the implementation cost, benefits, and trade-offs.<br>
 The primary goal will be to reduce the number of stall cycles, increase CycleMark/MHz, and therefore improve the overall CycleMark/s of the pipelined core.
-
 
 <br>
 

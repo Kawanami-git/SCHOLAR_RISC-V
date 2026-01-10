@@ -62,6 +62,8 @@ module ctrl #(
     input  wire                         decode_ready_i,
     /// Decode valid flag (1: valid  0: not valid)
     input  wire                         decode_valid_i,
+    /// Memory ready flag (1: ready  0: not ready)
+    input wire                          mem_ready_i,
     /// One-cycle soft reset (active-low) for taken branch handling
     output wire                         softresetn_o,
     /// Destination register (from writeback)
@@ -115,22 +117,32 @@ module ctrl #(
 
 
 
-  /// Control Hazard
+  /// Control hazard
   /*!
-  * This block handles the branch management
-  * of the pipeline.
-  * If a taken branch is detected, the controller
-  * applies a reset on fetch, decode & exe stages
-  * to reinitialize them.
-  * Thus, the pipiline does a clean restart using
-  * the branch program counter.
+  * When a jump or a taken branch is resolved in Exe, the next PC value becomes
+  * known, but younger instructions may already be present in Fetch/Decode
+  * (wrong-path instructions).
+  *
+  * To prevent executing these wrong-path instructions, the controller generates a
+  * one-cycle "soft reset" (`softresetn`, active-low) that flushes **Fetch**, **Decode**
+  * and **Exe**, forcing the front-end to restart from the redirected PC.
+  *
+  * Important: the flush is asserted only when **Mem** is ready (`mem_ready_i`).
+  * If the memory stage applies back-pressure, the control-flow instruction cannot
+  * leave **Exe** yet. Flushing too early would discard the branch/jump before it is
+  * allowed to progress, potentially losing its architectural effect and corrupting
+  * program flow.
+  *
+  * Therefore, redirection/flush is triggered only when the EXE→MEM transfer can occur,
+  * ensuring the control-flow instruction is preserved and the pipeline restarts safely.
   */
   always_comb begin : control_hazard
     if (!rstn_i) begin
       softresetn = 1'b1;
     end
-    else if ((exe2pc_i.pc_ctrl == PC_SET || exe2pc_i.pc_ctrl == PC_ADD ||
-                              (exe2pc_i.pc_ctrl == PC_COND && exe2pc_i.exe_out[0]))) begin
+    else if (mem_ready_i &&
+            (exe2pc_i.pc_ctrl == PC_SET || exe2pc_i.pc_ctrl == PC_ADD ||
+            (exe2pc_i.pc_ctrl == PC_COND && exe2pc_i.exe_out[0]))) begin
       softresetn = 1'b0;
     end
     else begin

@@ -243,6 +243,7 @@ module scholar_riscv_core #(
       .fetch_rd_i    (fetch_rd),
       .decode_valid_i(decode_valid),
       .decode_ready_i(decode_ready),
+      .mem_ready_i   (mem_ready),
       .softresetn_o  (softresetn),
       .wb_rd_i       (wb_rd),
       .pc_o          (pc)
