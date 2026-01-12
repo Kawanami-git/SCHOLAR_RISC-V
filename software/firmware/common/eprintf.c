@@ -4,8 +4,8 @@
 \file       eprintf.c
 \brief      Tiny printf that writes into CTP shared memory (bare-metal).
 \author     Kawanami
-\version    1.0
-\date       25/10/2025
+\version    1.1
+\date       12/01/2026
 
 \details
 
@@ -13,7 +13,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 25/10/2025 | Kawanami   | Initial version.                          |
-| 1.1     | xx/xx/xxxx | Author     |                                           |
+| 1.1     | 12/01/2026 | Kawanami   | Add the possibility to ignore Eprintf call using compiler flag for Spike compatibility. |
 ********************************************************************************
 */
 
@@ -94,6 +94,10 @@ static uword_t Euts(uword_t num, uword_t base, volatile char** out)
  */
 uword_t Eprintf(const char* fmt, ...)
 {
+#ifdef SPIKE
+  return 0;
+#endif
+
   if (!fmt)
   {
     return 0;

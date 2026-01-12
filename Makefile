@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.0
-# \date       19/12/2025
+# \version    1.1
+# \date       12/01/2026
 #
 # \details
 #   Drives the complete flow:
@@ -34,6 +34,7 @@
 # | Version | Date       | Author     | Description         |
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 19/12/2025 | Kawanami   | Initial version.    |
+# | 1.1     | 12/01/2026 | Kawanami   | Add the possibility to compare the loader & cyclemark firmware with a Spike golden trace.   |
 # ********************************************************************************
 # */
 
@@ -245,7 +246,10 @@ SIM_LOG_FILE					= $(SIM_LOG_DIR)log.txt
 SPIKE							= $(SPIKE_DIR)spike
 
 # Spike flags
-SPIKE_FLAGS						= -m2 --isa=$(ISA) -l --log-commits
+SPIKE_FLAGS						= -m0x00100000:0x00100000 --isa=$(ISA) -l --log-commits
+
+# Is the simulation with spike ?
+WITH_SPIKE						= NO_SPIKE
 
 # Verilator binary
 SIMULATOR						= $(VERILATOR_DIR)verilator
@@ -539,6 +543,7 @@ firmware: work
 	GLOBAL_DEFINES_DIR=$(SOFTWARE_DIR) \
 	FIRMWARE_FILES=$(FIRMWARE_FILES) \
 	LINKER=$(LINKER) \
+	WITH_SPIKE=$(WITH_SPIKE) \
 	BUILD_DIR=$(FIRMWARE_BUILD_DIR) \
 	LOG_DIR=$(FIRMWARE_LOG_DIR) \
 	FIRMWARE=$(FIRMWARE) \
@@ -548,8 +553,11 @@ firmware: work
 	@echo
 
 
-
-
+.PHONY: spike
+spike:
+	$(SPIKE) $(SPIKE_FLAGS) \
+	--log=$(FIRMWARE_BUILD_DIR)$(FIRMWARE).spike \
+	$(FIRMWARE_BUILD_DIR)$(FIRMWARE).elf
 
 # Loader firmware target
 .PHONY: loader_firmware
@@ -563,6 +571,14 @@ loader_firmware: firmware
 loader: FIRMWARE=loader
 loader: dut loader_firmware
 loader: run
+
+# Spike loader target
+.PHONY: loader_spike
+loader_spike: SIM=$(SIM_VS_SPIKE)
+loader_spike: WITH_SPIKE=SPIKE
+loader_spike: FIRMWARE=loader
+loader_spike: dut loader_firmware spike
+loader_spike: run
 
 # Echo firmware target
 .PHONY: echo_firmware
@@ -593,6 +609,14 @@ cyclemark_firmware: firmware
 cyclemark: FIRMWARE=cyclemark
 cyclemark: dut cyclemark_firmware
 cyclemark: run
+
+# Spike cyclemark target
+.PHONY: cyclemark_spike
+cyclemark_spike: SIM=$(SIM_VS_SPIKE)
+cyclemark_spike: WITH_SPIKE=SPIKE
+cyclemark_spike: FIRMWARE=cyclemark
+cyclemark_spike: dut cyclemark_firmware spike
+cyclemark_spike: run
 
 
 

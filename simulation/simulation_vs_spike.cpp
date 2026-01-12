@@ -4,8 +4,8 @@
 \file       simulation_vs_spike.cpp
 \brief      ISA-level simulation against Spike golden trace
 \author     Kawanami
-\version    1.0
-\date       19/12/2025
+\version    1.1
+\date       12/01/2026
 
 \details
   This program:
@@ -26,7 +26,7 @@
 | Version | Date       | Author     | Description                                |
 |:-------:|:----------:|:-----------|:-------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version.                           |
-| 1.1     | xx/xx/xxxx | Author     |                                            |
+| 1.1     | 12/01/2026 | Kawanami   | Add PTC/CTP RAMs verification.             |
 ********************************************************************************
 */
 
@@ -92,17 +92,33 @@ static inline bool IsBranch(uint32_t instr_bin)
 }
 
 /*!
- * \brief Read the written data back from DATA RAM image, shifted by address LSBs.
+ * \brief Read the written data back from DATA RAMs image, shifted by address LSBs.
  *
- * The DATA RAM is exposed as word-wide entries (`NB_BYTES_IN_WORD` per entry).
+ * The DATA RAMs are exposed as word-wide entries (`NB_BYTES_IN_WORD` per entry).
  * We reconstruct the exact byte/half/word/dword as Spike reports it by shifting
  * according to the byte offset (ADDR_OFFSET).
  */
 static inline uword_t ReadBackAlignedData(uword_t mem_addr)
 {
   const uword_t word_index = (mem_addr & 0xFFFF) / NB_BYTES_IN_WORD;
-  const uword_t raw        = dut->DataDpramMem[word_index];
-  const uword_t byte_off   = (mem_addr & ADDR_OFFSET) * 8; // shift in bits
+  uword_t       raw        = 0;
+
+  if (mem_addr >= SOFTCORE_0_PTC_RAM_START_ADDR &&
+      mem_addr < SOFTCORE_0_PTC_RAM_START_ADDR + SOFTCORE_0_PTC_RAM_SIZE)
+  {
+    raw = dut->PtcDpramMem[word_index];
+  }
+  else if (mem_addr >= SOFTCORE_0_CTP_RAM_START_ADDR &&
+           mem_addr < SOFTCORE_0_CTP_RAM_START_ADDR + SOFTCORE_0_CTP_RAM_SIZE)
+  {
+    raw = dut->CtpDpramMem[word_index];
+  }
+  else
+  {
+    raw = dut->DataDpramMem[word_index];
+  }
+
+  const uword_t byte_off = (mem_addr & ADDR_OFFSET) * 8; // shift in bits
   return (raw >> byte_off);
 }
 
@@ -176,7 +192,7 @@ static inline uword_t verify_gpr(Instr* instr)
   // Non-store: register writeback or CSR
   if (IsCSR(instr->instr_bin))
   {
-    if((instr->instr_bin >> 20) == 0xb00) // mhpmcounter0
+    if ((instr->instr_bin >> 20) == 0xb00) // mhpmcounter0
     {
       if (dut->GprMemory[instr->rd] != (dut->mhpmcounter0_q - 4)) // exe/stage/wb/effective write
       {
@@ -198,9 +214,10 @@ static inline uword_t verify_gpr(Instr* instr)
       dut->GprEn = 0;
       return SUCCESS;
     }
-    else if((instr->instr_bin >> 20) == 0xb03) // mhpmcounter4
+    else if ((instr->instr_bin >> 20) == 0xb03) // mhpmcounter4
     {
-      if (dut->GprMemory[instr->rd] != dut->mhpmcounter3_q - 2) // final li + sw add two stalled cycles
+      if (dut->GprMemory[instr->rd] !=
+          dut->mhpmcounter3_q - 2) // final li + sw add two stalled cycles
       {
         LogPrintf("Instruction %s (pc: 0x%x) error: CSR writeback x%02u expected 0x" WORD_PRINT_FMT
                   " got 0x" WORD_PRINT_FMT ".\n",
@@ -212,7 +229,7 @@ static inline uword_t verify_gpr(Instr* instr)
         return FAILURE;
       }
     }
-    else if((instr->instr_bin >> 20) == 0xb04) // mhpmcounter4
+    else if ((instr->instr_bin >> 20) == 0xb04) // mhpmcounter4
     {
       if (dut->GprMemory[instr->rd] != dut->mhpmcounter4_q)
       {

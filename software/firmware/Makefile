@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Firmware build pipeline for SCHOLAR RISC-V (ELF → BIN/DUMP/HEX).
 # \author     Kawanami
-# \version    1.0
-# \date       19/12/2025
+# \version    1.1
+# \date       12/01/2026
 #
 # \details
 #   Invokes the RISC-V GNU toolchain to compile and link firmware sources,
@@ -36,6 +36,7 @@
 # | Version | Date       | Author     | Description         |
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 04/11/2025 | Kawanami   | Initial version.    |
+# | 1.1     | 12/01/2026 | Kawanami   | Add a new preprocessor variable used to skip code when doing a spike simulation.    |
 # ********************************************************************************
 # */
 
@@ -74,6 +75,9 @@ TOOLS_DIR  				?= $(ROOT_DIR)../../scripts/
 
 # elf converter (to hex, format -> addr:data)
 MAKE_HEX				?= $(TOOLS_DIR)makehex.py
+
+# Simulation with spike ?
+WITH_SPIKE				= NO_SPIKE
 #################################### 	 				####################################
 
 
@@ -93,7 +97,7 @@ LINKER					?= $(LINKER_DIR)linker.ld
 # Firmware compiler flag
 ECFLAGS  				?= -I$(COMMON_FILES_DIR) -I$(GLOBAL_DEFINES_DIR) \
 						  -DITERATIONS=$(ITERATIONS) \
-						  -D$(XLEN) -march=$(ISA) -mabi=$(ABI) -Wall -nostdlib \
+						  -D$(XLEN) -D$(WITH_SPIKE) -march=$(ISA) -mabi=$(ABI) -Wall -nostdlib \
 						  -ffreestanding -O3 -ffunction-sections -fdata-sections
 
 # Firmware linker flag

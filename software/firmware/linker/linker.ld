@@ -5,8 +5,8 @@
 \brief      Linker script for SCHOLAR RISC-V bare-metal firmware.
 
 \author     Kawanami
-\version    1.0
-\date       25/10/2025
+\version    1.1
+\date       12/01/2026
 
 \details
   Defines the on-chip memory layout and section placement:
@@ -29,14 +29,15 @@
 | Version | Date       | Author     | Description        |
 |:-------:|:----------:|:-----------|:-------------------|
 | 1.0     | 25/10/2025 | Kawanami   | Initial version.   |
+| 1.1     | 12/01/2026 | Kawanami   | Add few modifications in memory ORIGINs to have a unified linker between classical simulation and Spike simulation.   |
 ********************************************************************************
 */
 
 MEMORY {
-    INSTR_RAM  (rx)  : ORIGIN = 0x00000000, LENGTH = 16K
-    DATA_RAM   (rw)  : ORIGIN = 0x00010000, LENGTH = 16K
-    PTC_MEM    (rw)  : ORIGIN = 0x00020000, LENGTH = 1K
-    CTP_MEM    (rw)  : ORIGIN = 0x00030000, LENGTH = 1K
+    INSTR_RAM  (rx)  : ORIGIN = 0x00100000, LENGTH = 16K
+    DATA_RAM   (rw)  : ORIGIN = 0x00110000, LENGTH = 16K
+    PTC_MEM    (rw)  : ORIGIN = 0x00120000, LENGTH = 1K
+    CTP_MEM    (rw)  : ORIGIN = 0x00130000, LENGTH = 1K
 }
 
 SECTIONS {

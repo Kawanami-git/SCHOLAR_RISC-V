@@ -5,8 +5,8 @@
 \brief      Minimal RISC-V firmware entry (stack init + call main, then halt).
 
 \author     Kawanami
-\version    1.0
-\date       25/10/2025
+\version    1.1
+\date       12/01/2026
 
 \details
   Sets the stack pointer to `_stack_top`, calls `main`, and then loops forever.
@@ -20,16 +20,34 @@
 | Version | Date       | Author     | Description             |
 |:-------:|:----------:|:-----------|:------------------------|
 | 1.0     | 25/10/2025 | Kawanami   | Initial version.        |
+| 1.1     | 12/01/2026 | Kawanami   | Add few instructions to allow using Spike with firmware such as loader or cyclemark.        |
 ********************************************************************************
 */
-    .section .start
-    .globl _start
-    .globl main
+.section .start
+.globl _start
+.globl main
 
 _start:
+    # Clear registers that Spike sets
+    addi x5, x0, 0
+    addi x10, x0, 0
+    addi x11, x0, 0
+
     la      sp, _stack_top       # Initialize stack pointer
     call    main                 # Jump into C entry point
+
+    # End of test sequence
+    la t1, tohost
+    li t2, 1
+    sw t2, 0(t1)
+    ebreak
 
 1:
     j       1b                   # If main returns, loop forever
 
+.section .tohost, "aw", @progbits
+.globl tohost, fromhost
+.balign 8
+
+tohost:   .dword 0
+fromhost: .dword 0

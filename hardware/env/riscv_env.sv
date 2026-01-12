@@ -5,8 +5,8 @@
 \brief      SCHOLAR RISC-V Integration Environment (core + RAMs + AXI fabric)
 
 \author     Kawanami
-\date       19/12/2025
-\version    1.0
+\date       12/01/2026
+\version    1.1
 
 \details
   Top-level integration for the SCHOLAR RISC-V core with:
@@ -35,6 +35,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 12/01/2026 | Kawanami   | Expose PTC/CTP RAM to Verilator TB.       |
 ********************************************************************************
 */
 
@@ -66,7 +67,7 @@ module riscv_env #(
     /// GPR value to write (testbench)
     input  wire  [         Archi          - 1 : 0] GprData,
     /// Full GPR file view (read-only mirror)
-    output wire  [         Archi          - 1 : 0] GprMemory            [        NB_GPR],
+    output wire  [         Archi          - 1 : 0] GprMemory            [              NB_GPR],
     /// CSR mhpmcounter0 register
     output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter0_q,
     /// CSR mhpmcounter3 register
@@ -74,7 +75,11 @@ module riscv_env #(
     /// CSR mhpmcounter4 register
     output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter4_q,
     /// Data RAM contents (exposed to TB)
-    output logic [          Archi         - 1 : 0] DataDpramMem         [DATA_RAM_DEPTH],
+    output logic [          Archi         - 1 : 0] DataDpramMem         [      DATA_RAM_DEPTH],
+    /// PTC RAM contents (exposed to TB)
+    output logic [          Archi         - 1 : 0] PtcDpramMem          [PTC_SHARED_RAM_DEPTH],
+    /// CTP RAM contents (exposed to TB)
+    output logic [          Archi         - 1 : 0] CtpDpramMem          [CTP_SHARED_RAM_DEPTH],
     /// Writeback to GPR write enable
     output wire                                    wb_valid,
 `endif
@@ -550,6 +555,9 @@ module riscv_env #(
       .DataWidth(Archi),
       .Size     (PTC_SHARED_RAM_SIZE)
   ) w_axi_shared_ram (
+`ifdef SIM
+      .mem_o          (PtcDpramMem),
+`endif
       .core_clk_i     (core_clk_i),
       .axi_clk_i      (axi_clk_i),
       .rstn_i         (axi_rstn_i),
@@ -589,6 +597,10 @@ module riscv_env #(
       .DataWidth(Archi),
       .Size     (CTP_SHARED_RAM_SIZE)
   ) r_axi_shared_ram (
+`ifdef SIM
+      .mem_o(CtpDpramMem),
+`endif
+
       .core_clk_i     (core_clk_i),
       .axi_clk_i      (axi_clk_i),
       .rstn_i         (axi_rstn_i),
