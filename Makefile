@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.1
-# \date       12/01/2026
+# \version    1.2
+# \date       14/01/2026
 #
 # \details
 #   Drives the complete flow:
@@ -35,6 +35,7 @@
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 19/12/2025 | Kawanami   | Initial version.    |
 # | 1.1     | 12/01/2026 | Kawanami   | Add the possibility to compare the loader & cyclemark firmware with a Spike golden trace.   |
+# | 1.2     | 14/01/2026 | Kawanami   | Update 'help' target to include `loader_spike` and `cyclemark_spike`   |
 # ********************************************************************************
 # */
 
@@ -264,7 +265,7 @@ SIM_CXXFLAGS					= "-O3 -DSIM -D$(XLEN) -DMAX_CYCLES=$(MAX_CYCLES) \
 								   -I$(VERILATOR_BUILD_DIR) -I$(SOFTWARE_DIR) \
 								   -I$(PLATFORM_DIR) -I$(SIM_FILES_DIR)"
 
-# Maximum number of cycles for the simulation. As core is running at 1MHz, it corresponds to three seconds of simulation.
+# Maximum number of cycles for the simulation. As core is running at 1MHz, it corresponds to ten seconds of simulation.
 MAX_CYCLES          			= 10000000
 
 # Parameters used when building the firmware. It can be used, as exemple, to choose the number of iteraton of the CycleMark algorithm.
@@ -422,8 +423,10 @@ help:
 	@printf "Common targets:\n"
 	@printf "  %-35s %s\n" "isa"                  				"Run the ISA tests"
 	@printf "  %-35s %s\n" "loader" 				  			"Build & run the loader test"
+	@printf "  %-35s %s\n" "loader_spike" 				  		"Build & run the loader test with Spike golden trace comparison"
 	@printf "  %-35s %s\n" "echo" 				  				"Build & run the echo test"
 	@printf "  %-35s %s\n" "cyclemark" 			  				"Build & run the cyclemark test"
+	@printf "  %-35s %s\n" "cyclemark_spike" 				  	"Build & run the cyclemark test with Spike golden trace comparison"
 	@printf "  %-35s %s\n" "documentation"        				"Doxygen (board perspective)"
 	@printf "  %-35s %s\n" "sim_documentation"    				"Doxygen (simulation perspective)"
 	@printf "  %-35s %s\n" "format"               				"Format HDL & C/C++ sources"
@@ -446,7 +449,7 @@ help:
 	@printf "Key variables:\n"
 	@printf "  %-35s %s\n" "XLEN"         "Architecture (32-bit or 64-bit). Default is 32."
 	@printf "  %-35s %s\n" "ITERATIONS"   "Number of iterations for ISA tests ans Cyclemark. More iterations equals more reliable tests. Default is 1."
-	@printf "  %-35s %s\n" "MAX_CYCLES"   "Max simulation cycles (default: 3000000 = 3s of simulation)"
+	@printf "  %-35s %s\n" "MAX_CYCLES"   "Max simulation cycles (default: 10000000 = 10s of simulation)"
 	@echo
 	@echo "Examples:"
 	@echo "  make isa XLEN=XLEN32"
@@ -552,12 +555,14 @@ firmware: work
 	@echo "✅ $(FIRMWARE) firmware build done. See $(FIRMWARE_LOG_DIR)log.txt for details."
 	@echo
 
-
+# Spike target (build spike golden trace)
 .PHONY: spike
 spike:
 	$(SPIKE) $(SPIKE_FLAGS) \
 	--log=$(FIRMWARE_BUILD_DIR)$(FIRMWARE).spike \
 	$(FIRMWARE_BUILD_DIR)$(FIRMWARE).elf
+
+
 
 # Loader firmware target
 .PHONY: loader_firmware
