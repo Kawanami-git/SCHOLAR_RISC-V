@@ -4,8 +4,8 @@
 # \file       sd.yaml
 # \brief      ISA test: SD
 # \author     Kawanami
-# \version    1.0
-# \date       25/10/2025
+# \version    1.1
+# \date       14/01/2026
 #
 # \details
 #
@@ -15,6 +15,7 @@
 # | Version | Date       | Author     | Description         |
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 25/10/2025 | Kawanami   | Initial version.    |
+# | 1.1     | 14/01/2026 | Kawanami   | Update memory boundaries to match HW.    |
 # ********************************************************************************
 # */
 
@@ -36,8 +37,8 @@ rv64:
       rd: random addr_reg
       imm:
         random:
-          min: 0x0000000080010810
-          max: 0x0000000080013000
+          min: 0x0000000000110810
+          max: 0x0000000000113000
 
     - op: sd
       rs2: data_reg

@@ -503,7 +503,7 @@ isa_firmware: work
 			GLOBAL_DEFINES_DIR=$(SOFTWARE_DIR) \
 			FIRMWARE_FILES=$(FIRMWARE_BUILD_DIR)/$$(basename $$source .yaml).s \
 			COMMON_FILES=" " \
-			LINKER=$(FIRMWARE_DIR)linker/linker_ISA.ld \
+			LINKER=$(FIRMWARE_DIR)linker/linker.ld \
 			BUILD_DIR=$(FIRMWARE_BUILD_DIR) \
 			LOG_DIR=$(FIRMWARE_LOG_DIR) \
 			FIRMWARE=$$(basename $$source .yaml); \

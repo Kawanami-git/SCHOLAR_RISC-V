@@ -5,8 +5,8 @@
 \brief      Minimal RISC-V firmware entry (stack init + call main, then halt).
 
 \author     Kawanami
-\version    1.1
-\date       12/01/2026
+\version    1.2
+\date       14/01/2026
 
 \details
   Sets the stack pointer to `_stack_top`, calls `main`, and then loops forever.
@@ -21,9 +21,10 @@
 |:-------:|:----------:|:-----------|:------------------------|
 | 1.0     | 25/10/2025 | Kawanami   | Initial version.        |
 | 1.1     | 12/01/2026 | Kawanami   | Add few instructions to allow using Spike with firmware such as loader or cyclemark.        |
+| 1.2     | 14/01/2026 | Kawanami   | Modify start section declaration to ensure that gcc sees the section as executable code.      |
 ********************************************************************************
 */
-.section .start
+.section .start, "ax", @progbits
 .globl _start
 .globl main
 
