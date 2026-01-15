@@ -4,8 +4,8 @@
 \file       spike_parser.cpp
 \brief      Spike log parser implementation.
 \author     Kawanami
-\version    1.0
-\date       25/10/2025
+\version    1.1
+\date       15/01/2026
 
 \details
   Implementation for \ref ParseSpike / \ref FreeSpike and helpers.
@@ -19,7 +19,7 @@
 | Version | Date       | Author     | Description                                |
 |:-------:|:----------:|:-----------|:-------------------------------------------|
 | 1.0     | 25/10/2025 | Kawanami   | Initial version.                           |
-| 1.1     | xx/xx/xxxx | Author     |                                            |
+| 1.1     | 15/01/2026 | Kawanami   | Update the reference address used to skip Spike internal instructions.                                           |
 ********************************************************************************
 */
 
@@ -240,8 +240,8 @@ uint32_t Parse(SpikeLog* spike, FILE* file)
       }
     }
 
-    // Skip non-user-space instructions (e.g., Spike internals)
-    if (current->addr < 0x80000000ULL)
+    // Skip Spike instructions (e.g., Spike internals)
+    if (current->addr < 0x00002000ULL)
     {
       // keep current node to be overwritten by next valid instruction
       std::memset(current, 0, sizeof(*current));

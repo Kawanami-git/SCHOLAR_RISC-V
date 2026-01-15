@@ -4,8 +4,8 @@
 \file       simulation_vs_spike.cpp
 \brief      ISA-level simulation against Spike golden trace
 \author     Kawanami
-\version    1.1
-\date       12/01/2026
+\version    1.2
+\date       15/01/2026
 
 \details
   This program:
@@ -27,6 +27,7 @@
 |:-------:|:----------:|:-----------|:-------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version.                           |
 | 1.1     | 12/01/2026 | Kawanami   | Add PTC/CTP RAMs verification.             |
+| 1.2     | 15/01/2026 | Kawanami   | Fix CSR verification preventing a complex firmware (e.g. loader, cyclemark) to be compared to a Spike golden trace.             |
 ********************************************************************************
 */
 
@@ -50,6 +51,10 @@
 
 /// Provided by the Verilator harness (DUT instance).
 extern Vriscv_env* dut;
+
+uword_t mhpmcounter0;
+uword_t mhpmcounter3;
+uword_t mhpmcounter4;
 
 /*------------------------------------------------------------------------------
  * Local helpers
@@ -194,14 +199,14 @@ static inline uword_t verify_gpr(Instr* instr)
   {
     if ((instr->instr_bin >> 20) == 0xb00) // mhpmcounter0
     {
-      if (dut->GprMemory[instr->rd] != (dut->mhpmcounter0_q - 4)) // exe/stage/wb/effective write
+      if (dut->GprMemory[instr->rd] != mhpmcounter0) // exe/stage/wb/effective write
       {
         LogPrintf("Instruction %s (pc: 0x%x) error: CSR writeback x%02u expected 0x" WORD_PRINT_FMT
                   " got 0x" WORD_PRINT_FMT ".\n",
                   instr->instr,
                   instr->addr,
                   (unsigned)instr->rd,
-                  (uword_t)(dut->mhpmcounter0_q - 4),
+                  (uword_t)(mhpmcounter0),
                   (uword_t)dut->GprMemory[instr->rd]);
         return FAILURE;
       }
@@ -212,36 +217,48 @@ static inline uword_t verify_gpr(Instr* instr)
       dut->GprEn   = 1;
       Comb();
       dut->GprEn = 0;
-      return SUCCESS;
     }
-    else if ((instr->instr_bin >> 20) == 0xb03) // mhpmcounter4
+    else if ((instr->instr_bin >> 20) == 0xb03) // mhpmcounter3
     {
-      if (dut->GprMemory[instr->rd] !=
-          dut->mhpmcounter3_q - 2) // final li + sw add two stalled cycles
+      if (dut->GprMemory[instr->rd] != mhpmcounter3) // final li + sw add two stalled cycles
       {
         LogPrintf("Instruction %s (pc: 0x%x) error: CSR writeback x%02u expected 0x" WORD_PRINT_FMT
                   " got 0x" WORD_PRINT_FMT ".\n",
                   instr->instr,
                   instr->addr,
                   (unsigned)instr->rd,
-                  (uword_t)(dut->mhpmcounter3_q - 2),
+                  (uword_t)(mhpmcounter3),
                   (uword_t)dut->GprMemory[instr->rd]);
         return FAILURE;
       }
+
+      // Force RD value to 0 to match Spike (no counter3 in Spike)
+      dut->GprAddr = instr->rd;
+      dut->GprData = 0;
+      dut->GprEn   = 1;
+      Comb();
+      dut->GprEn = 0;
     }
     else if ((instr->instr_bin >> 20) == 0xb04) // mhpmcounter4
     {
-      if (dut->GprMemory[instr->rd] != dut->mhpmcounter4_q)
+      if (dut->GprMemory[instr->rd] != mhpmcounter4)
       {
         LogPrintf("Instruction %s (pc: 0x%x) error: CSR writeback x%02u expected 0x" WORD_PRINT_FMT
                   " got 0x" WORD_PRINT_FMT ".\n",
                   instr->instr,
                   instr->addr,
                   (unsigned)instr->rd,
-                  (uword_t)(dut->mhpmcounter3_q),
+                  (uword_t)(mhpmcounter4),
                   (uword_t)dut->GprMemory[instr->rd]);
         return FAILURE;
       }
+
+      // Force RD value to 0 to match Spike (no counter4 in Spike)
+      dut->GprAddr = instr->rd;
+      dut->GprData = 0;
+      dut->GprEn   = 1;
+      Comb();
+      dut->GprEn = 0;
     }
     else
     {
@@ -301,10 +318,27 @@ static uint32_t run(const std::string& firmwarefile, const std::string& spikefil
     return FAILURE;
   }
 
-  // Fetch first instruction into the IF register (two cycles as your TB expects)
+  mhpmcounter0 = 0;
+  mhpmcounter3 = 0;
+  mhpmcounter4 = 0;
   Instr* instr = spike->instructions;
   while (std::memcmp(instr->instr, "ebreak", std::strlen("ebreak")) != 0)
   {
+    switch (dut->decode_csr_raddr)
+    {
+    case 0xb00:
+      mhpmcounter0 = dut->mhpmcounter0;
+      break;
+    case 0xb03:
+      mhpmcounter3 = dut->mhpmcounter3;
+      break;
+    case 0xb04:
+      mhpmcounter4 = dut->mhpmcounter4;
+      break;
+    default:
+      break;
+    }
+
     if (dut->wb_valid)
     {
       Cycle();

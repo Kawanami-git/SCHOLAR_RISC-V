@@ -5,8 +5,8 @@
 \brief      SCHOLAR RISC-V Integration Environment (core + RAMs + AXI fabric)
 
 \author     Kawanami
-\date       12/01/2026
-\version    1.1
+\date       15/01/2026
+\version    1.2
 
 \details
   Top-level integration for the SCHOLAR RISC-V core with:
@@ -36,6 +36,7 @@
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 12/01/2026 | Kawanami   | Expose PTC/CTP RAM to Verilator TB.       |
+| 1.2     | 15/01/2026 | Kawanami   | Expose few more signals to Verilator to improve CSRs verification.<br>Also Change the core start address to match on-board address spaces. |
 ********************************************************************************
 */
 
@@ -43,10 +44,10 @@
 
 `ifdef XLEN64
 `define ARCHI 64
-`define START_ADDR 64'h0000000080000000
+`define START_ADDR 64'h0000000000100000
 `else
 `define ARCHI 32
-`define START_ADDR 32'h80000000
+`define START_ADDR 32'h00100000
 `endif
 
 module riscv_env #(
@@ -68,12 +69,20 @@ module riscv_env #(
     input  wire  [         Archi          - 1 : 0] GprData,
     /// Full GPR file view (read-only mirror)
     output wire  [         Archi          - 1 : 0] GprMemory            [              NB_GPR],
+    ///
+    output wire  [                           11:0] decode_csr_raddr,
     /// CSR mhpmcounter0 register
-    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter0_q,
+    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter0,
+    ///
+    output wire                                    rs1_dirty,
+    ///
+    output wire                                    rs2_dirty,
     /// CSR mhpmcounter3 register
-    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter3_q,
+    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter3,
+    ///
+    output wire                                    softresetn,
     /// CSR mhpmcounter4 register
-    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter4_q,
+    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter4,
     /// Data RAM contents (exposed to TB)
     output logic [          Archi         - 1 : 0] DataDpramMem         [      DATA_RAM_DEPTH],
     /// PTC RAM contents (exposed to TB)
@@ -434,30 +443,34 @@ module riscv_env #(
       .StartAddress(StartAddr)
   ) scholar_riscv_core (
 `ifdef SIM
-      .gpr_en_i        (GprEn),
-      .gpr_addr_i      (GprAddr),
-      .gpr_data_i      (GprData),
-      .gpr_memory_o    (GprMemory),
-      .mhpmcounter0_q_o(mhpmcounter0_q),
-      .mhpmcounter3_q_o(mhpmcounter3_q),
-      .mhpmcounter4_q_o(mhpmcounter4_q),
-      .wb_valid_o      (wb_valid),
+      .gpr_en_i          (GprEn),
+      .gpr_addr_i        (GprAddr),
+      .gpr_data_i        (GprData),
+      .gpr_memory_o      (GprMemory),
+      .decode_csr_raddr_o(decode_csr_raddr),
+      .mhpmcounter0_o    (mhpmcounter0),
+      .rs1_dirty_o       (rs1_dirty),
+      .rs2_dirty_o       (rs2_dirty),
+      .mhpmcounter3_o    (mhpmcounter3),
+      .softresetn_o      (softresetn),
+      .mhpmcounter4_o    (mhpmcounter4),
+      .wb_valid_o        (wb_valid),
 `endif
-      .clk_i           (core_clk_i),
-      .rstn_i          (core_rstn_i),
+      .clk_i             (core_clk_i),
+      .rstn_i            (core_rstn_i),
       // IF
-      .i_m_rdata_i     (core_i_m_dout),
-      .i_m_hit_i       (core_i_m_hit),
-      .i_m_addr_o      (core_i_m_addr),
-      .i_m_rden_o      (core_i_m_rden),
+      .i_m_rdata_i       (core_i_m_dout),
+      .i_m_hit_i         (core_i_m_hit),
+      .i_m_addr_o        (core_i_m_addr),
+      .i_m_rden_o        (core_i_m_rden),
       // DF
-      .d_m_rdata_i     (core_d_m_dout),
-      .d_m_hit_i       (core_d_m_hit),
-      .d_m_addr_o      (core_d_m_addr),
-      .d_m_rden_o      (core_d_m_rden),
-      .d_m_wren_o      (core_d_m_wren),
-      .d_m_wmask_o     (core_d_m_wmask),
-      .d_m_wdata_o     (core_d_m_din)
+      .d_m_rdata_i       (core_d_m_dout),
+      .d_m_hit_i         (core_d_m_hit),
+      .d_m_addr_o        (core_d_m_addr),
+      .d_m_rden_o        (core_d_m_rden),
+      .d_m_wren_o        (core_d_m_wren),
+      .d_m_wmask_o       (core_d_m_wmask),
+      .d_m_wdata_o       (core_d_m_din)
   );
 
   /// data RAM: core R/W, AXI write (firmware data loader)

@@ -4,8 +4,8 @@
 \file       scholar_riscv_core.sv
 \brief      SCHOLAR RISC-V Core Module
 \author     Kawanami
-\date       10/01/2026
-\version    1.1
+\date       15/01/2026
+\version    1.2
 
 \details
   This module is the top-level module of the SCHOLAR RISC-V core.
@@ -34,7 +34,8 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
-| 1.1     | 10/01/2026 | Kawanami | Add non-perfect memory support in the controller by checking `mem_ready_i` before triggering the softreset. |
+| 1.1     | 10/01/2026 | Kawanami   | Add non-perfect memory support in the controller by checking `mem_ready_i` before triggering the softreset. |
+| 1.2     | 15/01/2026 | Kawanami   | Expose few more signals to Verilator to improve CSRs verification.  |
 ********************************************************************************
 */
 
@@ -67,14 +68,21 @@ module scholar_riscv_core #(
     /// GPR write data (SIM only)
     input  wire [  DATA_WIDTH    - 1 : 0] gpr_data_i,
     /// GPR memory (SIM only)
-    output wire [  DATA_WIDTH    - 1 : 0] gpr_memory_o    [NB_GPR],
-    /* CSR signals */
+    output wire [  DATA_WIDTH    - 1 : 0] gpr_memory_o      [NB_GPR],
+    ///
+    output wire [                 11 : 0] decode_csr_raddr_o,
     /// CSR mhpmcounter0 register
-    output wire [     DATA_WIDTH - 1 : 0] mhpmcounter0_q_o,
+    output wire [     DATA_WIDTH - 1 : 0] mhpmcounter0_o,
+    ///
+    output wire                           rs1_dirty_o,
+    ///
+    output wire                           rs2_dirty_o,
     /// CSR mhpmcounter3 register
-    output wire [     DATA_WIDTH - 1 : 0] mhpmcounter3_q_o,
+    output wire [     DATA_WIDTH - 1 : 0] mhpmcounter3_o,
+    ///
+    output wire                           softresetn_o,
     /// CSR mhpmcounter4 register
-    output wire [     DATA_WIDTH - 1 : 0] mhpmcounter4_q_o,
+    output wire [     DATA_WIDTH - 1 : 0] mhpmcounter4_o,
     /// Writeback to GPR write enable
     output wire                           wb_valid_o,
 `endif
@@ -216,9 +224,9 @@ module scholar_riscv_core #(
 
   csr #() csr (
 `ifdef SIM
-      .mhpmcounter0_q_o(mhpmcounter0_q_o),
-      .mhpmcounter3_q_o(mhpmcounter3_q_o),
-      .mhpmcounter4_q_o(mhpmcounter4_q_o),
+      .mhpmcounter0_q_o(mhpmcounter0_o),
+      .mhpmcounter3_q_o(mhpmcounter3_o),
+      .mhpmcounter4_q_o(mhpmcounter4_o),
 `endif
       .clk_i           (clk_i),
       .rstn_i          (rstn_i),
@@ -251,7 +259,11 @@ module scholar_riscv_core #(
   );
 
 `ifdef SIM
-  assign wb_valid_o = wb_valid;
+  assign decode_csr_raddr_o = decode_csr_raddr;
+  assign wb_valid_o         = wb_valid;
+  assign rs1_dirty_o        = ctrl_rs1_dirty;
+  assign rs2_dirty_o        = ctrl_rs2_dirty;
+  assign softresetn_o       = softresetn;
 `endif
 
   fetch #() fetch (
