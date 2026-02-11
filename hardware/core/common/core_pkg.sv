@@ -1,32 +1,33 @@
-// SPDX-License-Identifier: MIT
 /*!
 ********************************************************************************
 \file       core_pkg.sv
 \brief      Core-wide parameters and control encodings for SCHOLAR RISC-V
 \author     Kawanami
-\date       19/12/2025
-\version    1.0
+\date       28/01/2026
+\version    1.1
 
 \details
-  Centralizes architectural widths (XLEN/ADDR/DATA), register-file sizes,
-  and all micro-op/control encodings used across the pipeline:
-  - Execution unit opcodes (EXE_*),
-  - Program Counter control (PC_*),
+  Centralizes architectural widths (XLEN/ADDR/DATA), register-file sizing,
+  and all micro-op/control encodings used across the core:
+  - Execution unit control (EXE_*),
+  - Program counter control (PC_*),
   - Memory access control (MEM_*),
-  - GPR/CSR write-back control (GPR_*, CSR_*).
+  - GPR/CSR write-back control (GPR_*, CSR_*),
+  - Base instruction opcode tags (LOAD_OP, REG_OP, SYS_OP, ...).
 
-  XLEN-dependent constants are selected via the preprocessor macro `XLEN32`.
+  XLEN-dependent constants are selected via preprocessor defines
+  (e.g., XLEN64 vs default RV32).
 
 \remarks
   - Keep these encodings in sync with decode/execute/MEM/WB logic.
-  - Changing bit widths or enumerations here impacts multiple stages
-    (decode tables, forwarding/hazard logic, memory formatting, etc.).
-  - TODO: add M/CSR extensions encodings when implemented.
+  - Changing widths or encodings here impacts multiple stages
+    (decode tables, hazard logic, memory formatting, etc.).
 
 \section core_pkg_version_history Version history
-| Version | Date       | Author   | Description                              |
-|:-------:|:----------:|:---------|:-----------------------------------------|
-| 1.0     | 19/12/2025 | Kawanami | Initial version of the core package.     |
+| Version | Date       | Author   | Description                                           |
+|:-------:|:----------:|:---------|:------------------------------------------------------|
+| 1.0     | 19/12/2025 | Kawanami | Initial version of the core package.                  |
+| 1.1     | 28/01/2026 | Kawanami | Add CSR_ALU control and clarify SYSTEM opcode docs.   |
 ********************************************************************************
 */
 
@@ -74,8 +75,8 @@ package core_pkg;
   localparam logic [OP_WIDTH - 1 : 0] JALR_OP = 7'b1100111;
   /// Opcode for JAL (Jump and Link, J-type)
   localparam logic [OP_WIDTH - 1 : 0] JAL_OP = 7'b1101111;
-  /// Opcode for CSR instructions (Control and Status Registers)
-  localparam logic [OP_WIDTH - 1 : 0] CSR_OP = 7'b1110011;
+  /// Opcode for SYSTEM instructions (CSR + privileged system operations)
+  localparam logic [OP_WIDTH - 1 : 0] SYS_OP = 7'b1110011;
   /// Address granularity in bytes (e.g., 4 bytes for 32-bit, 8 for 64-bit)
   localparam int unsigned ADDR_OFFSET = DATA_WIDTH / BYTE_LENGTH;
   /// Number of bits needed to encode byte offset within a word
@@ -185,6 +186,8 @@ package core_pkg;
   localparam int CSR_CTRL_WIDTH = 1;
   /// No update to CSR
   localparam logic [CSR_CTRL_WIDTH-1:0] CSR_IDLE = 1'b0;
+  /// CSR update from ALU
+  localparam logic [CSR_CTRL_WIDTH-1:0] CSR_ALU = 1'b1;
 
 endpackage
 

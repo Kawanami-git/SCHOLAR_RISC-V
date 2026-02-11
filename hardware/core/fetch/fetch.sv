@@ -4,8 +4,8 @@
 \file       fetch.sv
 \brief      SCHOLAR RISC-V core fetch stage
 \author     Kawanami
-\date       12/12/2025
-\version    1.0
+\date       30/01/2026
+\version    1.1
 
 \details
   Instruction Fetch (IF) stage for the SCHOLAR RISC-V core pipeline.
@@ -18,7 +18,7 @@
       in the *next* cycle.
     - `i_m_rdata_i` is consumed in the next cycle (registered validity).
 
-  A lightweight pre-decode is performed to extract rs1/rs2/rd early (from the
+  A lightweight pre-decode is performed to extract rs1/rs2/csr_raddr early (from the
   fetched instruction) so the hazard controller can evaluate dependencies
   without adding a critical path: decode -> ctrl -> decode.
 
@@ -34,27 +34,33 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 12/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 30/01/2026 | Kawanami   | Add csr_raddr extraction & non-perfect memory support.            |
 ********************************************************************************
 */
 
-/*!
+module fetch
+
+  /*!
 * Import useful packages.
 */
-import if2id_pkg::if2id_t;
-import core_pkg::INSTR_WIDTH;
-import core_pkg::ADDR_WIDTH;
-import core_pkg::RF_ADDR_WIDTH;
-import core_pkg::OP_WIDTH;
-import core_pkg::AUIPC_OP;
-import core_pkg::STORE_OP;
-import core_pkg::LUI_OP;
-import core_pkg::BRANCH_OP;
-import core_pkg::JAL_OP;
-import core_pkg::REGW_OP;
-import core_pkg::REG_OP;
+  import if2id_pkg::if2id_t;
+  import if2ctrl_pkg::if2ctrl_t;
+  import core_pkg::INSTR_WIDTH;
+  import core_pkg::ADDR_WIDTH;
+  import core_pkg::RF_ADDR_WIDTH;
+  import core_pkg::CSR_ADDR_WIDTH;
+  import core_pkg::OP_WIDTH;
+  import core_pkg::AUIPC_OP;
+  import core_pkg::STORE_OP;
+  import core_pkg::LUI_OP;
+  import core_pkg::BRANCH_OP;
+  import core_pkg::JAL_OP;
+  import core_pkg::REGW_OP;
+  import core_pkg::REG_OP;
+  import core_pkg::SYS_OP;
 /**/
 
-module fetch #(
+#(
 ) (
 
     /// System clock
@@ -62,25 +68,21 @@ module fetch #(
     /// System active low reset
     input  wire                            rstn_i,
     /// Current program counter (address used for the memory request)
-    input  wire    [  ADDR_WIDTH  - 1 : 0] pc_i,
+    input  wire      [ADDR_WIDTH  - 1 : 0] pc_i,
     /// Decode-stage ready. When low, fetch is stalled (no new request)
     input  wire                            decode_ready_i,
     /// Instruction valid flag
     output wire                            valid_o,
     /// IF->ID payload: fetched instruction and its associated PC
     output if2id_t                         if2id_o,
-    /// Pre-decoded register source 1 (for hazard checking)
-    output wire    [RF_ADDR_WIDTH - 1 : 0] rs1_o,
-    /// Pre-decoded register source 2 (for hazard checking)
-    output wire    [RF_ADDR_WIDTH - 1 : 0] rs2_o,
-    /// Pre-decoded destination register (for hazard checking)
-    output wire    [RF_ADDR_WIDTH - 1 : 0] rd_o,
+    /// IF->CTRL payload (rs1/rs1/csr_raddr)
+    output if2ctrl_t                       if2ctrl_o,
     /// Memory output data
-    input  wire    [    INSTR_WIDTH - 1:0] i_m_rdata_i,
+    input  wire      [  INSTR_WIDTH - 1:0] i_m_rdata_i,
     /// Memory hit flag (1: hit, 0: miss)
     input  wire                            i_m_hit_i,
     /// Memory address
-    output wire    [   ADDR_WIDTH - 1 : 0] i_m_addr_o,
+    output wire      [ ADDR_WIDTH - 1 : 0] i_m_addr_o,
     /// Memory read enable (1: enable, 0: disable)
     output wire                            i_m_rden_o
 );
@@ -94,17 +96,17 @@ module fetch #(
 
   /* wires */
   /// Source register 1 extracted from the fetched instruction
-  logic [RF_ADDR_WIDTH - 1 : 0] rs1;
+  logic [ RF_ADDR_WIDTH - 1 : 0] rs1;
   /// Source register 2 extracted from the fetched instruction
-  logic [RF_ADDR_WIDTH - 1 : 0] rs2;
-  /// Destination register extracted from the fetched instruction
-  logic [RF_ADDR_WIDTH - 1 : 0] rd;
+  logic [ RF_ADDR_WIDTH - 1 : 0] rs2;
+  /// Control & Status register read address extracted from the fetched instruction
+  logic [CSR_ADDR_WIDTH - 1 : 0] csr_raddr;
 
   /* registers */
   /// Registered memory "hit": indicates that `rdata` is valid in this cycle
-  reg                           hit_q;
+  reg                            hit_q;
   /// Registered PC matching the instruction returned in this cycle
-  reg   [   ADDR_WIDTH - 1 : 0] pc_q;
+  reg   [    ADDR_WIDTH - 1 : 0] pc_q;
   /********************             ********************/
 
   /// Instruction memory address is driven directly by the current PC
@@ -112,7 +114,7 @@ module fetch #(
 
   /// Issue a read request only when decode can accept the next instruction
   /// When `decode_ready_i` is low, IF stalls and does not advance
-  assign i_m_rden_o = decode_ready_i & rstn_i;
+  assign i_m_rden_o = decode_ready_i && rstn_i;
 
   /// Synchronous instruction memory handshake
   /*!
@@ -125,8 +127,13 @@ module fetch #(
     if (!rstn_i) begin
       hit_q <= 1'b0;
     end
-    else if (decode_ready_i) begin  // Save last mem rsq rsp
-      hit_q <= i_m_hit_i;
+    else begin
+      if (i_m_hit_i) begin
+        hit_q <= 1'b1;
+      end
+      else if (decode_ready_i) begin
+        hit_q <= 1'b0;
+      end
     end
   end
 
@@ -163,11 +170,12 @@ module fetch #(
   * Notes:
   * - Some opcodes do not use rs1 (e.g., LUI/AUIPC/JAL) -> rs1 = 0
   * - Some opcodes do not use rs2 (e.g., I-type loads/ALU imm) -> rs2 = 0
-  * - Some opcodes do not write rd (e.g., stores/branches) -> rd = 0
+  * - Some opcodes do not read CSR (e.g., stores/branches) -> csr_raddr = 0
   */
   always_comb begin : pre_decode
     if ((i_m_rdata_i[6:0] == AUIPC_OP) || (i_m_rdata_i[6:0] == LUI_OP) ||
-        (i_m_rdata_i[6:0] == JAL_OP)) begin
+        (i_m_rdata_i[6:0] == JAL_OP) ||
+        ((i_m_rdata_i[6:0] == SYS_OP) && i_m_rdata_i[14] && |i_m_rdata_i[14:12])) begin
       rs1 = '0;
     end
     else begin
@@ -182,20 +190,20 @@ module fetch #(
       rs2 = '0;
     end
 
-    if ((i_m_rdata_i[6:0] == BRANCH_OP) || (i_m_rdata_i[6:0] == STORE_OP)) begin
-      rd = '0;
+    if (i_m_rdata_i[6:0] == SYS_OP && |i_m_rdata_i[14:12]) begin
+      csr_raddr = i_m_rdata_i[31:20];
     end
     else begin
-      rd = i_m_rdata_i[11:7];
+      csr_raddr = '0;
     end
   end
 
   /// Output driven by pre_decode
-  assign rs1_o = rs1;
+  assign if2ctrl_o.rs1       = rs1;
   /// Output driven by pre_decode
-  assign rs2_o = rs2;
+  assign if2ctrl_o.rs2       = rs2;
   /// Output driven by pre_decode
-  assign rd_o  = rd;
+  assign if2ctrl_o.csr_raddr = csr_raddr;
 
 
 

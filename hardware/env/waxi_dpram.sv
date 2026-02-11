@@ -5,8 +5,8 @@
 \brief      Dual-Port RAM (AXI write-only / Core write/read)
 
 \author     Kawanami
-\date       19/12/2025
-\version    1.0
+\date       03/02/2026
+\version    1.2
 
 \details
   Educational dual-port RAM used to store the SCHOLAR RISC-V core
@@ -37,14 +37,14 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 21/01/2026 | Kawanami   | Add the possibility to emulate non-perfect memory. |
+| 1.2     | 03/02/2026 | Kawanami   | Remove unused imported package. |
 ********************************************************************************
 */
 
-/* verilator lint_off IMPORTSTAR */
-import core_pkg::*;
-/* verilator lint_on IMPORTSTAR */
-
 module waxi_dpram #(
+    ///
+    parameter  bit          NoPerfectMemory = 0,
     /// Number of bits in a byte
     parameter  int          ByteLength      = 8,
     /// Address bus width in bits (applies to core and AXI)
@@ -300,8 +300,75 @@ module waxi_dpram #(
   *
   * This simplifies handshaking by eliminating the need for an explicit memory
   * ready/acknowledge protocol.
+  *
+  * For non-perfect memory test, a latency is added to `core_m_hit_o` to emulate
+  * a memory latency (even if the data is ready, the core will not capture it if
+  * the m_hit signal is not asserted).
+  * The latency depends on the address. This ensure a non-constant latency.
   */
-  assign core_m_hit_o    = core_m_rden_i || core_m_wren_i;
+  generate
+    if (NoPerfectMemory) begin : gen_not_perfect_memory
+
+      localparam int unsigned MAX_LAT = 3;  // 0..MAX_LAT
+      localparam int unsigned ADDR_LAT_LSB = (DataWidth == 64) ? 3 : 2;
+
+      localparam int unsigned LAT_W = (MAX_LAT < 1) ? 1 : $clog2(MAX_LAT + 1);
+      localparam int unsigned LAT_MAX_REPR = (1 << LAT_W) - 1;
+      localparam bit NEED_CLAMP = (MAX_LAT != LAT_MAX_REPR);
+
+      logic             req_now;
+      logic             busy_q;
+      logic [LAT_W-1:0] wait_q;
+      logic [LAT_W-1:0] lat_raw;
+      logic [LAT_W-1:0] lat_sel;
+
+      assign req_now = core_m_rden_i || core_m_wren_i;
+
+      // Derive a deterministic latency from address bits (ignore alignment by default).
+      // Uses bits [ADDR_LAT_LSB + LAT_W - 1 : ADDR_LAT_LSB].
+      assign lat_raw = core_m_addr_i[ADDR_LAT_LSB+:LAT_W];
+
+      if (NEED_CLAMP) begin : gen_clamp
+        // Clamp to MAX_LAT to keep latency in 0..MAX_LAT without using modulo.
+        assign lat_sel = (lat_raw > MAX_LAT[LAT_W-1:0]) ? MAX_LAT[LAT_W-1:0] : lat_raw;
+      end
+      else begin : gen_noclamp
+        assign lat_sel = lat_raw;
+      end
+
+      // Hit is high when the request is active and the wait counter reached zero.
+      // Deasserts combinationally when req_now drops.
+      assign core_m_hit_o = req_now && busy_q && (wait_q == '0);
+
+      always_ff @(posedge core_clk_i) begin
+        if (!rstn_i) begin
+          busy_q <= 1'b0;
+          wait_q <= '0;
+        end
+        else begin
+          if (!busy_q) begin
+            if (req_now) begin
+              busy_q <= 1'b1;
+              wait_q <= (MAX_LAT == 0) ? '0 : lat_sel;  // sample latency at request start
+            end
+          end
+          else begin
+            if (!req_now) begin
+              busy_q <= 1'b0;
+              wait_q <= '0;
+            end
+            else if (wait_q != '0) begin
+              wait_q <= wait_q - 1'b1;
+            end
+          end
+        end
+      end
+
+    end
+    else begin : gen_perfect_memory
+      assign core_m_hit_o = core_m_rden_i || core_m_wren_i;
+    end
+  endgenerate
   /**/
 
   /// Dual-Port RAM instantiation

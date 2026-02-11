@@ -4,45 +4,53 @@
 \file       decode.sv
 \brief      SCHOLAR RISC-V core decode stage
 \author     Kawanami
-\date       15/12/2025
-\version    1.0
+\date       28/01/2026
+\version    1.1
 
 \details
   Instruction Decode (ID) stage of the SCHOLAR RISC-V core pipeline.
 
-  The decode stage receives the fetched instruction/PC from the IF stage and
-  produces the micro-operation (uop) control fields and operands for EXE/MEM/WB.
+  The decode stage receives the fetched instruction and PC from the IF stage and
+  produces operands and micro-operation control fields for the downstream stages.
 
   This stage is split into two parts:
-    - `decode.sv` (this file): stage wrapper and IF->ID input register
-    - `decode_unit`: actual instruction decoding, operand selection and
-      readiness / hazard gating.
+    - decode.sv (this file): stage wrapper and IF->ID pipeline register
+    - decode_unit: instruction decoding, operand selection, and hazard/ready gating
 
   The IF->ID payload is captured only when:
-    - fetch provides a valid instruction (`fetch_valid_i`)
-    - the decode stage is ready to accept it (`ready_o`)
+    - fetch provides a valid instruction (fetch_valid_i)
+    - the decode stage is ready to accept it (ready_o)
+
+  When decode is ready but no new instruction is provided, the IF->ID register is
+  cleared to prevent re-issuing a previously consumed instruction in pipelines
+  where stages may progress independently (e.g., under non-perfect memory back-pressure).
 
 \remarks
-  - TODO: .
+  - ready_o reflects the ability of the decode unit to accept a new instruction,
+    including back-pressure from EXE and operand availability (dirty flags).
+  - The CSR read path participates in hazard gating through csr_dirty_i.
 
 \section decode_version_history Version history
-| Version | Date       | Author     | Description                    |
-|:-------:|:----------:|:-----------|:-------------------------------|
-| 1.0     | 15/12/2025 | Kawanami   | Initial version of the module. |
+| Version | Date       | Author   | Description                                                                 |
+|:-------:|:----------:|:---------|:----------------------------------------------------------------------------|
+| 1.0     | 15/12/2025 | Kawanami | Initial version of the module.                                              |
+| 1.1     | 28/01/2026 | Kawanami | Clear IF->ID register when ready and no new fetch payload; add CSR write path. |
 ********************************************************************************
 */
 
-/*!
+module decode
+
+  /*!
 * Import useful packages.
 */
-import if2id_pkg::if2id_t;
-import id2exe_pkg::id2exe_t;
-import core_pkg::RF_ADDR_WIDTH;
-import core_pkg::DATA_WIDTH;
-import core_pkg::CSR_ADDR_WIDTH;
+  import if2id_pkg::if2id_t;
+  import id2exe_pkg::id2exe_t;
+  import core_pkg::RF_ADDR_WIDTH;
+  import core_pkg::DATA_WIDTH;
+  import core_pkg::CSR_ADDR_WIDTH;
 /**/
 
-module decode #(
+#(
 ) (
     /// System clock
     input  wire                              clk_i,
@@ -70,6 +78,8 @@ module decode #(
     output wire     [CSR_ADDR_WIDTH - 1 : 0] csr_raddr_o,
     /// CSR file read data
     input  wire     [DATA_WIDTH     - 1 : 0] csr_data_i,
+    /// Control & Status Registers dependency flag (1: data not ready / pending write)
+    input  wire                              csr_dirty_i,
     /// Decoded instruction valid flag (1: `id2exe_o` fields are valid)
     output wire                              valid_o,
     /// IF->ID payload (instruction + PC)
@@ -99,7 +109,8 @@ module decode #(
   *  - the incoming payload is valid (`fetch_valid_i`)
   *  - decode is ready to accept it (`ready`)
   *
-  * When stalled, the register holds its previous value.
+  * When ready but no new instruction is provided, the IF->ID register is
+  * cleared to prevent re-issuing a previously consumed instruction in pipelines
   */
   always_ff @(posedge clk_i) begin : if_id
     if (!rstn_i) begin
@@ -107,6 +118,9 @@ module decode #(
     end
     else if (fetch_valid_i && ready) begin
       if2id_q <= if2id_i;
+    end
+    else if (ready) begin
+      if2id_q <= '0;
     end
   end
 
@@ -116,7 +130,7 @@ module decode #(
   /// Decode unit instantiation
   /*!
   * `decode_unit` consumes the registered instruction/PC and:
-  *  - requests register file rs1 & rs2 data
+  *  - requests register file rs1 & rs2 data or CSR data
   *  - selects/forwards operands (op1/op2/op3)
   *  - generates control fields for EXE/MEM/WB/PC
   *  - asserts `valid_o` when the decoded payload is valid
@@ -136,6 +150,8 @@ module decode #(
       .rs2_dirty_i(rs2_dirty_i),
       .csr_raddr_o(csr_raddr_o),
       .csr_data_i (csr_data_i),
+      .csr_dirty_i(csr_dirty_i),
+      .csr_waddr_o(id2exe_o.csr_waddr),
       .op1_o      (id2exe_o.op1),
       .op2_o      (id2exe_o.op2),
       .op3_o      (id2exe_o.op3),

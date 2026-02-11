@@ -4,8 +4,8 @@
 \file       simulation_vs_spike.cpp
 \brief      ISA-level simulation against Spike golden trace
 \author     Kawanami
-\version    1.2
-\date       15/01/2026
+\version    1.3
+\date       03/02/2026
 
 \details
   This program:
@@ -27,7 +27,9 @@
 |:-------:|:----------:|:-----------|:-------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version.                           |
 | 1.1     | 12/01/2026 | Kawanami   | Add PTC/CTP RAMs verification.             |
-| 1.2     | 15/01/2026 | Kawanami   | Fix CSR verification preventing a complex firmware (e.g. loader, cyclemark) to be compared to a Spike golden trace.             |
+| 1.2     | 15/01/2026 | Kawanami   | Fix CSR verification preventing a complex firmware (e.g.
+loader, cyclemark) to be compared to a Spike golden trace.             |
+| 1.3     | 03/02/2026 | Kawanami   | Improve log by adding a missing instruction address and update instruction commit detection due to HW modification. |
 ********************************************************************************
 */
 
@@ -52,8 +54,11 @@
 /// Provided by the Verilator harness (DUT instance).
 extern Vriscv_env* dut;
 
+/// mcycle
 uword_t mhpmcounter0;
+/// stall counter
 uword_t mhpmcounter3;
+/// Branch counter
 uword_t mhpmcounter4;
 
 /*------------------------------------------------------------------------------
@@ -275,9 +280,10 @@ static inline uword_t verify_gpr(Instr* instr)
     {
       if (dut->GprMemory[instr->rd] != instr->rd_data)
       {
-        LogPrintf("Instruction %s error: GPR x%02u expected 0x" WORD_PRINT_FMT
+        LogPrintf("Instruction %s (pc: 0x%x) error: GPR x%02u expected 0x" WORD_PRINT_FMT
                   " got 0x" WORD_PRINT_FMT ".\n",
                   instr->instr,
+                  instr->addr,
                   (unsigned)instr->rd,
                   (uword_t)instr->rd_data,
                   (uword_t)dut->GprMemory[instr->rd]);
@@ -339,7 +345,7 @@ static uint32_t run(const std::string& firmwarefile, const std::string& spikefil
       break;
     }
 
-    if (dut->wb_valid)
+    if (dut->instr_committed)
     {
       Cycle();
 

@@ -4,8 +4,8 @@
 \file       mem_unit.sv
 \brief      SCHOLAR RISC-V core memory unit
 \author     Kawanami
-\date       17/12/2025
-\version    1.0
+\date       03/02/2026
+\version    1.1
 
 \details
   This module implements the memory unit of the SCHOLAR RISC-V processor core.
@@ -21,24 +21,27 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 17/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 03/02/2026 | Kawanami   | Use local package import instead of global. |
 ********************************************************************************
 */
 
-/*!
+module mem_unit
+
+  /*!
 * Import useful packages.
 */
-import core_pkg::BYTE_LENGTH;
-import core_pkg::ADDR_WIDTH;
-import core_pkg::DATA_WIDTH;
-import core_pkg::MEM_CTRL_WIDTH;
-import core_pkg::ADDR_OFFSET_WIDTH;
-import core_pkg::MEM_IDLE;
-import core_pkg::MEM_WB;
-import core_pkg::MEM_WH;
-import core_pkg::MEM_WW;
+  import core_pkg::BYTE_LENGTH;
+  import core_pkg::ADDR_WIDTH;
+  import core_pkg::DATA_WIDTH;
+  import core_pkg::MEM_CTRL_WIDTH;
+  import core_pkg::ADDR_OFFSET_WIDTH;
+  import core_pkg::MEM_IDLE;
+  import core_pkg::MEM_WB;
+  import core_pkg::MEM_WH;
+  import core_pkg::MEM_WW;
 /**/
 
-module mem_unit #(
+#(
 ) (
     /// System clock
     input  wire                           clk_i,

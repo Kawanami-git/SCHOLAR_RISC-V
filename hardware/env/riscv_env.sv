@@ -5,8 +5,8 @@
 \brief      SCHOLAR RISC-V Integration Environment (core + RAMs + AXI fabric)
 
 \author     Kawanami
-\date       15/01/2026
-\version    1.2
+\date       03/02/2026
+\version    1.3
 
 \details
   Top-level integration for the SCHOLAR RISC-V core with:
@@ -37,10 +37,9 @@
 | 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 12/01/2026 | Kawanami   | Expose PTC/CTP RAM to Verilator TB.       |
 | 1.2     | 15/01/2026 | Kawanami   | Expose few more signals to Verilator to improve CSRs verification.<br>Also Change the core start address to match on-board address spaces. |
+| 1.3     | 03/02/2026 | Kawanami   | Remove unecessary package import and signals and add non-perfect memory support. |
 ********************************************************************************
 */
-
-
 
 `ifdef XLEN64
 `define ARCHI 64
@@ -51,14 +50,16 @@
 `endif
 
 module riscv_env #(
+    ///
+    parameter bit                      NoPerfectMemory = 0,
     /// Number of bits in a byte
-    parameter int unsigned             ByteLength = 8,
+    parameter int unsigned             ByteLength      = 8,
     /// Address bus width
-    parameter int unsigned             Archi      = `ARCHI,
+    parameter int unsigned             Archi           = `ARCHI,
     /// Core reset vector (byte address)
-    parameter logic        [Archi-1:0] StartAddr  = `START_ADDR,
+    parameter logic        [Archi-1:0] StartAddr       = `START_ADDR,
     /// AXI transaction ID width
-    parameter int unsigned             IdWidth    = 8
+    parameter int unsigned             IdWidth         = 8
 ) (
 `ifdef SIM
     /// Write-enable for GPR poke (testbench)
@@ -68,21 +69,15 @@ module riscv_env #(
     /// GPR value to write (testbench)
     input  wire  [         Archi          - 1 : 0] GprData,
     /// Full GPR file view (read-only mirror)
-    output wire  [         Archi          - 1 : 0] GprMemory            [              NB_GPR],
+    output wire  [         Archi          - 1 : 0] GprMemory            [        RISCV_NB_GPR],
     ///
     output wire  [                           11:0] decode_csr_raddr,
     /// CSR mhpmcounter0 register
-    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter0,
-    ///
-    output wire                                    rs1_dirty,
-    ///
-    output wire                                    rs2_dirty,
+    output wire  [                  Archi - 1 : 0] mhpmcounter0,
     /// CSR mhpmcounter3 register
-    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter3,
-    ///
-    output wire                                    softresetn,
+    output wire  [                  Archi - 1 : 0] mhpmcounter3,
     /// CSR mhpmcounter4 register
-    output wire  [             DATA_WIDTH - 1 : 0] mhpmcounter4,
+    output wire  [                  Archi - 1 : 0] mhpmcounter4,
     /// Data RAM contents (exposed to TB)
     output logic [          Archi         - 1 : 0] DataDpramMem         [      DATA_RAM_DEPTH],
     /// PTC RAM contents (exposed to TB)
@@ -90,7 +85,7 @@ module riscv_env #(
     /// CTP RAM contents (exposed to TB)
     output logic [          Archi         - 1 : 0] CtpDpramMem          [CTP_SHARED_RAM_DEPTH],
     /// Writeback to GPR write enable
-    output wire                                    wb_valid,
+    output wire                                    instr_committed,
 `endif
     /* Global signals*/
     /// Core clock
@@ -449,12 +444,9 @@ module riscv_env #(
       .gpr_memory_o      (GprMemory),
       .decode_csr_raddr_o(decode_csr_raddr),
       .mhpmcounter0_o    (mhpmcounter0),
-      .rs1_dirty_o       (rs1_dirty),
-      .rs2_dirty_o       (rs2_dirty),
       .mhpmcounter3_o    (mhpmcounter3),
-      .softresetn_o      (softresetn),
       .mhpmcounter4_o    (mhpmcounter4),
-      .wb_valid_o        (wb_valid),
+      .instr_committed_o (instr_committed),
 `endif
       .clk_i             (core_clk_i),
       .rstn_i            (core_rstn_i),
@@ -475,9 +467,10 @@ module riscv_env #(
 
   /// data RAM: core R/W, AXI write (firmware data loader)
   waxi_dpram #(
-      .AddrWidth(Archi),
-      .DataWidth(Archi),
-      .Size     (DATA_RAM_SIZE)
+      .NoPerfectMemory(NoPerfectMemory),
+      .AddrWidth      (Archi),
+      .DataWidth      (Archi),
+      .Size           (DATA_RAM_SIZE)
   ) data_ram (
 `ifdef SIM
       .mem_o          (DataDpramMem),
@@ -522,9 +515,10 @@ module riscv_env #(
 
   /// Instructions RAM: core read-only, AXI write (firmware instructions loader)
   waxi_dpram #(
-      .AddrWidth(Archi),
-      .DataWidth(RISCV_INSTR_WIDTH),
-      .Size     (INSTR_RAM_SIZE)
+      .NoPerfectMemory(NoPerfectMemory),
+      .AddrWidth      (Archi),
+      .DataWidth      (RISCV_INSTR_WIDTH),
+      .Size           (INSTR_RAM_SIZE)
   ) instr_dpram (
       .core_clk_i     (core_clk_i),
       .axi_clk_i      (axi_clk_i),
@@ -564,9 +558,10 @@ module riscv_env #(
 
   /// PTC RAM: platform→core shared, AXI write path
   waxi_dpram #(
-      .AddrWidth(Archi),
-      .DataWidth(Archi),
-      .Size     (PTC_SHARED_RAM_SIZE)
+      .NoPerfectMemory(NoPerfectMemory),
+      .AddrWidth      (Archi),
+      .DataWidth      (Archi),
+      .Size           (PTC_SHARED_RAM_SIZE)
   ) w_axi_shared_ram (
 `ifdef SIM
       .mem_o          (PtcDpramMem),
@@ -606,9 +601,10 @@ module riscv_env #(
 
   /// CTP RAM: core→platform shared, AXI read path
   raxi_dpram #(
-      .AddrWidth(Archi),
-      .DataWidth(Archi),
-      .Size     (CTP_SHARED_RAM_SIZE)
+      .NoPerfectMemory(NoPerfectMemory),
+      .AddrWidth      (Archi),
+      .DataWidth      (Archi),
+      .Size           (CTP_SHARED_RAM_SIZE)
   ) r_axi_shared_ram (
 `ifdef SIM
       .mem_o(CtpDpramMem),

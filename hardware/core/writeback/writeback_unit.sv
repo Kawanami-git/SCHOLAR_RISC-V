@@ -4,8 +4,8 @@
 \file       writeback_unit.sv
 \brief      SCHOLAR RISC-V core write-back unit
 \author     Kawanami
-\date       17/12/2025
-\version    1.0
+\date       03/02/2026
+\version    1.1
 
 \details
   This module implements the write-back unit of the SCHOLAR RISC-V processor core.
@@ -28,32 +28,39 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 17/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 03/02/2026 | Kawanami   | Add CSR write path.                       |
 ********************************************************************************
 */
 
-/*!
+module writeback_unit
+
+  /*!
 * Import useful packages.
 */
-import core_pkg::RF_ADDR_WIDTH;
-import core_pkg::DATA_WIDTH;
-import core_pkg::GPR_CTRL_WIDTH;
-import core_pkg::CSR_CTRL_WIDTH;
-import core_pkg::MEM_CTRL_WIDTH;
-import core_pkg::CSR_ADDR_WIDTH;
-import core_pkg::ADDR_OFFSET_WIDTH;
-import core_pkg::GPR_MEM;
-import core_pkg::GPR_ALU;
-import core_pkg::GPR_PRGMC;
-import core_pkg::GPR_OP3;
-import core_pkg::MEM_RB;
-import core_pkg::MEM_RBU;
-import core_pkg::MEM_RH;
-import core_pkg::MEM_RHU;
-import core_pkg::MEM_RW;
-import core_pkg::MEM_RWU;
+  import core_pkg::RF_ADDR_WIDTH;
+  import core_pkg::DATA_WIDTH;
+  import core_pkg::GPR_CTRL_WIDTH;
+  import core_pkg::CSR_CTRL_WIDTH;
+  import core_pkg::MEM_CTRL_WIDTH;
+  import core_pkg::CSR_CTRL_WIDTH;
+  import core_pkg::CSR_ADDR_WIDTH;
+  import core_pkg::ADDR_OFFSET_WIDTH;
+  import core_pkg::CSR_IDLE;
+  import core_pkg::CSR_ALU;
+  import core_pkg::GPR_IDLE;
+  import core_pkg::GPR_MEM;
+  import core_pkg::GPR_ALU;
+  import core_pkg::GPR_PRGMC;
+  import core_pkg::GPR_OP3;
+  import core_pkg::MEM_RB;
+  import core_pkg::MEM_RBU;
+  import core_pkg::MEM_RH;
+  import core_pkg::MEM_RHU;
+  import core_pkg::MEM_RW;
+  import core_pkg::MEM_RWU;
 /**/
 
-module writeback_unit #(
+#(
 ) (
     /// Exe stage output
     input  wire [     DATA_WIDTH - 1 : 0] exe_out_i,
@@ -61,6 +68,8 @@ module writeback_unit #(
     input  wire [     DATA_WIDTH - 1 : 0] op3_i,
     /// Destination register index
     input  wire [  RF_ADDR_WIDTH - 1 : 0] rd_i,
+    /// CSR write address
+    input  wire [ CSR_ADDR_WIDTH - 1 : 0] csr_waddr_i,
     /// GPR control signal
     input  wire [     GPR_CTRL_WIDTH-1:0] gpr_ctrl_i,
     /* verilator lint_off UNUSEDSIGNAL */
@@ -78,7 +87,11 @@ module writeback_unit #(
     /// CSR write data
     output wire [     DATA_WIDTH - 1 : 0] csr_wdata_o,
     /// Data read from memory
-    input  wire [DATA_WIDTH      - 1 : 0] d_m_rdata_i
+    input  wire [DATA_WIDTH      - 1 : 0] d_m_rdata_i,
+    /// GPR data valid flag (1: valid  0: not valid)
+    output wire                           gpr_wdata_valid_o,
+    /// CSR data valid flag (1: valid  0: not valid)
+    output wire                           csr_wdata_valid_o
 );
 
   /******************** DECLARATION ********************/
@@ -99,18 +112,16 @@ module writeback_unit #(
   /********************             ********************/
 
   /// Save memory address offset (LOAD op only)
-  assign m_addr_offset = exe_out_i[ADDR_OFFSET_WIDTH-1 : 0];
+  assign m_addr_offset     = exe_out_i[ADDR_OFFSET_WIDTH-1 : 0];
 
-  /*!
-  * Since only the `mcycle` register is implemented in the CSR file,
-  * and it is read-only, there is no need to perform any write to the CSRs.
-  *
-  * `csr_waddr_o` is tied to zero since no write will occur.
-  */
-  assign csr_waddr_o   = 'b0;
+  ///
+  assign csr_waddr_o       = csr_waddr_i;
 
-  /// CSR is read only in this version of the core.
-  assign csr_wdata_o   = '0;
+  ///
+  assign csr_wdata_o       = exe_out_i;
+
+  ///
+  assign csr_wdata_valid_o = csr_ctrl_i != CSR_IDLE ? 1 : 0;
 
   /// General-Purpose Registers writeback
   /*!
@@ -242,10 +253,11 @@ module writeback_unit #(
 
 
   /// Destination register address in the register file
-  assign rd_o        = rd_i;
+  assign rd_o              = rd_i;
   /// Output driven by rd_gen
-  assign gpr_wdata_o = gpr_wdata;
-
+  assign gpr_wdata_o       = gpr_wdata;
+  ///
+  assign gpr_wdata_valid_o = gpr_ctrl_i != GPR_IDLE ? 1 : 0;
 
 
 

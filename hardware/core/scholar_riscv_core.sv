@@ -4,8 +4,8 @@
 \file       scholar_riscv_core.sv
 \brief      SCHOLAR RISC-V Core Module
 \author     Kawanami
-\date       15/01/2026
-\version    1.2
+\date       03/02/2026
+\version    1.3
 
 \details
   This module is the top-level module of the SCHOLAR RISC-V core.
@@ -36,26 +36,32 @@
 | 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 10/01/2026 | Kawanami   | Add non-perfect memory support in the controller by checking `mem_ready_i` before triggering the softreset. |
 | 1.2     | 15/01/2026 | Kawanami   | Expose few more signals to Verilator to improve CSRs verification.  |
+| 1.3     | 03/02/2026 | Kawanami   | Add CSR write path and non-perfect memory support. |
 ********************************************************************************
 */
 
-/*!
+module scholar_riscv_core
+
+  /*!
 * Import useful packages.
 */
-import if2id_pkg::if2id_t;
-import id2exe_pkg::id2exe_t;
-import exe2mem_pkg::exe2mem_t;
-import mem2wb_pkg::mem2wb_t;
-import exe2pc_pkg::exe2pc_t;
+  import if2id_pkg::if2id_t;
+  import if2ctrl_pkg::if2ctrl_t;
+  import id2exe_pkg::id2exe_t;
+  import exe2mem_pkg::exe2mem_t;
+  import exe2ctrl_pkg::exe2ctrl_t;
+  import mem2wb_pkg::mem2wb_t;
+  import mem2ctrl_pkg::mem2ctrl_t;
+  import wb2ctrl_pkg::wb2ctrl_t;
 
-import core_pkg::ADDR_WIDTH;
-import core_pkg::DATA_WIDTH;
-import core_pkg::RF_ADDR_WIDTH;
-import core_pkg::CSR_ADDR_WIDTH;
-import core_pkg::NB_GPR;
+  import core_pkg::ADDR_WIDTH;
+  import core_pkg::DATA_WIDTH;
+  import core_pkg::RF_ADDR_WIDTH;
+  import core_pkg::CSR_ADDR_WIDTH;
+  import core_pkg::NB_GPR;
 /**/
 
-module scholar_riscv_core #(
+#(
     /// Core boot/start address
     parameter logic [ADDR_WIDTH - 1 : 0] StartAddress = '0
 ) (
@@ -69,22 +75,16 @@ module scholar_riscv_core #(
     input  wire [  DATA_WIDTH    - 1 : 0] gpr_data_i,
     /// GPR memory (SIM only)
     output wire [  DATA_WIDTH    - 1 : 0] gpr_memory_o      [NB_GPR],
-    ///
+    /// Decode to CSR raddr
     output wire [                 11 : 0] decode_csr_raddr_o,
     /// CSR mhpmcounter0 register
     output wire [     DATA_WIDTH - 1 : 0] mhpmcounter0_o,
-    ///
-    output wire                           rs1_dirty_o,
-    ///
-    output wire                           rs2_dirty_o,
     /// CSR mhpmcounter3 register
     output wire [     DATA_WIDTH - 1 : 0] mhpmcounter3_o,
-    ///
-    output wire                           softresetn_o,
     /// CSR mhpmcounter4 register
     output wire [     DATA_WIDTH - 1 : 0] mhpmcounter4_o,
-    /// Writeback to GPR write enable
-    output wire                           wb_valid_o,
+    /// Writeback instruction commited flag
+    output wire                           instr_committed_o,
 `endif
     /* Global signals */
     /// System clock
@@ -131,76 +131,80 @@ module scholar_riscv_core #(
 
   /* Control / PC */
   /// Active-low softreset (branch handling)
-  wire                                    softresetn;
+  wire                                     softresetn;
   /// Program counter
-  wire      [DATA_WIDTH          - 1 : 0] pc;
+  wire       [DATA_WIDTH          - 1 : 0] pc;
   /// Instruction rs1 dirty flag
-  wire                                    ctrl_rs1_dirty;
+  wire                                     ctrl_rs1_dirty;
   /// Instruction rs2 dirty flag
-  wire                                    ctrl_rs2_dirty;
+  wire                                     ctrl_rs2_dirty;
+  /// Instruction CSR dirty flag
+  wire                                     ctrl_csr_dirty;
   /* General purpose register file */
   /// General purpose register file RS1 value
-  wire      [DATA_WIDTH          - 1 : 0] gpr_rs1_data;
+  wire       [DATA_WIDTH          - 1 : 0] gpr_rs1_data;
   /// General purpose register file RS2 value
-  wire      [DATA_WIDTH          - 1 : 0] gpr_rs2_data;
+  wire       [DATA_WIDTH          - 1 : 0] gpr_rs2_data;
   /* CSR file */
   /// CSR read value
-  wire      [DATA_WIDTH          - 1 : 0] csr_data;
+  wire       [DATA_WIDTH          - 1 : 0] csr_data;
   /* Fetch */
   /// Fetch to decode stage control/data package
-  if2id_t                                 if2id;
+  if2id_t                                  if2id;
   /// Fetch valid flag
-  wire                                    fetch_valid;
-  /// Fetch pre-decode destination register
-  wire      [      RF_ADDR_WIDTH - 1 : 0] fetch_rd;
-  /// Fetch pre-decode source 1 register
-  wire      [      RF_ADDR_WIDTH - 1 : 0] fetch_rs1;
-  /// Fetch pre-decode source 2 register
-  wire      [      RF_ADDR_WIDTH - 1 : 0] fetch_rs2;
+  wire                                     fetch_valid;
+  /// Fetch to control package
+  if2ctrl_t                                if2ctrl;
   /* Decode */
   /// Decode ready flag
-  wire                                    decode_ready;
+  wire                                     decode_ready;
   /// Decode valid flag
-  wire                                    decode_valid;
+  wire                                     decode_valid;
   /// General purpose register file port 0 read address
-  wire      [     RF_ADDR_WIDTH  - 1 : 0] decode_rs1;
+  wire       [     RF_ADDR_WIDTH  - 1 : 0] decode_rs1;
   /// General purpose register file port 1 read address
-  wire      [     RF_ADDR_WIDTH  - 1 : 0] decode_rs2;
+  wire       [     RF_ADDR_WIDTH  - 1 : 0] decode_rs2;
   /// Decode to exe control/data package
-  id2exe_t                                id2exe;
+  id2exe_t                                 id2exe;
   /// Control/status register file read address
-  wire      [     CSR_ADDR_WIDTH - 1 : 0] decode_csr_raddr;
+  wire       [     CSR_ADDR_WIDTH - 1 : 0] decode_csr_raddr;
   /* Exe */
   /// Exe ready flag
-  wire                                    exe_ready;
+  wire                                     exe_ready;
   /// Exe valid flag
-  wire                                    exe_valid;
-  /// Exe to mem control/data package
-  exe2mem_t                               exe2mem;
-  /// Exe to pc (control) control/data package
-  exe2pc_t                                exe2pc;
+  wire                                     exe_valid;
+  /// Exe to mem package
+  exe2mem_t                                exe2mem;
+  /// Exe to Control package
+  exe2ctrl_t                               exe2ctrl;
   /* mem */
   /// Mem ready flag
-  wire                                    mem_ready;
+  wire                                     mem_ready;
   /// Mem valid flag
-  wire                                    mem_valid;
+  wire                                     mem_valid;
   /// Mem to writeback control/data package
-  mem2wb_t                                mem2wb;
+  mem2wb_t                                 mem2wb;
+  /// Mem to Control package
+  mem2ctrl_t                               mem2ctrl;
   /* write-back */
-  /// Writeback valid flag
-  wire                                    wb_valid;
+  /// Writeback GPR wdata valid flag
+  wire                                     wb_gpr_wdata_valid;
+  /// Writeback CSR wdata valid flag
+  wire                                     wb_csr_wdata_valid;
   /// General purpose register file write port address
-  wire      [          RF_ADDR_WIDTH-1:0] wb_rd;
+  wire       [          RF_ADDR_WIDTH-1:0] wb_rd;
   /// General purpose register file write port data
-  wire      [             DATA_WIDTH-1:0] wb_gpr_wdata;
+  wire       [             DATA_WIDTH-1:0] wb_gpr_wdata;
   /// CSR write port address
-  wire      [         CSR_ADDR_WIDTH-1:0] wb_csr_waddr;
+  wire       [         CSR_ADDR_WIDTH-1:0] wb_csr_waddr;
   /// CSR file write port data
-  wire      [             DATA_WIDTH-1:0] wb_csr_wdata;
-
+  wire       [             DATA_WIDTH-1:0] wb_csr_wdata;
+  /// Writeback to Control package
+  wb2ctrl_t                                wb2ctrl;
 
   /* registers */
-
+  /// softresetn register
+  reg softresetn_q;
   /********************             ********************/
 
   gpr #() gpr (
@@ -214,7 +218,7 @@ module scholar_riscv_core #(
       .rstn_i    (rstn_i),
       .rs1_i     (decode_rs1),
       .rs2_i     (decode_rs2),
-      .wb_valid_i(wb_valid),
+      .wb_valid_i(wb_gpr_wdata_valid),
       .rd_i      (wb_rd),
       .rd_data_i (wb_gpr_wdata),
       .rs1_data_o(gpr_rs1_data),
@@ -232,6 +236,7 @@ module scholar_riscv_core #(
       .rstn_i          (rstn_i),
       .waddr_i         (wb_csr_waddr),
       .wdata_i         (wb_csr_wdata),
+      .wen_i           (wb_csr_wdata_valid),
       .raddr_i         (decode_csr_raddr),
       .rdata_o         (csr_data),
       .mhpmevent3      (ctrl_rs1_dirty || ctrl_rs2_dirty),
@@ -244,38 +249,67 @@ module scholar_riscv_core #(
       .clk_i         (clk_i),
       .rstn_i        (rstn_i),
       .i_m_hit_i     (i_m_hit_i),
-      .exe2pc_i      (exe2pc),
-      .rs1_i         (fetch_rs1),
+      .if2ctrl_i     (if2ctrl),
+      .exe2ctrl_i    (exe2ctrl),
+      .mem2ctrl_i    (mem2ctrl),
+      .wb2ctrl_i     (wb2ctrl),
       .rs1_dirty_o   (ctrl_rs1_dirty),
-      .rs2_i         (fetch_rs2),
       .rs2_dirty_o   (ctrl_rs2_dirty),
-      .fetch_rd_i    (fetch_rd),
-      .decode_valid_i(decode_valid),
+      .csr_dirty_o   (ctrl_csr_dirty),
       .decode_ready_i(decode_ready),
       .mem_ready_i   (mem_ready),
       .softresetn_o  (softresetn),
-      .wb_rd_i       (wb_rd),
       .pc_o          (pc)
   );
 
 `ifdef SIM
   assign decode_csr_raddr_o = decode_csr_raddr;
-  assign wb_valid_o         = wb_valid;
-  assign rs1_dirty_o        = ctrl_rs1_dirty;
-  assign rs2_dirty_o        = ctrl_rs2_dirty;
-  assign softresetn_o       = softresetn;
 `endif
 
+  /// softresetn registration
+  /*
+  * This block saves the softresetn value.
+  * This value is then used to trigger a flush of the
+  * Decode stage.
+  *
+  * Using this register and not the `softresetn`
+  * signal breaks the critical path
+  * due to data hazard handling.
+  *
+  * From a behavioral point of view, this has no consequences
+  * and the front-end of the pipeline (fetch/decode/exe) is
+  * correctly flushed.
+  */
+  always_ff @(posedge clk_i) begin : softresetn_reg
+    if(!rstn_i) begin
+      softresetn_q <= '0;
+    end else begin
+      softresetn_q <= softresetn;
+    end
+  end
+
+  /*!
+  * When a jump occurs:
+  * - First cycle: fetch is flushed
+  * - Second cycle: decode is flushed (= not ready).
+  *
+  * As fetch requests a new instruction only if decode is ready,
+  * there is a two cycles penality.
+  * To avoid the second cycle penality, fetch verifies if decode is
+  * ready or under reset:
+  * - If ready, no issues.
+  * - If under reset, it will be ready at the next cycle
+  *   when the instruction will be available because `softresetn`
+  *   is a one cyle pulse.
+  */
   fetch #() fetch (
       .clk_i         (clk_i),
       .rstn_i        (rstn_i && softresetn),
       .pc_i          (pc),
-      .decode_ready_i(decode_ready),
+      .decode_ready_i(decode_ready || !softresetn_q),
       .valid_o       (fetch_valid),
       .if2id_o       (if2id),
-      .rs1_o         (fetch_rs1),
-      .rs2_o         (fetch_rs2),
-      .rd_o          (fetch_rd),
+      .if2ctrl_o     (if2ctrl),
       .i_m_rdata_i   (i_m_rdata_i),
       .i_m_hit_i     (i_m_hit_i),
       .i_m_addr_o    (i_m_addr_o),
@@ -284,7 +318,7 @@ module scholar_riscv_core #(
 
   decode #() decode (
       .clk_i        (clk_i),
-      .rstn_i       (rstn_i && softresetn),
+      .rstn_i       (rstn_i && softresetn_q),
       .fetch_valid_i(fetch_valid),
       .exe_ready_i  (exe_ready),
       .ready_o      (decode_ready),
@@ -297,6 +331,7 @@ module scholar_riscv_core #(
       .rs2_dirty_i  (ctrl_rs2_dirty),
       .csr_raddr_o  (decode_csr_raddr),
       .csr_data_i   (csr_data),
+      .csr_dirty_i  (ctrl_csr_dirty),
       .if2id_i      (if2id),
       .id2exe_o     (id2exe)
   );
@@ -310,7 +345,7 @@ module scholar_riscv_core #(
       .valid_o       (exe_valid),
       .id2exe_i      (id2exe),
       .exe2mem_o     (exe2mem),
-      .exe2pc_o      (exe2pc)
+      .exe2ctrl_o    (exe2ctrl)
   );
 
   mem #() mem (
@@ -321,6 +356,7 @@ module scholar_riscv_core #(
       .valid_o    (mem_valid),
       .exe2mem_i  (exe2mem),
       .mem2wb_o   (mem2wb),
+      .mem2ctrl_o (mem2ctrl),
       .d_m_wdata_o(d_m_wdata_o),
       .d_m_hit_i  (d_m_hit_i),
       .d_m_addr_o (d_m_addr_o),
@@ -330,16 +366,21 @@ module scholar_riscv_core #(
   );
 
   writeback #() writeback (
-      .clk_i      (clk_i),
-      .rstn_i     (rstn_i),
-      .mem_valid_i(mem_valid),
-      .mem2wb_i   (mem2wb),
-      .rd_o       (wb_rd),
-      .valid_o    (wb_valid),
-      .gpr_wdata_o(wb_gpr_wdata),
-      .csr_waddr_o(wb_csr_waddr),
-      .csr_wdata_o(wb_csr_wdata),
-      .d_m_rdata_i(d_m_rdata_i)
+`ifdef SIM
+      .instr_committed_o(instr_committed_o),
+`endif
+      .clk_i            (clk_i),
+      .rstn_i           (rstn_i),
+      .mem_valid_i      (mem_valid),
+      .mem2wb_i         (mem2wb),
+      .wb2ctrl_o        (wb2ctrl),
+      .rd_o             (wb_rd),
+      .gpr_wdata_o      (wb_gpr_wdata),
+      .csr_waddr_o      (wb_csr_waddr),
+      .csr_wdata_o      (wb_csr_wdata),
+      .d_m_rdata_i      (d_m_rdata_i),
+      .gpr_wdata_valid_o(wb_gpr_wdata_valid),
+      .csr_wdata_valid_o(wb_csr_wdata_valid)
   );
 
 endmodule

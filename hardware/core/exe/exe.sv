@@ -4,8 +4,8 @@
 \file       exe.sv
 \brief      SCHOLAR RISC-V core execution stage
 \author     Kawanami
-\date       17/12/2025
-\version    1.0
+\date       30/01/2026
+\version    1.1
 
 \details
   Execution (EXE) stage of the SCHOLAR RISC-V pipeline.
@@ -13,7 +13,7 @@
   The EXE stage consumes the decoded micro-operation (uop) + operands from ID,
   performs the arithmetic/logic work through the ALU, and forwards:
     - ALU result + writeback/memory control to the MEM stage
-    - PC-related information (pc/op3/pc_ctrl + ALU result) to the PC/controller
+    - PC-related information (pc/op3/pc_ctrl + ALU result) to the Pipeline Controller
 
   This stage is split into:
     - `exe.sv`     : stage wrapper and ID->EXE input register
@@ -36,39 +36,41 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 17/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 30/01/2026 | Kawanami   | Add CSR write path & new strucure fields forwarding. |
 ********************************************************************************
 */
 
-/*!
+module exe
+
+  /*!
 * Import useful packages.
 */
-import id2exe_pkg::id2exe_t;
-import exe2mem_pkg::exe2mem_t;
-import exe2pc_pkg::exe2pc_t;
-import core_pkg::DATA_WIDTH;
+  import id2exe_pkg::id2exe_t;
+  import exe2mem_pkg::exe2mem_t;
+  import exe2ctrl_pkg::exe2ctrl_t;
+  import core_pkg::DATA_WIDTH;
 /**/
 
-
-module exe #(
+#(
 ) (
     /// System clock
-    input  wire      clk_i,
+    input  wire       clk_i,
     /// System active low reset
-    input  wire      rstn_i,
+    input  wire       rstn_i,
     /// ID stage valid flag
-    input  wire      decode_valid_i,
+    input  wire       decode_valid_i,
     /// Mem stage ready flag (back-pressure from the next stage)
-    input  wire      mem_ready_i,
+    input  wire       mem_ready_i,
     /// Exe stage ready (1: can accept a new ID->EXE payload)
-    output wire      ready_o,
+    output wire       ready_o,
     /// Exe result valid flag (1: ALU result and forwarded fields are valid)
-    output wire      valid_o,
+    output wire       valid_o,
     /// ID->EXE payload (operands + control micro-ops)
-    input  id2exe_t  id2exe_i,
+    input  id2exe_t   id2exe_i,
     /// EXE->MEM payload (operands + control micro-ops)
-    output exe2mem_t exe2mem_o,
+    output exe2mem_t  exe2mem_o,
     /// EXE->PC payload (operands + control micro-ops)
-    output exe2pc_t  exe2pc_o
+    output exe2ctrl_t exe2ctrl_o
 );
 
   /******************** DECLARATION ********************/
@@ -115,29 +117,37 @@ module exe #(
   end
 
   /// EXE is ready if MEM consume current micro-ops
-  assign ready_o            = mem_ready_i;
+  assign ready_o              = mem_ready_i;
   /// Forward op3 to MEM
-  assign exe2mem_o.op3      = id2exe_q.op3;
+  assign exe2mem_o.op3        = id2exe_q.op3;
   /// Provide ALU out to MEM
-  assign exe2mem_o.exe_out  = alu_out;
+  assign exe2mem_o.exe_out    = alu_out;
   /// Forward rd to MEM
-  assign exe2mem_o.rd       = id2exe_q.rd;
+  assign exe2mem_o.rd         = id2exe_q.rd;
+  /// Forward CSR waddr to MEM
+  assign exe2mem_o.csr_waddr  = id2exe_q.csr_waddr;
   /// Forward MEM control signal to MEM
-  assign exe2mem_o.mem_ctrl = id2exe_q.mem_ctrl;
+  assign exe2mem_o.mem_ctrl   = id2exe_q.mem_ctrl;
   /// Forward GPR control signal to MEM
-  assign exe2mem_o.gpr_ctrl = id2exe_q.gpr_ctrl;
+  assign exe2mem_o.gpr_ctrl   = id2exe_q.gpr_ctrl;
   /// Forward CSR control signal to MEM
-  assign exe2mem_o.csr_ctrl = id2exe_q.csr_ctrl;
+  assign exe2mem_o.csr_ctrl   = id2exe_q.csr_ctrl;
   /// Forward op3 to PC
-  assign exe2pc_o.op3       = id2exe_q.op3;
-  /// Forward instruction pc to PC
-  assign exe2pc_o.pc        = id2exe_q.pc;
-  /// Forward ALU out to PC
-  assign exe2pc_o.exe_out   = alu_out;
-  /// Forward PC control signal to PC
-  assign exe2pc_o.pc_ctrl   = id2exe_q.pc_ctrl;
+  assign exe2ctrl_o.op3       = id2exe_q.op3;
+  /// Forward instruction pc to Controller
+  assign exe2ctrl_o.pc        = id2exe_q.pc;
+  /// Forward ALU out to Controller
+  assign exe2ctrl_o.exe_out   = alu_out;
+  /// Forward PC control signal to Controller
+  assign exe2ctrl_o.pc_ctrl   = id2exe_q.pc_ctrl;
+  /// Forward instruction rd to Controller
+  assign exe2ctrl_o.rd        = id2exe_q.rd;
+  /// Forward instruction csr write address to Controller
+  assign exe2ctrl_o.csr_waddr = id2exe_q.csr_waddr;
+  /// Forward instruction csr control to Controller
+  assign exe2ctrl_o.csr_ctrl  = id2exe_q.csr_ctrl;
   /// Output driven by ALU
-  assign valid_o            = valid;
+  assign valid_o              = valid;
 
   /// ALU instantiation
   /*!

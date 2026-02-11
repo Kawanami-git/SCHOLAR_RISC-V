@@ -4,8 +4,8 @@
 \file       platform.cpp
 \brief      Entry point for driving SCHOLAR RISC-V on SIM or PolarFire Linux target
 \author     Kawanami
-\version    1.0
-\date       25/10/2025
+\version    1.1
+\date       03/02/2026
 
 \details
   Unified main loop for two environments, selected at compile time:
@@ -36,7 +36,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 25/10/2025 | Kawanami   | Initial version.                          |
-| 1.1     | xx/xx/xxxx | Author     |                                           |
+| 1.1     | 03/02/2026 | Kawanami   | Add a flush instruction after printf to ensure correct diplay of softcore messages. |
 ********************************************************************************
 */
 
@@ -208,6 +208,7 @@ int main(int argc, char** argv)
       }
       LogPrintf("Receive: %s\n", buf);
       std::printf("%s", buf);
+      std::fflush(stdout);
 
       // Clear local buffer
       std::memset(buf, 0, sizeof(buf));

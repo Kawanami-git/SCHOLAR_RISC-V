@@ -4,8 +4,8 @@
 \file       decode_unit.sv
 \brief      SCHOLAR RISC-V core decode unit module
 \author     Kawanami
-\date       15/12/2025
-\version    1.0
+\date       28/01/2026
+\version    1.1
 
 \details
  Instruction Decode Unit (ID) for the SCHOLAR RISC-V core.
@@ -36,14 +36,87 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 15/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 28/01/2026 | Kawanami   | Add CSR write path and and clarify SYSTEM opcode. |
 ********************************************************************************
 */
 
-/* verilator lint_off IMPORTSTAR */
-import core_pkg::*;
-/* verilator lint_on IMPORTSTAR */
+module decode_unit
 
-module decode_unit #(
+  /*!
+* Import useful packages.
+*/
+  import core_pkg::ADDR_WIDTH;
+  import core_pkg::INSTR_WIDTH;
+  import core_pkg::RF_ADDR_WIDTH;
+  import core_pkg::DATA_WIDTH;
+  import core_pkg::CSR_ADDR_WIDTH;
+  import core_pkg::EXE_CTRL_WIDTH;
+  import core_pkg::EXE_ADD;
+  import core_pkg::EXE_SUB;
+  import core_pkg::EXE_SLL;
+  import core_pkg::EXE_SLT;
+  import core_pkg::EXE_SLTU;
+  import core_pkg::EXE_XOR;
+  import core_pkg::EXE_SRA;
+  import core_pkg::EXE_SRL;
+  import core_pkg::EXE_OR;
+  import core_pkg::EXE_AND;
+  import core_pkg::EXE_EQ;
+  import core_pkg::EXE_NE;
+  import core_pkg::EXE_SLT;
+  import core_pkg::EXE_GE;
+  import core_pkg::EXE_SLTU;
+  import core_pkg::EXE_GEU;
+  import core_pkg::EXE_ADDW;
+  import core_pkg::EXE_SUBW;
+  import core_pkg::EXE_SLLW;
+  import core_pkg::EXE_SRAW;
+  import core_pkg::EXE_SRLW;
+  import core_pkg::MEM_CTRL_WIDTH;
+  import core_pkg::MEM_IDLE;
+  import core_pkg::MEM_RB;
+  import core_pkg::MEM_RH;
+  import core_pkg::MEM_RBU;
+  import core_pkg::MEM_RHU;
+  import core_pkg::MEM_RW;
+  import core_pkg::MEM_RWU;
+  import core_pkg::MEM_RD;
+  import core_pkg::MEM_WB;
+  import core_pkg::MEM_WH;
+  import core_pkg::MEM_WW;
+  import core_pkg::MEM_WD;
+  import core_pkg::CSR_CTRL_WIDTH;
+  import core_pkg::CSR_IDLE;
+  import core_pkg::CSR_ALU;
+  import core_pkg::GPR_CTRL_WIDTH;
+  import core_pkg::GPR_IDLE;
+  import core_pkg::GPR_MEM;
+  import core_pkg::GPR_ALU;
+  import core_pkg::GPR_PRGMC;
+  import core_pkg::GPR_OP3;
+  import core_pkg::PC_CTRL_WIDTH;
+  import core_pkg::PC_SET;
+  import core_pkg::PC_ADD;
+  import core_pkg::PC_COND;
+  import core_pkg::PC_INC;
+  import core_pkg::OP_WIDTH;
+  import core_pkg::FUNCT3_WIDTH;
+  import core_pkg::FUNCT7_WIDTH;
+  import core_pkg::LOAD_OP;
+  import core_pkg::IMM_OP;
+  import core_pkg::IMMW_OP;
+  import core_pkg::REGW_OP;
+  import core_pkg::AUIPC_OP;
+  import core_pkg::STORE_OP;
+  import core_pkg::REG_OP;
+  import core_pkg::LUI_OP;
+  import core_pkg::BRANCH_OP;
+  import core_pkg::JALR_OP;
+  import core_pkg::JAL_OP;
+  import core_pkg::SYS_OP;
+/**/
+
+#(
 ) (
     /// System active low reset
     input  wire                          rstn_i,
@@ -69,8 +142,12 @@ module decode_unit #(
     input  wire                          rs2_dirty_i,
     /// CSR file read address
     output wire [CSR_ADDR_WIDTH - 1 : 0] csr_raddr_o,
+    /// CSR file write address
+    output wire [CSR_ADDR_WIDTH - 1 : 0] csr_waddr_o,
     /// CSR file read data
     input  wire [DATA_WIDTH     - 1 : 0] csr_data_i,
+    /// Control & Status register dependency flag (1: data not ready / pending write)
+    input  wire                          csr_dirty_i,
     /// First operand: RS1 value or zeroes
     output wire [    DATA_WIDTH - 1 : 0] op1_o,
     /// Second operand: RS2 value (REG_OP or BRANCH_OP) or immediate
@@ -110,7 +187,7 @@ module decode_unit #(
   function automatic logic instr_is_valid(input logic [6:0] op);
     return op == LOAD_OP || op == IMM_OP || op == IMMW_OP || op == REGW_OP || op == AUIPC_OP ||
         op == STORE_OP || op == REG_OP || op == LUI_OP || op == BRANCH_OP || op == JALR_OP ||
-        op == JAL_OP || op == CSR_OP;
+        op == JAL_OP || op == SYS_OP;
   endfunction
 
 
@@ -141,8 +218,10 @@ module decode_unit #(
   logic [ PC_CTRL_WIDTH - 1 : 0] pc_ctrl;
   /// Gpr (writeback) control signal
   logic [GPR_CTRL_WIDTH - 1 : 0] gpr_ctrl;
-  /// Mem control signakl
+  /// Mem control signal
   logic [MEM_CTRL_WIDTH - 1 : 0] mem_ctrl;
+  /// CSR control signal
+  logic [CSR_CTRL_WIDTH - 1 : 0] csr_ctrl;
   /// First operand
   logic [    DATA_WIDTH - 1 : 0] op1;
   /// Second operand
@@ -169,9 +248,11 @@ module decode_unit #(
   * In this design, decode is ready only when the next stage can accept
   * the current instruction (`exe_ready_i`) AND operands are available.
   *
-  * Dirty flags are checked unconditionally (rs1/rs2).
+  * Dirty flags are checked unconditionally (rs1/rs2/csr).
   * For instructions that do not use rs1/rs2, the decoder must map the
   * corresponding register index to x0, and x0 must never be dirty.
+  * For instructions that do not use csr, the decoder must map the
+  * csr_ctrl to CSR_IDLE and csr_raddr to 0.
   */
   always_comb begin : ctrl
     if (!rstn_i) begin
@@ -179,8 +260,8 @@ module decode_unit #(
       valid = 1'b0;
     end
     else if (instr_is_valid(op)) begin
-      ready = exe_ready_i && !rs1_dirty_i && !rs2_dirty_i;
-      valid = !rs1_dirty_i && !rs2_dirty_i;
+      ready = exe_ready_i && !rs1_dirty_i && !rs2_dirty_i && !csr_dirty_i;
+      valid = !rs1_dirty_i && !rs2_dirty_i && !csr_dirty_i;
     end
     else begin
       ready = 1'b1;
@@ -214,7 +295,7 @@ module decode_unit #(
   *
   * - `funct7` is only used by R-type instructions (like Add, Sub, etc.)
   *   to differentiate between operations such as Add and Sub.
-  *   It is not relevant for STORE, BRANCH, AUIPC, LUI, CSR, or JAL.
+  *   It is not relevant for STORE, BRANCH, AUIPC, LUI, SYS, or JAL.
   *
   * - The register source 1 (`rs1_o`) is extracted for all instructions
   *   that require a first source operand.
@@ -258,9 +339,11 @@ module decode_unit #(
         csr_raddr = '0;
       end
 
-      CSR_OP: begin
+      SYS_OP: begin
         funct7 = '0;
+        rs1    = funct3 == '0 ? '0 : funct3[2] ? '0 : instr_i[19:15];
         rs2    = '0;
+        rd     = |funct3 ? instr_i[11:7] : '0;
       end
 
       REG_OP, REGW_OP: begin
@@ -303,6 +386,8 @@ module decode_unit #(
   /// Output driven by instr_decoder
   assign csr_raddr_o = csr_raddr;
   /// Output driven by instr_decoder
+  assign csr_waddr_o = csr_raddr;
+  /// Output driven by instr_decoder
   assign rs2_o       = rs2;
   /// Output driven by instr_decoder
   assign rs1_o       = rs1;
@@ -322,7 +407,10 @@ module decode_unit #(
   * - For branch instructions (`BRANCH_OP`),
   *   `funct3` specifies the comparison type (e.g., Beq, Bne, Slt).
   *
-  * - For other instructions (LOAD, STORE, AUIPC, LUI, JAL, CSR, unsupported),
+  * - For SYS instructions, funct3 specifies the operation to perform
+  *   (mostly used for CSR operations).
+  *
+  * - For other instructions (LOAD, STORE, AUIPC, LUI, JAL, unsupported),
   *   the default ALU operation is Add.
   *   This is functionally correct for U-Type instructions
   *   and address calculations, and harmless for current CSR implementation
@@ -364,6 +452,15 @@ module decode_unit #(
             default: exe_ctrl = 'x;
           endcase
         end
+        else if (op == SYS_OP) begin
+          case (funct3)
+            3'b000:         exe_ctrl = EXE_ADD;
+            3'b001, 3'b101: exe_ctrl = EXE_ADD;
+            3'b010, 3'b110: exe_ctrl = EXE_OR;
+            3'b011, 3'b111: exe_ctrl = EXE_AND;
+            default:        exe_ctrl = EXE_ADD;
+          endcase
+        end
         else exe_ctrl = EXE_ADD;
       end
     end
@@ -391,6 +488,15 @@ module decode_unit #(
             3'b110:  exe_ctrl = EXE_SLTU;
             3'b111:  exe_ctrl = EXE_GEU;
             default: exe_ctrl = 'x;
+          endcase
+        end
+        else if (op == SYS_OP) begin
+          case (funct3)
+            3'b000:         exe_ctrl = EXE_ADD;
+            3'b001, 3'b101: exe_ctrl = EXE_ADD;
+            3'b010, 3'b110: exe_ctrl = EXE_OR;
+            3'b011, 3'b111: exe_ctrl = EXE_AND;
+            default:        exe_ctrl = EXE_ADD;
           endcase
         end
         else exe_ctrl = EXE_ADD;
@@ -541,8 +647,8 @@ module decode_unit #(
   *                      (AUIPC uses ALU to compute `pc_i` + imm)
   * - `JAL_OP`,
   *   `JALR_OP`         → Write the return address (`pc_i` + 4) (`GprPrgmc`)
-  * - `CSR_OP`          → Write the content of source register op3_o (`GprOp3`)
-  *                       which contain the mcycle register value
+  * - `SYS_OP`          → Write the content of source register op3_o (`GprOp3`)
+  *                       which contain the CSR value
   * - Others            → No register write-back (`RD_IDLE`).
   *                       This also prevent unsupported instructions to write
   *                       into the GPRs.
@@ -553,10 +659,10 @@ module decode_unit #(
     end
     else begin
       case (op)
-        LOAD_OP:                                            gpr_ctrl = GPR_MEM;
+        LOAD_OP: gpr_ctrl = GPR_MEM;
         IMM_OP, IMMW_OP, REGW_OP, AUIPC_OP, REG_OP, LUI_OP: gpr_ctrl = GPR_ALU;
-        JALR_OP, JAL_OP:                                    gpr_ctrl = GPR_PRGMC;
-        CSR_OP:                                             gpr_ctrl = GPR_OP3;
+        JALR_OP, JAL_OP: gpr_ctrl = GPR_PRGMC;
+        SYS_OP: gpr_ctrl = (funct3 != '0) ? GPR_OP3 : GPR_IDLE;
 
         default: gpr_ctrl = GPR_IDLE;
       endcase
@@ -569,11 +675,31 @@ module decode_unit #(
 
   /// CSR control signals generator
   /*!
-  * For the current version of this core,
-  * only read-only CSRs are implemented.
-  * Thus, nothing to control.
+  * According to the CSR instruction, CSR may be updated
+  * by computed data from the ALU.
+  * In this case, `csr_ctrl` takes CSR_ALU.
+  * Otherwise, it takes CSR_IDLE.
   */
-  assign csr_ctrl_o = CSR_IDLE;
+  always_comb begin : csr_ctrl_gen
+    if (!rstn_i) begin
+      csr_ctrl = CSR_IDLE;
+    end
+    else begin
+      if (op == SYS_OP) begin
+        case (funct3)
+          3'b000, 3'b100: csr_ctrl = CSR_IDLE;
+          3'b001, 3'b101: csr_ctrl = CSR_ALU;
+          default:        csr_ctrl = |instr_i[19:15] ? CSR_ALU : CSR_IDLE;
+        endcase
+      end
+      else begin
+        csr_ctrl = CSR_IDLE;
+      end
+    end
+  end
+
+  /// Output driven by csr_ctrl_gen
+  assign csr_ctrl_o = csr_ctrl;
 
 
   /// Operands generator
@@ -584,16 +710,18 @@ module decode_unit #(
   *
   * The following signals are computed:
   * - `op1_o` : first operand. Usually read from GPR[rs1_o],
-  *             but may be `pc_i` (JALR) or zero (others).
+  *             but may be ~GPR[rs1_o] (CSR), `rs1` itself (CSR)
+  *             `pc_i` (JALR), or zero (others).
   *
   * - `op2_o` : second operand or immediate.
   *             Depends on the instruction format:
-  *              - R-type / Branch : `rs2_o` value
+  *              - R-type / Branch : `rs2_data_i` value
   *              - I/U/J-type      : immediate value, sign-extended if needed
   *              - LUI/AUIPC       : upper immediate (shifted)
+  *              - SYS_OP          : `csr_data_i`
   *
-  * - `op3_o` : second operand (for STORE),
-  *             branch offset (BRANCH), or CSR value.
+  * - `op3_o` : `rs2_data_i` (for STORE),
+  *             immediate branch offset (BRANCH), or `csr_data_i`.
   *
   * All immediate values are sign-extended to match `DATA_WIDTH`.
   */
@@ -661,9 +789,21 @@ module decode_unit #(
         op3 = pc_i;
       end
 
-      CSR_OP: begin
-        op1 = '0;
-        op2 = '0;
+      SYS_OP: begin
+        if (funct3 == 0) begin
+          op1 = '0;
+          op2 = '0;
+        end
+        else if (funct3[2]) begin
+          op1 = (funct3 == 3'b111) ?
+              ~{{DATA_WIDTH - 5{1'b0}}, instr_i[19:15]} : {{DATA_WIDTH - 5{1'b0}}, instr_i[19:15]};
+          op2 = (funct3 == 3'b101) ? '0 : csr_data_i;
+        end
+        else begin
+          op1 = (funct3 == 3'b011) ? ~rs1_data_i : rs1_data_i;
+          op2 = (funct3 == 3'b001) ? '0 : csr_data_i;
+        end
+
         op3 = csr_data_i;
       end
 

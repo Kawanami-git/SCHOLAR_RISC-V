@@ -4,8 +4,8 @@
 \file       pc.sv
 \brief      SCHOLAR RISC-V core pc updater
 \author     Kawanami
-\date       19/12/2025
-\version    1.0
+\date       03/02/2026
+\version    1.1
 
 \details
   This module updates the Program Counter (PC) according to control
@@ -24,23 +24,25 @@
 | Version | Date       | Author   | Description                    |
 |:-------:|:----------:|:---------|:-------------------------------|
 | 1.0     | 19/12/2025 | Kawanami | Initial version of the module. |
+| 1.1     | 03/02/2026 | Kawanami   | Use local package import instead of global. |
 ********************************************************************************
 */
 
-/*!
+module pc
+
+  /*!
 * Import useful packages.
 */
-import core_pkg::PC_CTRL_WIDTH;
-import core_pkg::ADDR_WIDTH;
-import core_pkg::DATA_WIDTH;
-import core_pkg::PC_INC;
-import core_pkg::PC_SET;
-import core_pkg::PC_ADD;
-import core_pkg::PC_COND;
+  import core_pkg::PC_CTRL_WIDTH;
+  import core_pkg::ADDR_WIDTH;
+  import core_pkg::DATA_WIDTH;
+  import core_pkg::PC_INC;
+  import core_pkg::PC_SET;
+  import core_pkg::PC_ADD;
+  import core_pkg::PC_COND;
 /**/
 
-
-module pc #(
+#(
     /// Core boot/start address
     parameter logic [ADDR_WIDTH - 1 : 0] StartAddress = '0
 ) (

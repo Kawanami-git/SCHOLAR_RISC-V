@@ -2,9 +2,9 @@
 /*!
 ********************************************************************************
 \file       if2id_pkg.sv
-\brief      IF→ID payload definition for SCHOLAR RISC-V
+\brief      IF->ID payload definition for SCHOLAR RISC-V
 \author     Kawanami
-\date       19/12/2025
+\date       28/01/2026
 \version    1.0
 
 \details
@@ -24,7 +24,7 @@
 \section if2id_pkg_version_history Version history
 | Version | Date       | Author   | Description                           |
 |:-------:|:----------:|:---------|:--------------------------------------|
-| 1.0     | 19/12/2025 | Kawanami | Initial definition of IF→ID payload.  |
+| 1.0     | 28/01/2026 | Kawanami | Initial definition of IF->ID payload. |
 ********************************************************************************
 */
 

@@ -4,8 +4,8 @@
 \file       alu.sv
 \brief      SCHOLAR RISC-V core arithmetic and logic unit
 \author     Kawanami
-\date       17/12/2025
-\version    1.0
+\date       03/02/2026
+\version    1.1
 
 \details
   This module implements the arithmetic and logic unit
@@ -33,37 +33,40 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 17/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 03/02/2026 | Kawanami   | Use local package import instead of global. |
 ********************************************************************************
 */
 
-/*!
+/* verilator lint_off UNUSEDSIGNAL */
+module alu
+
+  /*!
 * Import useful packages.
 */
-import core_pkg::DATA_WIDTH;
-import core_pkg::EXE_CTRL_WIDTH;
-import core_pkg::EXE_ADD;
-import core_pkg::EXE_SUB;
-import core_pkg::EXE_SLL;
-import core_pkg::EXE_SRL;
-import core_pkg::EXE_SRA;
-import core_pkg::EXE_SLT;
-import core_pkg::EXE_SLTU;
-import core_pkg::EXE_XOR;
-import core_pkg::EXE_OR;
-import core_pkg::EXE_AND;
-import core_pkg::EXE_ADDW;
-import core_pkg::EXE_SUBW;
-import core_pkg::EXE_SLLW;
-import core_pkg::EXE_SRLW;
-import core_pkg::EXE_SRAW;
-import core_pkg::EXE_EQ;
-import core_pkg::EXE_NE;
-import core_pkg::EXE_GE;
-import core_pkg::EXE_GEU;
+  import core_pkg::DATA_WIDTH;
+  import core_pkg::EXE_CTRL_WIDTH;
+  import core_pkg::EXE_ADD;
+  import core_pkg::EXE_SUB;
+  import core_pkg::EXE_SLL;
+  import core_pkg::EXE_SRL;
+  import core_pkg::EXE_SRA;
+  import core_pkg::EXE_SLT;
+  import core_pkg::EXE_SLTU;
+  import core_pkg::EXE_XOR;
+  import core_pkg::EXE_OR;
+  import core_pkg::EXE_AND;
+  import core_pkg::EXE_ADDW;
+  import core_pkg::EXE_SUBW;
+  import core_pkg::EXE_SLLW;
+  import core_pkg::EXE_SRLW;
+  import core_pkg::EXE_SRAW;
+  import core_pkg::EXE_EQ;
+  import core_pkg::EXE_NE;
+  import core_pkg::EXE_GE;
+  import core_pkg::EXE_GEU;
 /**/
 
-/* verilator lint_off UNUSEDSIGNAL */
-module alu #(
+#(
 ) (
     /// System active low reset
     input  wire                          rstn_i,

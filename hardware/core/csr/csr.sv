@@ -4,15 +4,14 @@
 \file       csr.sv
 \brief      SCHOLAR RISC-V core control/status registers file module
 \author     Kawanami
-\date       19/12/2025
-\version    1.0
+\date       28/01/2026
+\version    1.1
 
 \details
   This module implements the SCHOLAR RISC-V
   Control and Status Register (CSR) file.
 
-  It currently supports the `mhpmcounter0` (mcycle) register,
-  the mhpmcounter3 (stall) register and mhpmcounter4 (taken branches) register.
+  It currently supports a cycle counter (mhpmcounter0, mapped to the standard mcycle CSR addresses), mhpmcounter3 (stall cycles) and mhpmcounter4 (softresetn events).
 
   According to the RISC-V specification, `mhpmcounter0` can be accessed through:
     - Address 0xB00 → lower 32 bits (LSB)
@@ -26,12 +25,7 @@
     - Address 0xB04 → lower 32 bits (LSB)
     - Address 0xB84 → upper 32 bits (MSB)
 
-  For simplicity, for the 32-bit architecture,
-  this implementation only provides access
-  to the lower 32 bits of the registers, and this value
-  is returned through the `rdata_o` output.
-
- These registers are read-only: writes to it are ignored,
+ These registers are read-only: writes to them are ignored,
   and no write-enable logic is implemented.
 
 \remarks
@@ -42,13 +36,21 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 28/01/2026 | Kawanami   | Add RV32 hi-addresses, RV64-compatible CSR address aliases and return zero on unsupported CSR reads. |
 ********************************************************************************
 */
 
-import core_pkg::CSR_ADDR_WIDTH;
-import core_pkg::DATA_WIDTH;
+module csr
 
-module csr #(
+  /*!
+* Import useful packages.
+*/
+  import core_pkg::CSR_ADDR_WIDTH;
+  import core_pkg::ADDR_WIDTH;
+  import core_pkg::DATA_WIDTH;
+/**/
+
+#(
 ) (
 `ifdef SIM
     /// CSR mhpmcounter0 register (SIM only)
@@ -63,19 +65,21 @@ module csr #(
     input  wire                          clk_i,
     /// System active low reset
     input  wire                          rstn_i,
-    /* verilator lint_off UNUSED */
+    /* verilator lint_off UNUSEDSIGNAL */
     /// CSR write address
     input  wire [CSR_ADDR_WIDTH - 1 : 0] waddr_i,
+    /// CSR write enable
+    input  wire                          wen_i,
     /// Data to write in the CSR
     input  wire [DATA_WIDTH     - 1 : 0] wdata_i,
+    /* verilator lint_on UNUSEDSIGNAL */
     /// CSR read address
     input  wire [CSR_ADDR_WIDTH - 1 : 0] raddr_i,
-    /* verilator lint_on UNUSED */
     /// CSR read value
     output wire [DATA_WIDTH     - 1 : 0] rdata_o,
     /// Data hazard stall (rs1 or rs1 dirty)
     input  wire                          mhpmevent3,
-    /// Softreset even (taken branch)
+    /// Softreset event
     input  wire                          mhpmevent4
 );
 
@@ -83,12 +87,19 @@ module csr #(
   /* parameters verification */
 
   /* local parameters */
+  localparam logic [CSR_ADDR_WIDTH - 1 : 0] MHPMCOUNTER0_ADDR_HI = 'hb80;
+  localparam logic [CSR_ADDR_WIDTH - 1 : 0] MHPMCOUNTER0_ADDR = 'hb00;
+  localparam logic [CSR_ADDR_WIDTH - 1 : 0] MHPMCOUNTER3_ADDR_HI = 'hb83;
+  localparam logic [CSR_ADDR_WIDTH - 1 : 0] MHPMCOUNTER3_ADDR = 'hb03;
+  localparam logic [CSR_ADDR_WIDTH - 1 : 0] MHPMCOUNTER4_ADDR_HI = 'hb84;
+  localparam logic [CSR_ADDR_WIDTH - 1 : 0] MHPMCOUNTER4_ADDR = 'hb04;
 
   /* functions */
 
   /* wires */
   /// Read data
   logic [DATA_WIDTH - 1 : 0] rdata;
+
 
   /* registers */
   /// mhpmcounter0 register (mcycle)
@@ -97,6 +108,7 @@ module csr #(
   reg   [            63 : 0] mhpmcounter3_q;
   /// mhpmcounter4 register (taken branches)
   reg   [            63 : 0] mhpmcounter4_q;
+
   /********************             ********************/
 
   /// mhpmcounters write logic
@@ -127,21 +139,41 @@ module csr #(
     end
   end
 
-  /// mhpmcounters read logic
+
+  /// CSR read logic
   /*!
-  * This bloc drives `rdata` according to the input
-  * address `raddr_i`, allowing to retreive CSR values.
+  * This block drives rdata according to raddr_i.
+  * On RV32, the low and high halves are exposed through the standard CSR addresses.
+  * On RV64, both low and high addresses return the full 64-bit counter value for compatibility.
   */
-  always_comb begin : mhpmcounters_read
-    if (raddr_i == 'hb00) rdata = mhpmcounter0_q[DATA_WIDTH-1:0];
-    else if (raddr_i == 'hb03) rdata = mhpmcounter3_q[DATA_WIDTH-1:0];
-    else if (raddr_i == 'hb04) rdata = mhpmcounter4_q[DATA_WIDTH-1:0];
-    else rdata = mhpmcounter0_q[DATA_WIDTH-1:0];
-  end
+  generate
+    if (DATA_WIDTH == 64) begin : gen_csrs_read_64
+      always_comb begin : csrs_read
+        case (raddr_i)
+          MHPMCOUNTER0_ADDR_HI, MHPMCOUNTER0_ADDR: rdata = mhpmcounter0_q[DATA_WIDTH-1:0];
+          MHPMCOUNTER3_ADDR_HI, MHPMCOUNTER3_ADDR: rdata = mhpmcounter3_q[DATA_WIDTH-1:0];
+          MHPMCOUNTER4_ADDR_HI, MHPMCOUNTER4_ADDR: rdata = mhpmcounter4_q[DATA_WIDTH-1:0];
+          default:                                 rdata = '0;
+        endcase
+      end
+    end
+    else begin : gen_csrs_read_32
+      always_comb begin : csrs_read
+        case (raddr_i)
+          MHPMCOUNTER0_ADDR_HI: rdata = mhpmcounter0_q[63:32];
+          MHPMCOUNTER0_ADDR:    rdata = mhpmcounter0_q[31:0];
+          MHPMCOUNTER3_ADDR_HI: rdata = mhpmcounter3_q[63:32];
+          MHPMCOUNTER3_ADDR:    rdata = mhpmcounter3_q[31:0];
+          MHPMCOUNTER4_ADDR_HI: rdata = mhpmcounter4_q[63:32];
+          MHPMCOUNTER4_ADDR:    rdata = mhpmcounter4_q[31:0];
+          default:              rdata = '0;
+        endcase
+      end
+    end
+  endgenerate
 
-  /// Output driven by mhpmcounters_read
+  /// Output driven by csrs_read
   assign rdata_o = rdata;
-
 
 
   /*!

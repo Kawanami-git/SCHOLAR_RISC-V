@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Firmware build pipeline for SCHOLAR RISC-V (ELF → BIN/DUMP/HEX).
 # \author     Kawanami
-# \version    1.1
-# \date       12/01/2026
+# \version    1.2
+# \date       03/02/2026
 #
 # \details
 #   Invokes the RISC-V GNU toolchain to compile and link firmware sources,
@@ -37,6 +37,7 @@
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 04/11/2025 | Kawanami   | Initial version.    |
 # | 1.1     | 12/01/2026 | Kawanami   | Add a new preprocessor variable used to skip code when doing a spike simulation.    |
+# | 1.2     | 03/02/2026 | Kawanami   | Update start.s with start.S to enable gcc preprocessor on asm.    |
 # ********************************************************************************
 # */
 
@@ -88,7 +89,7 @@ COMMON_FILES_DIR		?= $(ROOT_DIR)common/
 # Firmware common files
 COMMON_FILES			?= $(COMMON_FILES_DIR)eprintf.c \
 						   $(COMMON_FILES_DIR)memory.c \
-						   $(COMMON_FILES_DIR)start.s
+						   $(COMMON_FILES_DIR)start.S
 
 # Firmware linker(s) directory
 LINKER_DIR				?= $(ROOT_DIR)linker/

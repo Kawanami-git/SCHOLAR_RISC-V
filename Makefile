@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.2
-# \date       14/01/2026
+# \version    1.3
+# \date       03/02/2026
 #
 # \details
 #   Drives the complete flow:
@@ -22,9 +22,11 @@
 #     - `make documentation` / `make sim_documentation` (with PREDEFINED=SIM)
 #
 #   Key variables:
-#     - XLEN={XLEN32|XLEN64} selects RV32I_Zicntr or RV64I_Zicntr (default: XLEN64)
-#     - WORK_DIR / *_WORK_DIR control build & log output paths
-#     - VERILATOR_DIR / SPIKE_DIR point to tools
+#     - XLEN={XLEN32|XLEN64} selects RV32I_Zicntr or RV64I_Zicntr (default: XLEN32).
+#     - TTYUSB selects tty to communicate with the MPFS DISCOVERY KIT board through USB.
+#	  - PERFECT_MEMORY selects memories type (perfect -> always hit, not perfect -> may miss).
+#	  - ITERATIONS Number of iterations for ISA tests and Cyclemark (default: 1).
+#	  - MAX_CYCLES Max simulation cycles (default: 10000000 = 10s of simulation).
 #
 # \remarks
 #   - Requires Verilator, Spike, Python 3 and a RISC-V toolchain for firmware builds.
@@ -35,7 +37,8 @@
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 19/12/2025 | Kawanami   | Initial version.    |
 # | 1.1     | 12/01/2026 | Kawanami   | Add the possibility to compare the loader & cyclemark firmware with a Spike golden trace.   |
-# | 1.2     | 14/01/2026 | Kawanami   | Update 'help' target to include `loader_spike` and `cyclemark_spike`   |
+# | 1.2     | 14/01/2026 | Kawanami   | Update 'help' target to include `loader_spike` and `cyclemark_spike`.   |
+# | 1.3     | 03/02/2026 | Kawanami   | Add non-perfect memory support.   |
 # ********************************************************************************
 # */
 
@@ -54,6 +57,13 @@ ABI								:= lp64
 endif
 
 TTYUSB							?= /dev/ttyUSB0
+
+PERFECT_MEMORY					?= YES
+ifeq ($(PERFECT_MEMORY),YES)
+NOT_PERFECT_MEMORY				= "1'b0"
+else
+NOT_PERFECT_MEMORY				= "1'b1"
+endif
 ####################################						###################################
 
 
@@ -160,10 +170,13 @@ MPFS_DISCO_KIT_BOARD			= $(WORK_DIR)board/
 # Design under test files
 DUT_FILES						= $(DUT_DIR)common/core_pkg.sv \
 								  $(DUT_DIR)common/if2id_pkg.sv\
+								  $(DUT_DIR)common/if2ctrl_pkg.sv\
 								  $(DUT_DIR)common/id2exe_pkg.sv\
 								  $(DUT_DIR)common/exe2mem_pkg.sv\
-								  $(DUT_DIR)common/exe2pc_pkg.sv\
+								  $(DUT_DIR)common/exe2ctrl_pkg.sv\
 								  $(DUT_DIR)common/mem2wb_pkg.sv\
+								  $(DUT_DIR)common/mem2ctrl_pkg.sv\
+								  $(DUT_DIR)common/wb2ctrl_pkg.sv\
 								  $(DUT_DIR)scholar_riscv_core.sv \
 								  $(DUT_DIR)ctrl/ctrl.sv \
 								  $(DUT_DIR)ctrl/pc.sv \
@@ -257,7 +270,7 @@ SIMULATOR						= $(VERILATOR_DIR)verilator
 
 # Verilator hardware flags
 SIM_FLAGS						= -j $(shell nproc) -D$(XLEN) -DSIM \
-								  -I$(DUT_DIR)common/ \
+								  -I$(DUT_DIR)common/ -GNoPerfectMemory=$(NOT_PERFECT_MEMORY) \
 								  --Wno-TIMESCALEMOD -O3 --threads 4 --unroll-count 5120
 
 # Verilator software flags
@@ -418,7 +431,7 @@ default: help
 help:
 	@echo
 	@echo "SCHOLAR RISC-V — top-level Makefile helper"
-	@echo "Usage: make <target> [XLEN=XLEN32|XLEN64] [ITERATIONS=N] [MAX_CYCLES=N]"
+	@echo "Usage: make <target> [XLEN=XLEN32|XLEN64] [PERFECT_MEMORY] [ITERATIONS=N] [MAX_CYCLES=N]"
 	@echo
 	@printf "Common targets:\n"
 	@printf "  %-35s %s\n" "isa"                  				"Run the ISA tests"
@@ -448,7 +461,8 @@ help:
 	@echo
 	@printf "Key variables:\n"
 	@printf "  %-35s %s\n" "XLEN"         "Architecture (32-bit or 64-bit). Default is 32."
-	@printf "  %-35s %s\n" "ITERATIONS"   "Number of iterations for ISA tests ans Cyclemark. More iterations equals more reliable tests. Default is 1."
+	@printf "  %-35s %s\n" "PERFECT_MEMORY" "Selects the memories type. If perfect, memories will always hit. Otherwise, they may miss."
+	@printf "  %-35s %s\n" "ITERATIONS"   "Number of iterations for ISA tests and Cyclemark. More iterations equals more reliable tests. Default is 1."
 	@printf "  %-35s %s\n" "MAX_CYCLES"   "Max simulation cycles (default: 10000000 = 10s of simulation)"
 	@echo
 	@echo "Examples:"

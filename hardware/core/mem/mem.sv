@@ -4,8 +4,8 @@
 \file       mem.sv
 \brief      SCHOLAR RISC-V core memory module
 \author     Kawanami
-\date       17/12/2025
-\version    1.0
+\date       30/01/2026
+\version    1.1
 
 \details
   This module implements the Memory (MEM) stage of the SCHOLAR RISC-V core.
@@ -13,11 +13,6 @@
   The MEM stage performs data-memory transactions when required by the current
   micro-operation. It enforces data alignment via byte-enable masks for writes
   and performs sign/zero extension on reads as dictated by the control signals.
-
-  Latency model:
-  - Both writes and reads are modeled as 1-cycle transactions with a perfect
-    memory: read requests are issued in MEM, and the data is registered in WB
-    on the next cycle.
 
   Handshake:
   - EXE -> MEM uses (exe_valid_i, ready_o). When ready_o=1, MEM can capture a
@@ -33,47 +28,52 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 17/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 30/01/2026 | Kawanami   | Add CSR write path, non-perfect memory support and new strucure fields forwarding. |
 ********************************************************************************
 */
 
-/*!
+module mem
+
+  /*!
 * Import useful packages.
 */
-import exe2mem_pkg::exe2mem_t;
-import mem2wb_pkg::mem2wb_t;
-import core_pkg::ADDR_WIDTH;
-import core_pkg::DATA_WIDTH;
+  import exe2mem_pkg::exe2mem_t;
+  import mem2wb_pkg::mem2wb_t;
+  import mem2ctrl_pkg::mem2ctrl_t;
+  import core_pkg::ADDR_WIDTH;
+  import core_pkg::DATA_WIDTH;
 /**/
 
-
-module mem #(
+#(
 ) (
     /// System clock
-    input  wire                                clk_i,
+    input  wire                                 clk_i,
     /// System active low reset
-    input  wire                                rstn_i,
+    input  wire                                 rstn_i,
     /// Exe stage valid signal (1: valid  0: not valid)
-    input  wire                                exe_valid_i,
+    input  wire                                 exe_valid_i,
     /// Mem stage ready (1: can accept a new EXE->MEM payload)
-    output wire                                ready_o,
+    output wire                                 ready_o,
     /// Mem operation complete
-    output wire                                valid_o,
+    output wire                                 valid_o,
     /// EXE->MEM payload (operands + control micro-ops)
-    input  exe2mem_t                           exe2mem_i,
+    input  exe2mem_t                            exe2mem_i,
     /// MEM->WB payload (operands + control micro-ops)
-    output mem2wb_t                            mem2wb_o,
+    output mem2wb_t                             mem2wb_o,
+    /// MEM->CTRL payload
+    output mem2ctrl_t                           mem2ctrl_o,
     /// Data to write to memory
-    output wire      [DATA_WIDTH      - 1 : 0] d_m_wdata_o,
+    output wire       [DATA_WIDTH      - 1 : 0] d_m_wdata_o,
     /// Memory hit flag
-    input  wire                                d_m_hit_i,
+    input  wire                                 d_m_hit_i,
     /// Memory address for LOAD or STORE
-    output wire      [     ADDR_WIDTH - 1 : 0] d_m_addr_o,
+    output wire       [     ADDR_WIDTH - 1 : 0] d_m_addr_o,
     /// Memory read enable
-    output wire                                d_m_rden_o,
+    output wire                                 d_m_rden_o,
     /// Memory write enable
-    output wire                                d_m_wren_o,
+    output wire                                 d_m_wren_o,
     /// Byte-level write mask for STOREs
-    output wire      [(DATA_WIDTH/8)  - 1 : 0] d_m_wmask_o
+    output wire       [(DATA_WIDTH/8)  - 1 : 0] d_m_wmask_o
 );
 
   /******************** DECLARATION ********************/
@@ -117,28 +117,37 @@ module mem #(
       exe2mem_q.mem_ctrl <= '0;
       exe2mem_q.gpr_ctrl <= '0;
       exe2mem_q.csr_ctrl <= '0;
+      exe2mem_q.rd       <= '0;
     end
   end
 
   /// Forward EXE output to writeback
-  assign mem2wb_o.exe_out  = exe2mem_q.exe_out;
+  assign mem2wb_o.exe_out     = exe2mem_q.exe_out;
   /// Forward op3 to writeback
-  assign mem2wb_o.op3      = exe2mem_q.op3;
+  assign mem2wb_o.op3         = exe2mem_q.op3;
   /// Forward rd to writeback
-  assign mem2wb_o.rd       = exe2mem_q.rd;
+  assign mem2wb_o.rd          = exe2mem_q.rd;
+  /// Forward CSR waddr to writeback
+  assign mem2wb_o.csr_waddr   = exe2mem_q.csr_waddr;
   /// Forward GPR control signal to writeback
-  assign mem2wb_o.gpr_ctrl = exe2mem_q.gpr_ctrl;
+  assign mem2wb_o.gpr_ctrl    = exe2mem_q.gpr_ctrl;
   /// Forward CSR control signal to writeback
-  assign mem2wb_o.csr_ctrl = exe2mem_q.csr_ctrl;
+  assign mem2wb_o.csr_ctrl    = exe2mem_q.csr_ctrl;
   /// Forward MEM control signal to writeback (sign-extention)
-  assign mem2wb_o.mem_ctrl = exe2mem_q.mem_ctrl;
+  assign mem2wb_o.mem_ctrl    = exe2mem_q.mem_ctrl;
+  /// Forward instruction rd to Controller
+  assign mem2ctrl_o.rd        = exe2mem_q.rd;
+  /// Forward instruction csr write address to Controller
+  assign mem2ctrl_o.csr_waddr = exe2mem_q.csr_waddr;
+  /// Forward instruction csr control to Controller
+  assign mem2ctrl_o.csr_ctrl  = exe2mem_q.csr_ctrl;
   /// Output driven by mem unit.
-  assign ready_o           = ready;
+  assign ready_o              = ready;
 
   /// Memory unit instantiation
   /*!
-  * Drives write/read transactions to the external data memory assuming a
-  * single-cycle response model. `valid_o` qualifies the MEM->WB transfer.
+  * Drives write/read transactions to the external data memory.
+  * `valid_o` qualifies the MEM->WB transfer.
   */
   mem_unit #() mem_unit (
       .clk_i      (clk_i),

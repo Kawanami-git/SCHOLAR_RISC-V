@@ -4,8 +4,8 @@
 \file       gpr.sv
 \brief      SCHOLAR RISC-V core General Purpose Registers file module
 \author     Kawanami
-\date       19/12/2025
-\version    1.0
+\date       30/01/2026
+\version    1.1
 
 \details
   This module implements the SCHOLAR RISC-V register file.
@@ -21,14 +21,21 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 30/01/2026 | Kawanami   | Comments improvment and use local package import instead of global. |
 ********************************************************************************
 */
 
-import core_pkg::RF_ADDR_WIDTH;
-import core_pkg::DATA_WIDTH;
-import core_pkg::NB_GPR;
+module gpr
 
-module gpr #(
+  /*!
+* Import useful packages.
+*/
+  import core_pkg::RF_ADDR_WIDTH;
+  import core_pkg::DATA_WIDTH;
+  import core_pkg::NB_GPR;
+/**/
+
+#(
 ) (
 `ifdef SIM
     /// GPR write enable (SIM only)
@@ -130,7 +137,7 @@ module gpr #(
 
   /// x0 reset
   /*!
-  * This bloc allows to set GPR x0 to 0 when
+  * This block allows to set GPR x0 to 0 when
   * the core is under reset.
   * Otherwise, it fowards the writeback stage
   * write requests.
