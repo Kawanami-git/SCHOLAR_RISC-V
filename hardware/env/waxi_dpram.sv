@@ -5,8 +5,8 @@
 \brief      Dual-Port RAM (AXI write-only / Core write/read)
 
 \author     Kawanami
-\date       15/10/2025
-\version    1.1
+\date       12/02/2026
+\version    1.2
 
 \details
   Educational dual-port RAM used to store the SCHOLAR RISC-V core
@@ -38,20 +38,27 @@
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 15/10/2025 | Kawanami   | Change module name from data_dpram to waxi_dpram.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
 ********************************************************************************
 */
 
 module waxi_dpram #(
+    /// Use non-perfect memory
+    parameter  bit          NoPerfectMemory = 0,
     /// Number of bits in a byte
-    parameter int          ByteLength = 8,
+    parameter  int          ByteLength      = 8,
     /// Address bus width in bits (applies to core and AXI)
-    parameter int unsigned AddrWidth  = 32,
+    parameter  int unsigned AddrWidth       = 32,
     /// Data bus width in bits (applies to core and AXI)
-    parameter int unsigned DataWidth  = 32,
+    parameter  int unsigned DataWidth       = 32,
+    /// Address granularity in bytes (e.g., 4 bytes for 32-bit, 8 for 64-bit)
+    localparam int unsigned AddrOffset      = DataWidth / ByteLength,
+    /// Number of bits needed to encode byte offset within a word
+    localparam int unsigned AddrOffsetWidth = $clog2(AddrOffset),
     /// Dual Port RAM size in bytes
-    parameter int unsigned Size       = 16384,
+    parameter  int unsigned Size            = 16384,
     /// AXI transaction ID width
-    parameter int unsigned IdWidth    = 8
+    parameter  int unsigned IdWidth         = 8
 ) (
 
 `ifdef SIM
@@ -129,10 +136,6 @@ module waxi_dpram #(
   /* parameters verification */
 
   /* local parameters */
-  /// Address granularity in bytes (e.g., 4 bytes for 32-bit, 8 for 64-bit)
-  localparam int unsigned ADDR_OFFSET = DataWidth / ByteLength;
-  /// Number of bits needed to encode byte offset within a word
-  localparam int unsigned ADDR_OFFSET_WIDTH = $clog2(ADDR_OFFSET);
   /// Memory depth
   localparam int unsigned DEPTH = Size / (DataWidth / ByteLength);
   /// Useful number of bits to address the whole memory
@@ -297,8 +300,75 @@ module waxi_dpram #(
   *
   * This simplifies handshaking by eliminating the need for an explicit memory
   * ready/acknowledge protocol.
+  *
+  * For non-perfect memory test, a latency is added to `core_m_hit_o` to emulate
+  * a memory latency (even if the data is ready, the core will not capture it if
+  * the m_hit signal is not asserted).
+  * The latency depends on the address. This ensure a non-constant latency.
   */
-  assign core_m_hit_o    = core_m_rden_i || core_m_wren_i;
+  generate
+    if (NoPerfectMemory) begin : gen_not_perfect_memory
+
+      localparam int unsigned MAX_LAT = 3;  // 0..MAX_LAT
+      localparam int unsigned ADDR_LAT_LSB = (DataWidth == 64) ? 3 : 2;
+
+      localparam int unsigned LAT_W = (MAX_LAT < 1) ? 1 : $clog2(MAX_LAT + 1);
+      localparam int unsigned LAT_MAX_REPR = (1 << LAT_W) - 1;
+      localparam bit NEED_CLAMP = (MAX_LAT != LAT_MAX_REPR);
+
+      logic             req_now;
+      logic             busy_q;
+      logic [LAT_W-1:0] wait_q;
+      logic [LAT_W-1:0] lat_raw;
+      logic [LAT_W-1:0] lat_sel;
+
+      assign req_now = core_m_rden_i || core_m_wren_i;
+
+      // Derive a deterministic latency from address bits (ignore alignment by default).
+      // Uses bits [ADDR_LAT_LSB + LAT_W - 1 : ADDR_LAT_LSB].
+      assign lat_raw = core_m_addr_i[ADDR_LAT_LSB+:LAT_W];
+
+      if (NEED_CLAMP) begin : gen_clamp
+        // Clamp to MAX_LAT to keep latency in 0..MAX_LAT without using modulo.
+        assign lat_sel = (lat_raw > MAX_LAT[LAT_W-1:0]) ? MAX_LAT[LAT_W-1:0] : lat_raw;
+      end
+      else begin : gen_noclamp
+        assign lat_sel = lat_raw;
+      end
+
+      // Hit is high when the request is active and the wait counter reached zero.
+      // Deasserts combinationally when req_now drops.
+      assign core_m_hit_o = req_now && busy_q && (wait_q == '0);
+
+      always_ff @(posedge core_clk_i) begin
+        if (!rstn_i) begin
+          busy_q <= 1'b0;
+          wait_q <= '0;
+        end
+        else begin
+          if (!busy_q) begin
+            if (req_now) begin
+              busy_q <= 1'b1;
+              wait_q <= (MAX_LAT == 0) ? '0 : lat_sel;  // sample latency at request start
+            end
+          end
+          else begin
+            if (!req_now) begin
+              busy_q <= 1'b0;
+              wait_q <= '0;
+            end
+            else if (wait_q != '0) begin
+              wait_q <= wait_q - 1'b1;
+            end
+          end
+        end
+      end
+
+    end
+    else begin : gen_perfect_memory
+      assign core_m_hit_o = core_m_rden_i || core_m_wren_i;
+    end
+  endgenerate
   /**/
 
   /// Dual-Port RAM instantiation
@@ -315,14 +385,14 @@ module waxi_dpram #(
 `ifdef SIM
       .mem_o   (mem_o),
 `endif
-      .a_addr_i(s_axi_awaddr_q[USED_ADDR_WIDTH+ADDR_OFFSET_WIDTH-1 : ADDR_OFFSET_WIDTH]),
+      .a_addr_i(s_axi_awaddr_q[USED_ADDR_WIDTH+AddrOffsetWidth-1 : AddrOffsetWidth]),
       .a_clk_i (axi_clk_i),
       .a_din_i (s_axi_wdata_i),
       .a_be_i  (s_axi_wstrb_i),
       .a_wren_i(s_axi_wvalid_i),
       .a_rden_i(1'b0),
       .b_clk_i (core_clk_i),
-      .b_addr_i(core_m_addr_i[USED_ADDR_WIDTH+ADDR_OFFSET_WIDTH-1 : ADDR_OFFSET_WIDTH]),
+      .b_addr_i(core_m_addr_i[USED_ADDR_WIDTH+AddrOffsetWidth-1 : AddrOffsetWidth]),
       .b_din_i (core_m_wdata_i),
       .b_be_i  (core_m_wmask_i),
       .b_wren_i(core_m_wren_i),

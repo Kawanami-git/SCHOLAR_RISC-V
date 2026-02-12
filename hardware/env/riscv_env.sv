@@ -5,8 +5,8 @@
 \brief      SCHOLAR RISC-V Integration Environment (core + RAMs + AXI fabric)
 
 \author     Kawanami
-\date       17/10/2025
-\version    1.1
+\date       12/02/2026
+\version    1.2
 
 \details
   Top-level integration for the SCHOLAR RISC-V core with:
@@ -35,7 +35,8 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/06/2025 | Kawanami   | Initial version of the module.            |
-| 1.1     | 17/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.1     | 17/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support.              |
+| 1.2     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
 ********************************************************************************
 */
 
@@ -48,6 +49,8 @@
 `endif
 
 module riscv_env #(
+    /// Use non-perfect memories
+    parameter bit                      NoPerfectMemory = 0,
     /// Number of bits in a byte
     parameter int unsigned             ByteLength = 8,
     /// XLEN of the core (32 or 64)
@@ -462,6 +465,7 @@ module riscv_env #(
 
   /// Instructions RAM: core read-only, AXI write (firmware instructions loader)
   waxi_dpram #(
+      .NoPerfectMemory(NoPerfectMemory),
       .AddrWidth(Archi),
       .DataWidth(INSTR_WIDTH),
       .Size     (INSTR_RAM_SIZE)
@@ -504,6 +508,7 @@ module riscv_env #(
 
   /// data RAM: core R/W, AXI write (firmware data loader)
   waxi_dpram #(
+      .NoPerfectMemory(NoPerfectMemory),
       .AddrWidth(Archi),
       .DataWidth(Archi),
       .Size     (DATA_RAM_SIZE)
@@ -546,6 +551,7 @@ module riscv_env #(
 
   /// PTC RAM: platform→core shared, AXI write path
   waxi_dpram #(
+      .NoPerfectMemory(NoPerfectMemory),
       .AddrWidth(Archi),
       .DataWidth(Archi),
       .Size     (PTC_SHARED_RAM_SIZE)
@@ -588,6 +594,7 @@ module riscv_env #(
 
   /// CTP RAM: core→platform shared, AXI read path
   raxi_dpram #(
+      .NoPerfectMemory(NoPerfectMemory),
       .AddrWidth(Archi),
       .DataWidth(Archi),
       .Size     (CTP_SHARED_RAM_SIZE)

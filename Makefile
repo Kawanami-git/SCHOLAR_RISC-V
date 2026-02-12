@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.2
-# \date       23/12/2025
+# \version    1.3
+# \date       12/02/2026
 #
 # \details
 #   Drives the complete flow:
@@ -36,6 +36,7 @@
 # | 1.0     | 04/11/2025 | Kawanami   | Initial version.    |
 # | 1.1     | 11/11/2025 | Kawanami   | Update tools default directories.    |
 # | 1.2     | 23/12/2025 | Kawanami   | Fix Linux/sdk fetching.    |
+# | 1.3     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
 # ********************************************************************************
 # */
 
@@ -54,6 +55,13 @@ ABI								:= lp64
 endif
 
 TTYUSB							?= /dev/ttyUSB0
+
+PERFECT_MEMORY					?= YES
+ifeq ($(PERFECT_MEMORY),YES)
+NOT_PERFECT_MEMORY				= "1'b0"
+else
+NOT_PERFECT_MEMORY				= "1'b1"
+endif
 ####################################						###################################
 
 
@@ -238,6 +246,7 @@ SIMULATOR						= $(VERILATOR_DIR)verilator
 
 # Verilator hardware flags
 SIM_FLAGS						= -j $(shell nproc) -D$(XLEN) -DSIM \
+								  -GNoPerfectMemory=$(NOT_PERFECT_MEMORY) \
 								  --Wno-TIMESCALEMOD -O3 --threads 4 --unroll-count 5120
 
 # Verilator software flags
