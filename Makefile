@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.3
-# \date       12/02/2026
+# \version    1.4
+# \date       14/02/2026
 #
 # \details
 #   Drives the complete flow:
@@ -37,6 +37,7 @@
 # | 1.1     | 11/11/2025 | Kawanami   | Update tools default directories.    |
 # | 1.2     | 23/12/2025 | Kawanami   | Fix Linux/sdk fetching.    |
 # | 1.3     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
+# | 1.4     | 14/02/2026 | Kawanami   | Update sdk fetching and use.           |
 # ********************************************************************************
 # */
 
@@ -373,12 +374,17 @@ endif
 
 #################################### MPFS DISCOVERY KIT ####################################
 MPFS_DISCO_KIT_LINUX_LINK=https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/core-image-custom-mpfs-disco-kit.rootfs-20251104145941.wic
-MPFS_DISCO_KIT_SDK_LINK=https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/sdk.zip
+MPFS_DISCO_KIT_SDK_LINK=https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT/releases/download/2025-11-04/oecore-core-image-custom-x86_64-riscv64-mpfs-disco-kit-toolchain-nodistro.0.sh
+
 # Environnement for MPFS_DISCOVERY_KIT cross-compilation
 SDK_ENV ?= $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk/environment-setup-riscv64-oe-linux
 
+SDK_BIN ?= $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk/sysroots/x86_64-oesdk-linux/usr/bin/riscv64-oe-linux/
+
 # Helper to activate the MPFS_DISCOVERY_KIT environment before running the build
-SDK_ACTIVATE = . "$(SDK_ENV)" &&
+define SDK_RUN
+bash -lc 'source "$(SDK_ENV)"; export PATH="$$PATH:$(SDK_BIN)"; $(1)'
+endef
 ####################################					####################################
 
 
@@ -709,8 +715,8 @@ mpfs_disco_kit_linux: work
 mpfs_disco_kit_get_linux: work
 	@wget -P $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(MPFS_DISCO_KIT_LINUX_LINK)
 	@wget -P $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(MPFS_DISCO_KIT_SDK_LINK)
-	@unzip -d $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)sdk.zip
-
+	chmod +x $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR) $(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)oecore-core-image-custom-x86_64-riscv64-mpfs-disco-kit-toolchain-nodistro.0.sh
+	$(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)oecore-core-image-custom-x86_64-riscv64-mpfs-disco-kit-toolchain-nodistro.0.sh -y -d "$(WORK_DIR)$(MPFS_DISCO_KIT_LINUX_DIR)/sdk/"
 
 # MPFS_DISCO_KIT: Program the Linux
 .PHONY: mpfs_disco_kit_program_linux
@@ -763,7 +769,7 @@ mpfs_disco_kit_usb_setup:
 	@$(MAKE) --no-print-directory loader_firmware
 	@$(MAKE) --no-print-directory echo_firmware
 	@$(MAKE) --no-print-directory cyclemark_firmware
-	@$(SDK_ACTIVATE) $$CXX $(CXX_FLAGS) $(PLATFORM_FILES) -o $(MPFS_DISCO_KIT_BOARD)platform
+	@$(call SDK_RUN,$$CXX $(CXX_FLAGS) $(PLATFORM_FILES) -o $(MPFS_DISCO_KIT_BOARD)platform)
 
 	@for f in $(FIRMWARE_BUILD_DIR)/*.hex; do \
 	  $(MAKE) --no-print-directory uart_ft UART_FILE="$$f" \

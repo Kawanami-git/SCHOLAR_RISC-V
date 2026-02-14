@@ -5,8 +5,8 @@
 \brief      SCHOLAR RISC-V Integration Environment (core + RAMs + AXI fabric)
 
 \author     Kawanami
-\date       12/02/2026
-\version    1.2
+\date       13/02/2026
+\version    1.3
 
 \details
   Top-level integration for the SCHOLAR RISC-V core with:
@@ -37,6 +37,7 @@
 | 1.0     | 02/06/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 17/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support.              |
 | 1.2     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
+| 1.3     | 13/02/2026 | Kawanami   | Replace core custom interface with OBI standard. |
 ********************************************************************************
 */
 
@@ -52,13 +53,13 @@ module riscv_env #(
     /// Use non-perfect memories
     parameter bit                      NoPerfectMemory = 0,
     /// Number of bits in a byte
-    parameter int unsigned             ByteLength = 8,
+    parameter int unsigned             ByteLength      = 8,
     /// XLEN of the core (32 or 64)
-    parameter int unsigned             Archi      = `ARCHITECTURE,
+    parameter int unsigned             Archi           = `ARCHITECTURE,
     /// Core reset vector (byte address)
-    parameter logic        [Archi-1:0] StartAddr  = `START_ADDR,
+    parameter logic        [Archi-1:0] StartAddr       = `START_ADDR,
     /// AXI transaction ID width
-    parameter int unsigned             IdWidth    = 8
+    parameter int unsigned             IdWidth         = 8
 ) (
 `ifdef SIM
     /// Write-enable for GPR poke (testbench)
@@ -254,178 +255,180 @@ module riscv_env #(
   /* functions */
 
   /* wires */
-  /// Core instruction address (byte address)
-  wire [           Archi - 1 : 0] core_i_m_addr;
-  /// Core instruction read enable
-  wire                            core_i_m_rden;
-  /// Core instruction fetch data
-  wire [         INSTR_WIDTH-1:0] core_i_m_dout;
-  /// Core instruction hit/ack
-  wire                            core_i_m_hit;
-  /// Core data address (byte address)
-  wire [           Archi - 1 : 0] core_d_m_addr;
-  /// Core data write enable
-  wire                            core_d_m_wren;
-  /// Core data write data
-  wire [           Archi - 1 : 0] core_d_m_din;
-  /// Core data byte mask
-  wire [  (Archi/ByteLength)-1:0] core_d_m_wmask;
-  /// Core data read enable
-  wire                            core_d_m_rden;
-  /// Core data read data
-  wire [           Archi - 1 : 0] core_d_m_dout;
-  /// Core data hit/ack
-  wire                            core_d_m_hit;
-  /// Byte address seen by the DATA RAM (selected by the fabric)
-  wire [           Archi - 1 : 0] data_ram_addr;
-  /// Write enable toward DATA RAM (1 = write this cycle)
-  wire                            data_ram_wren;
-  /// Write data toward DATA RAM (XLEN-wide)
-  wire [           Archi - 1 : 0] data_ram_wdata;
-  /// Byte write mask toward DATA RAM (1 bit per byte)
-  wire [(Archi/ByteLength)-1 : 0] data_ram_wmask;
-  /// Read enable toward DATA RAM (1 = capture address this cycle)
-  wire                            data_ram_rden;
-  /// Read data returned by DATA RAM
-  wire [           Archi - 1 : 0] data_ram_rdata;
-  /// Combinational “accept/hit” from DATA RAM (no wait-states model)
-  wire                            data_ram_hit;
-  /// Byte address seen by the PTC shared RAM (fabric-decoded)
-  wire [           Archi - 1 : 0] ptc_shared_ram_addr;
-  /// Write enable toward PTC shared RAM
-  wire                            ptc_shared_ram_wren;
-  /// Write data toward PTC shared RAM
-  wire [           Archi - 1 : 0] ptc_shared_ram_wdata;
-  /// Byte write mask toward PTC shared RAM
-  wire [(Archi/ByteLength)-1 : 0] ptc_shared_ram_wmask;
-  /// Read enable toward PTC shared RAM
-  wire                            ptc_shared_ram_rden;
-  /// Read data returned by PTC shared RAM
-  wire [           Archi - 1 : 0] ptc_shared_ram_rdata;
-  /// Combinational “accept/hit” from PTC shared RAM
-  wire                            ptc_shared_ram_hit;
-  /// Byte address seen by the CTP shared RAM (fabric-decoded)
-  wire [           Archi - 1 : 0] ctp_shared_ram_addr;
-  /// Write enable toward CTP shared RAM
-  wire                            ctp_shared_ram_wren;
-  /// Write data toward CTP shared RAM
-  wire [           Archi - 1 : 0] ctp_shared_ram_wdata;
-  /// Byte write mask toward CTP shared RAM
-  wire [(Archi/ByteLength)-1 : 0] ctp_shared_ram_wmask;
-  /// Read enable toward CTP shared RAM
-  wire                            ctp_shared_ram_rden;
-  /// Read data returned by CTP shared RAM
-  wire [           Archi - 1 : 0] ctp_shared_ram_rdata;
-  /// Combinational “accept/hit” from CTP shared RAM
-  wire                            ctp_shared_ram_hit;
+  /// Address transfer request
+  wire                              core_imem_req;
+  /// Grant: Ready to accept address transfert
+  wire                              core_imem_gnt;
+  /// Address for memory access
+  wire [             Archi - 1 : 0] core_imem_addr;
+  /// Response transfer valid
+  wire                              core_imem_rvalid;
+  /// Read data
+  wire [                    31 : 0] core_imem_rdata;
+  /// Error response
+  wire                              core_imem_err;
+  /// Address transfer request
+  wire                              core_dmem_req;
+  /// Grant: Ready to accept address transfert
+  wire                              core_dmem_gnt;
+  /// Address for memory access
+  wire [             Archi - 1 : 0] core_dmem_addr;
+  /// Write enable (1: write - 0: read)
+  wire                              core_dmem_we;
+  /// Write data
+  wire [             Archi - 1 : 0] core_dmem_wdata;
+  /// Byte enable
+  wire [(Archi/ByteLength) - 1 : 0] core_dmem_be;
+  /// Response transfer valid
+  wire                              core_dmem_rvalid;
+  /// Read data
+  wire [             Archi - 1 : 0] core_dmem_rdata;
+  /// Error response
+  wire                              core_dmem_err;
+  /// Address transfer request
+  wire                              dmem_req;
+  /// Grant: Ready to accept address transfert
+  wire                              dmem_gnt;
+  /// Write enable (1: write - 0: read)
+  wire                              dmem_we;
+  /// Response transfer valid
+  wire                              dmem_rvalid;
+  /// Read data
+  wire [             Archi - 1 : 0] dmem_rdata;
+  /// Error response
+  wire                              dmem_err;
+  /// Address transfer request
+  wire                              ptc_req;
+  /// Grant: Ready to accept address transfert
+  wire                              ptc_gnt;
+  /// Write enable (1: write - 0: read)
+  wire                              ptc_we;
+  /// Response transfer valid
+  wire                              ptc_rvalid;
+  /// Read data
+  wire [             Archi - 1 : 0] ptc_rdata;
+  /// Error response
+  wire                              ptc_err;
+  /// Address transfer request
+  wire                              ctp_req;
+  /// Grant: Ready to accept address transfert
+  wire                              ctp_gnt;
+  /// Write enable (1: write - 0: read)
+  wire                              ctp_we;
+  /// Response transfer valid
+  wire                              ctp_rvalid;
+  /// Read data
+  wire [             Archi - 1 : 0] ctp_rdata;
+  /// Error response
+  wire                              ctp_err;
   /// AXI AWID routed to DATA RAM write path
-  wire [         IdWidth - 1 : 0] axi_data_ram_awid;
+  wire [           IdWidth - 1 : 0] axi_data_ram_awid;
   /// AXI AWADDR routed to DATA RAM write path (byte address)
-  wire [         Archi   - 1 : 0] axi_data_ram_awaddr;
+  wire [           Archi   - 1 : 0] axi_data_ram_awaddr;
   /// AXI AWLEN routed to DATA RAM (beats-1; nominally 0)
-  wire [                     7:0] axi_data_ram_awlen;
+  wire [                       7:0] axi_data_ram_awlen;
   /// AXI AWSIZE routed to DATA RAM (log2(bytes/beat))
-  wire [                     2:0] axi_data_ram_awsize;
+  wire [                       2:0] axi_data_ram_awsize;
   /// AXI AWBURST routed to DATA RAM (type; typically INCR/FIXED)
-  wire [                     1:0] axi_data_ram_awburst;
+  wire [                       1:0] axi_data_ram_awburst;
   /// AXI AWLOCK routed to DATA RAM (unused in this design)
-  wire [                     1:0] axi_data_ram_awlock;
+  wire [                       1:0] axi_data_ram_awlock;
   /// AXI AWCACHE routed to DATA RAM (unused in this design)
-  wire [                     3:0] axi_data_ram_awcache;
+  wire [                       3:0] axi_data_ram_awcache;
   /// AXI AWPROT routed to DATA RAM (unused in this design)
-  wire [                     2:0] axi_data_ram_awprot;
+  wire [                       2:0] axi_data_ram_awprot;
   /// AXI AWVALID routed to DATA RAM (address valid handshake)
-  wire                            axi_data_ram_awvalid;
+  wire                              axi_data_ram_awvalid;
   /// AXI AWREADY from DATA RAM (address ready handshake)
-  wire                            axi_data_ram_awready;
+  wire                              axi_data_ram_awready;
   /// AXI WDATA routed to DATA RAM (write payload)
-  wire [           Archi - 1 : 0] axi_data_ram_wdata;
+  wire [             Archi - 1 : 0] axi_data_ram_wdata;
   /// AXI WSTRB routed to DATA RAM (byte strobes)
-  wire [  (Archi/ByteLength)-1:0] axi_data_ram_wstrb;
+  wire [    (Archi/ByteLength)-1:0] axi_data_ram_wstrb;
   /// AXI WLAST routed to DATA RAM (last beat indicator)
-  wire                            axi_data_ram_wlast;
+  wire                              axi_data_ram_wlast;
   /// AXI WVALID routed to DATA RAM (write data valid)
-  wire                            axi_data_ram_wvalid;
+  wire                              axi_data_ram_wvalid;
   /// AXI WREADY from DATA RAM (write data ready)
-  wire                            axi_data_ram_wready;
+  wire                              axi_data_ram_wready;
   /// AXI BID from DATA RAM (write response ID)
-  wire [         IdWidth - 1 : 0] axi_data_ram_bid;
+  wire [           IdWidth - 1 : 0] axi_data_ram_bid;
   /// AXI BRESP from DATA RAM (write response code)
-  wire [                     1:0] axi_data_ram_bresp;
+  wire [                       1:0] axi_data_ram_bresp;
   /// AXI BVALID from DATA RAM (write response valid)
-  wire                            axi_data_ram_bvalid;
+  wire                              axi_data_ram_bvalid;
   /// AXI BREADY routed to DATA RAM (write response ready)
-  wire                            axi_data_ram_bready;
+  wire                              axi_data_ram_bready;
   /// AXI AWID routed to PTC RAM write path
-  wire [         IdWidth - 1 : 0] axi_shared_ram_awid;
+  wire [           IdWidth - 1 : 0] axi_shared_ram_awid;
   /// AXI AWADDR routed to PTC RAM write path (byte address)
-  wire [         Archi   - 1 : 0] axi_shared_ram_awaddr;
+  wire [           Archi   - 1 : 0] axi_shared_ram_awaddr;
   /// AXI AWLEN routed to PTC RAM (beats-1; nominally 0)
-  wire [                     7:0] axi_shared_ram_awlen;
+  wire [                       7:0] axi_shared_ram_awlen;
   /// AXI AWSIZE routed to PTC RAM (log2(bytes/beat))
-  wire [                     2:0] axi_shared_ram_awsize;
+  wire [                       2:0] axi_shared_ram_awsize;
   /// AXI AWBURST routed to PTC RAM (type; typically INCR/FIXED)
-  wire [                     1:0] axi_shared_ram_awburst;
+  wire [                       1:0] axi_shared_ram_awburst;
   /// AXI AWLOCK routed to PTC RAM (unused in this design)
-  wire [                     1:0] axi_shared_ram_awlock;
+  wire [                       1:0] axi_shared_ram_awlock;
   /// AXI AWCACHE routed to PTC RAM (unused in this design)
-  wire [                     3:0] axi_shared_ram_awcache;
+  wire [                       3:0] axi_shared_ram_awcache;
   /// AXI AWPROT routed to PTC RAM (unused in this design)
-  wire [                     2:0] axi_shared_ram_awprot;
+  wire [                       2:0] axi_shared_ram_awprot;
   /// AXI AWVALID routed to PTC RAM (address valid handshake)
-  wire                            axi_shared_ram_awvalid;
+  wire                              axi_shared_ram_awvalid;
   /// AXI AWREADY from PTC RAM (address ready handshake)
-  wire                            axi_shared_ram_awready;
+  wire                              axi_shared_ram_awready;
   /// AXI WDATA routed to PTC RAM (write payload)
-  wire [           Archi - 1 : 0] axi_shared_ram_wdata;
+  wire [             Archi - 1 : 0] axi_shared_ram_wdata;
   /// AXI WSTRB routed to PTC RAM (byte strobes)
-  wire [  (Archi/ByteLength)-1:0] axi_shared_ram_wstrb;
+  wire [    (Archi/ByteLength)-1:0] axi_shared_ram_wstrb;
   /// AXI WLAST routed to PTC RAM (last beat indicator)
-  wire                            axi_shared_ram_wlast;
+  wire                              axi_shared_ram_wlast;
   /// AXI WVALID routed to PTC RAM (write data valid)
-  wire                            axi_shared_ram_wvalid;
+  wire                              axi_shared_ram_wvalid;
   /// AXI WREADY from PTC RAM (write data ready)
-  wire                            axi_shared_ram_wready;
+  wire                              axi_shared_ram_wready;
   /// AXI BID from PTC RAM (write response ID)
-  wire [         IdWidth - 1 : 0] axi_shared_ram_bid;
+  wire [           IdWidth - 1 : 0] axi_shared_ram_bid;
   /// AXI BRESP from PTC RAM (write response code)
-  wire [                     1:0] axi_shared_ram_bresp;
+  wire [                       1:0] axi_shared_ram_bresp;
   /// AXI BVALID from PTC RAM (write response valid)
-  wire                            axi_shared_ram_bvalid;
+  wire                              axi_shared_ram_bvalid;
   /// AXI BREADY routed to PTC RAM (write response ready)
-  wire                            axi_shared_ram_bready;
+  wire                              axi_shared_ram_bready;
   /// AXI ARID routed to CTP RAM read path
-  wire [         IdWidth - 1 : 0] axi_shared_ram_arid;
+  wire [           IdWidth - 1 : 0] axi_shared_ram_arid;
   /// AXI ARADDR routed to CTP RAM read path (byte address)
-  wire [         Archi   - 1 : 0] axi_shared_ram_araddr;
+  wire [           Archi   - 1 : 0] axi_shared_ram_araddr;
   /// AXI ARLEN routed from fabric to CTP RAM (beats-1; nominally 0)
-  wire [                     7:0] axi_shared_ram_arlen;
+  wire [                       7:0] axi_shared_ram_arlen;
   /// AXI ARSIZE routed to CTP RAM (log2(bytes/beat))
-  wire [                     2:0] axi_shared_ram_arsize;
+  wire [                       2:0] axi_shared_ram_arsize;
   /// AXI ARBURST routed to CTP RAM (type; typically INCR/FIXED)
-  wire [                     1:0] axi_shared_ram_arburst;
+  wire [                       1:0] axi_shared_ram_arburst;
   /// AXI ARLOCK routed to CTP RAM (unused in this design)
-  wire [                     1:0] axi_shared_ram_arlock;
+  wire [                       1:0] axi_shared_ram_arlock;
   /// AXI ARCACHE routed to CTP RAM (unused in this design)
-  wire [                     3:0] axi_shared_ram_arcache;
+  wire [                       3:0] axi_shared_ram_arcache;
   /// AXI ARPROT routed to CTP RAM (unused in this design)
-  wire [                     2:0] axi_shared_ram_arprot;
+  wire [                       2:0] axi_shared_ram_arprot;
   /// AXI ARVALID routed to CTP RAM (address valid handshake)
-  wire                            axi_shared_ram_arvalid;
+  wire                              axi_shared_ram_arvalid;
   /// AXI ARREADY from CTP RAM (address ready handshake)
-  wire                            axi_shared_ram_arready;
+  wire                              axi_shared_ram_arready;
   /// AXI RID from CTP RAM (read response ID)
-  wire [         IdWidth - 1 : 0] axi_shared_ram_rid;
+  wire [           IdWidth - 1 : 0] axi_shared_ram_rid;
   /// AXI RDATA from CTP RAM (read payload)
-  wire [         Archi   - 1 : 0] axi_shared_ram_rdata;
+  wire [           Archi   - 1 : 0] axi_shared_ram_rdata;
   /// AXI RRESP from CTP RAM (read response code)
-  wire [                     1:0] axi_shared_ram_rresp;
+  wire [                       1:0] axi_shared_ram_rresp;
   /// AXI RLAST from CTP RAM (last beat indicator)
-  wire                            axi_shared_ram_rlast;
+  wire                              axi_shared_ram_rlast;
   /// AXI RVALID from CTP RAM (read data valid)
-  wire                            axi_shared_ram_rvalid;
+  wire                              axi_shared_ram_rvalid;
   /// AXI RREADY routed to CTP RAM (read data ready)
-  wire                            axi_shared_ram_rready;
+  wire                              axi_shared_ram_rready;
 
 
   /* registers */
@@ -449,26 +452,30 @@ module riscv_env #(
       .clk_i         (core_clk_i),
       .rstn_i        (core_rstn_i),
       // IF
-      .i_m_dout_i    (core_i_m_dout),
-      .i_m_hit_i     (core_i_m_hit),
-      .i_m_addr_o    (core_i_m_addr),
-      .i_m_rden_o    (core_i_m_rden),
+      .imem_req_o    (core_imem_req),
+      .imem_gnt_i    (core_imem_gnt),
+      .imem_addr_o   (core_imem_addr),
+      .imem_rvalid_i (core_imem_rvalid),
+      .imem_rdata_i  (core_imem_rdata),
+      .imem_err_i    (core_imem_err),
       // DF
-      .d_m_dout_i    (core_d_m_dout),
-      .d_m_hit_i     (core_d_m_hit),
-      .d_m_addr_o    (core_d_m_addr),
-      .d_m_rden_o    (core_d_m_rden),
-      .d_m_wren_o    (core_d_m_wren),
-      .d_m_wmask_o   (core_d_m_wmask),
-      .d_m_din_o     (core_d_m_din)
+      .dmem_req_o    (core_dmem_req),
+      .dmem_gnt_i    (core_dmem_gnt),
+      .dmem_addr_o   (core_dmem_addr),
+      .dmem_we_o     (core_dmem_we),
+      .dmem_wdata_o  (core_dmem_wdata),
+      .dmem_be_o     (core_dmem_be),
+      .dmem_rvalid_i (core_dmem_rvalid),
+      .dmem_rdata_i  (core_dmem_rdata),
+      .dmem_err_i    (core_dmem_err)
   );
 
   /// Instructions RAM: core read-only, AXI write (firmware instructions loader)
   waxi_dpram #(
       .NoPerfectMemory(NoPerfectMemory),
-      .AddrWidth(Archi),
-      .DataWidth(INSTR_WIDTH),
-      .Size     (INSTR_RAM_SIZE)
+      .AddrWidth      (Archi),
+      .DataWidth      (INSTR_WIDTH),
+      .Size           (INSTR_RAM_SIZE)
   ) instr_dpram (
 `ifdef SIM
       .mem_o          (InstrDpramMem),
@@ -477,13 +484,15 @@ module riscv_env #(
       .axi_clk_i      (axi_clk_i),
       .rstn_i         (axi_rstn_i),
       // Core
-      .core_m_addr_i  (core_i_m_addr),
-      .core_m_wren_i  ('0),
-      .core_m_wdata_i ('0),
-      .core_m_wmask_i ('0),
-      .core_m_rden_i  (core_i_m_rden),
-      .core_m_rdata_o (core_i_m_dout),
-      .core_m_hit_o   (core_i_m_hit),
+      .req_i          (core_imem_req),
+      .gnt_o          (core_imem_gnt),
+      .addr_i         (core_imem_addr),
+      .we_i           ('0),
+      .wdata_i        ('0),
+      .be_i           ('0),
+      .rvalid_o       (core_imem_rvalid),
+      .rdata_o        (core_imem_rdata),
+      .err_o          (core_imem_err),
       // AXI (INSTR)
       .s_axi_awid_i   (s_instr_axi_awid_i),
       .s_axi_awaddr_i (s_instr_axi_awaddr_i),
@@ -509,9 +518,9 @@ module riscv_env #(
   /// data RAM: core R/W, AXI write (firmware data loader)
   waxi_dpram #(
       .NoPerfectMemory(NoPerfectMemory),
-      .AddrWidth(Archi),
-      .DataWidth(Archi),
-      .Size     (DATA_RAM_SIZE)
+      .AddrWidth      (Archi),
+      .DataWidth      (Archi),
+      .Size           (DATA_RAM_SIZE)
   ) data_ram (
 `ifdef SIM
       .mem_o          (DataDpramMem),
@@ -520,13 +529,15 @@ module riscv_env #(
       .axi_clk_i      (axi_clk_i),
       .rstn_i         (axi_rstn_i),
       // Core
-      .core_m_addr_i  (data_ram_addr),
-      .core_m_wren_i  (data_ram_wren),
-      .core_m_wdata_i (data_ram_wdata),
-      .core_m_wmask_i (data_ram_wmask),
-      .core_m_rden_i  (data_ram_rden),
-      .core_m_rdata_o (data_ram_rdata),
-      .core_m_hit_o   (data_ram_hit),
+      .req_i          (dmem_req),
+      .gnt_o          (dmem_gnt),
+      .addr_i         (core_dmem_addr),
+      .we_i           (dmem_we),
+      .wdata_i        (core_dmem_wdata),
+      .be_i           (core_dmem_be),
+      .rvalid_o       (dmem_rvalid),
+      .rdata_o        (dmem_rdata),
+      .err_o          (dmem_err),
       // AXI (DATA)
       .s_axi_awid_i   (axi_data_ram_awid),
       .s_axi_awaddr_i (axi_data_ram_awaddr),
@@ -552,9 +563,9 @@ module riscv_env #(
   /// PTC RAM: platform→core shared, AXI write path
   waxi_dpram #(
       .NoPerfectMemory(NoPerfectMemory),
-      .AddrWidth(Archi),
-      .DataWidth(Archi),
-      .Size     (PTC_SHARED_RAM_SIZE)
+      .AddrWidth      (Archi),
+      .DataWidth      (Archi),
+      .Size           (PTC_SHARED_RAM_SIZE)
   ) w_axi_shared_ram (
 `ifdef SIM
       .mem_o          (PtcSharedDpramMem),
@@ -563,13 +574,15 @@ module riscv_env #(
       .axi_clk_i      (axi_clk_i),
       .rstn_i         (axi_rstn_i),
       // Core
-      .core_m_addr_i  (ptc_shared_ram_addr),
-      .core_m_wren_i  (ptc_shared_ram_wren),
-      .core_m_wdata_i (ptc_shared_ram_wdata),
-      .core_m_wmask_i (ptc_shared_ram_wmask),
-      .core_m_rden_i  (ptc_shared_ram_rden),
-      .core_m_rdata_o (ptc_shared_ram_rdata),
-      .core_m_hit_o   (ptc_shared_ram_hit),
+      .req_i          (ptc_req),
+      .gnt_o          (ptc_gnt),
+      .addr_i         (core_dmem_addr),
+      .we_i           (ptc_we),
+      .wdata_i        (core_dmem_wdata),
+      .be_i           (core_dmem_be),
+      .rvalid_o       (ptc_rvalid),
+      .rdata_o        (ptc_rdata),
+      .err_o          (ptc_err),
       // AXI (PTC write)
       .s_axi_awid_i   (axi_shared_ram_awid),
       .s_axi_awaddr_i (axi_shared_ram_awaddr),
@@ -595,9 +608,9 @@ module riscv_env #(
   /// CTP RAM: core→platform shared, AXI read path
   raxi_dpram #(
       .NoPerfectMemory(NoPerfectMemory),
-      .AddrWidth(Archi),
-      .DataWidth(Archi),
-      .Size     (CTP_SHARED_RAM_SIZE)
+      .AddrWidth      (Archi),
+      .DataWidth      (Archi),
+      .Size           (CTP_SHARED_RAM_SIZE)
   ) r_axi_shared_ram (
 `ifdef SIM
       .mem_o          (CtpSharedDpramMem),
@@ -606,13 +619,15 @@ module riscv_env #(
       .axi_clk_i      (axi_clk_i),
       .rstn_i         (axi_rstn_i),
       // Core
-      .core_m_addr_i  (ctp_shared_ram_addr),
-      .core_m_wren_i  (ctp_shared_ram_wren),
-      .core_m_wdata_i (ctp_shared_ram_wdata),
-      .core_m_wmask_i (ctp_shared_ram_wmask),
-      .core_m_rden_i  (ctp_shared_ram_rden),
-      .core_m_rdata_o (ctp_shared_ram_rdata),
-      .core_m_hit_o   (ctp_shared_ram_hit),
+      .req_i          (ctp_req),
+      .gnt_o          (ctp_gnt),
+      .addr_i         (core_dmem_addr),
+      .we_i           (ctp_we),
+      .wdata_i        (core_dmem_wdata),
+      .be_i           (core_dmem_be),
+      .rvalid_o       (ctp_rvalid),
+      .rdata_o        (ctp_rdata),
+      .err_o          (ctp_err),
       // AXI (CTP read)
       .s_axi_arid_i   (axi_shared_ram_arid),
       .s_axi_araddr_i (axi_shared_ram_araddr),
@@ -647,37 +662,34 @@ module riscv_env #(
       .clk_i                   (axi_clk_i),
       .rstn_i                  (axi_rstn_i),
       // Core data path → fabric
-      .core_d_m_addr_i         (core_d_m_addr),
-      .core_d_m_rden_i         (core_d_m_rden),
-      .core_d_m_wren_i         (core_d_m_wren),
-      .core_d_m_wmask_i        (core_d_m_wmask),
-      .core_d_m_din_i          (core_d_m_din),
-      .core_d_m_dout_o         (core_d_m_dout),
-      .core_d_m_hit_o          (core_d_m_hit),
+      .core_req_i              (core_dmem_req),
+      .core_gnt_o              (core_dmem_gnt),
+      .core_addr_i             (core_dmem_addr),
+      .core_we_i               (core_dmem_we),
+      .core_rvalid_o           (core_dmem_rvalid),
+      .core_rdata_o            (core_dmem_rdata),
+      .core_err_o              (core_dmem_err),
       // Fabric → DATA RAM
-      .data_ram_addr_o         (data_ram_addr),
-      .data_ram_wren_o         (data_ram_wren),
-      .data_ram_wdata_o        (data_ram_wdata),
-      .data_ram_wmask_o        (data_ram_wmask),
-      .data_ram_rden_o         (data_ram_rden),
-      .data_ram_rdata_i        (data_ram_rdata),
-      .data_ram_hit_i          (data_ram_hit),
+      .dmem_req_o              (dmem_req),
+      .dmem_gnt_i              (dmem_gnt),
+      .dmem_we_o               (dmem_we),
+      .dmem_rvalid_i           (dmem_rvalid),
+      .dmem_rdata_i            (dmem_rdata),
+      .dmem_err_i              (dmem_err),
       // Fabric → PTC RAM (AXI write)
-      .ptc_shared_ram_addr_o   (ptc_shared_ram_addr),
-      .ptc_shared_ram_wren_o   (ptc_shared_ram_wren),
-      .ptc_shared_ram_wdata_o  (ptc_shared_ram_wdata),
-      .ptc_shared_ram_wmask_o  (ptc_shared_ram_wmask),
-      .ptc_shared_ram_rden_o   (ptc_shared_ram_rden),
-      .ptc_shared_ram_rdata_i  (ptc_shared_ram_rdata),
-      .ptc_shared_ram_hit_i    (ptc_shared_ram_hit),
+      .ptc_req_o               (ptc_req),
+      .ptc_gnt_i               (ptc_gnt),
+      .ptc_we_o                (ptc_we),
+      .ptc_rvalid_i            (ptc_rvalid),
+      .ptc_rdata_i             (ptc_rdata),
+      .ptc_err_i               (ptc_err),
       // Fabric → CTP RAM (AXI read)
-      .ctp_shared_ram_addr_o   (ctp_shared_ram_addr),
-      .ctp_shared_ram_wren_o   (ctp_shared_ram_wren),
-      .ctp_shared_ram_wdata_o  (ctp_shared_ram_wdata),
-      .ctp_shared_ram_wmask_o  (ctp_shared_ram_wmask),
-      .ctp_shared_ram_rden_o   (ctp_shared_ram_rden),
-      .ctp_shared_ram_rdata_i  (ctp_shared_ram_rdata),
-      .ctp_shared_ram_hit_i    (ctp_shared_ram_hit),
+      .ctp_req_o               (ctp_req),
+      .ctp_gnt_i               (ctp_gnt),
+      .ctp_we_o                (ctp_we),
+      .ctp_rvalid_i            (ctp_rvalid),
+      .ctp_rdata_i             (ctp_rdata),
+      .ctp_err_i               (ctp_err),
       // AXI (from top) → write-splits (DATA / PTC)
       .s_axi_awid_i            (s_axi_awid_i),
       .s_axi_awaddr_i          (s_axi_awaddr_i),

@@ -4,8 +4,8 @@
 \file       writeback.sv
 \brief      SCHOLAR RISC-V core write-back module
 \author     Kawanami
-\date       21/09/2025
-\version    1.1
+\date       13/02/2026
+\version    1.2
 
 \details
  This module implements the write-back  unit
@@ -59,6 +59,7 @@
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 21/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 13/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 ********************************************************************************
 */
 module writeback #(
@@ -162,20 +163,28 @@ module writeback #(
     output wire [ DataWidth     - 1 : 0] csr_val_o,
     /// CSR write enable signal
     output wire                          csr_valid_o,
-    /// Data read from memory
-    input  wire [DataWidth      - 1 : 0] m_dout_i,
-    /// Data to write to memory
-    output wire [DataWidth      - 1 : 0] m_din_o,
-    /// Memory hit flag
-    input  wire                          m_hit_i,
-    /// Memory address for LOAD or STORE
-    output wire [AddrWidth      - 1 : 0] m_addr_o,
-    /// Memory read enable
-    output wire                          m_rden_o,
-    /// Memory write enable
-    output wire                          m_wren_o,
-    /// Byte-level write mask for STOREs
-    output wire [(DataWidth/8)  - 1 : 0] m_wmask_o
+    /// Address transfer request
+    output wire                          req_o,
+    /* verilator lint_off UNUSEDSIGNAL */
+    /// Grant: Ready to accept address transfert
+    input  wire                          gnt_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    /// Address for memory access
+    output wire [    AddrWidth  - 1 : 0] addr_o,
+    /// Write enable (1: write - 0: read)
+    output wire                          we_o,
+    /// Write data
+    output wire [     DataWidth - 1 : 0] wdata_o,
+    /// Byte enable
+    output wire [ (DataWidth/8) - 1 : 0] be_o,
+    /// Response transfer valid
+    input  wire                          rvalid_i,
+    /// Read data
+    input  wire [     DataWidth - 1 : 0] rdata_i,
+    /* verilator lint_off UNUSEDSIGNAL */
+    /// Error response
+    input  wire                          err_i
+    /* verilator lint_on UNUSEDSIGNAL */
 );
 
   /******************** DECLARATION ********************/
@@ -190,19 +199,19 @@ module writeback #(
 
   /* wires */
   /// Address used for memory access (read or write)
-  logic [   AddrWidth      - 1 : 0] m_addr;
+  logic [   AddrWidth      - 1 : 0] addr;
   /// Byte offset within the accessed word (used for write alignment)
   wire  [ADDR_OFFSET_WIDTH - 1 : 0] m_addr_offset;
+  ///
+  logic                             req;
   /// Memory write enable (1 = write)
-  logic                             m_wren;
+  logic                             we;
   /// Byte-wise write mask for memory store operations
-  logic [   (DataWidth/8)  - 1 : 0] m_wmask;
-  /// Memory read enable (1 = read)
-  logic                             m_rden;
+  logic [   (DataWidth/8)  - 1 : 0] be;
   /// Destination register validity flag
   logic                             rd_valid;
   /// Data to write into memory
-  logic [   DataWidth      - 1 : 0] m_din;
+  logic [   DataWidth      - 1 : 0] wdata;
   /// Data to write into GPR (register file)
   logic [   DataWidth      - 1 : 0] gpr_din;
   /// Next value for the program counter (pc_i)
@@ -219,7 +228,7 @@ module writeback #(
   /// Memory access control signals
   /*!
   * This block generates and controls memory access signals
-  * (`m_addr`, `m_wren`, `m_rden`, `m_wmask` and `m_din`)
+  * (`addr`, `req`, `we`, `be` and `wdata`)
   * based on the validity of the decode unit
   * (`decode_valid_i`) and the memory control signal (`mem_ctrl_i`).
   *
@@ -227,25 +236,25 @@ module writeback #(
   * detect the kind of operation (read or write).
   *
   * They support both LOAD and STORE instructions:
-  *   - For LOAD: a read request is triggered (`m_rden`),
+  *   - For LOAD: a read request is triggered (`req` && `!we`),
   *               and a full write mask is applied.
   *               (Some memories use write masks for read access as well,
   *               so we use the same mask logic.)
   *
-  *   - For STORE: a write request is triggered (`m_wren`)
-  *               and the write mask (`m_wmask`) and the data to write (`m_din`)
+  *   - For STORE: a write request is triggered (`req` && `we`)
+  *               and the write mask (`be`) and the data to write (`wdata`)
   *               are generated based on the access size
   *               (byte, halfword, word, double word) and the address offset.
   *
   * Memory request completion is tracked via `m_req_done_q`,
-  * which is set when the memory reports a hit (`m_hit_i`).
+  * which is set when the memory reports a completion (`rvalid`).
   *
   * Notes:
   *   - Read/write assertion is done combinatorially to avoid stalling the core,
   *     while deassertion is done synchronously
   *     to ensure proper timing with the memory (`gen_mem_ack`).
   *
-  *   - The memory address (`m_addr`) must remain stable
+  *   - The memory address (`addr`) must remain stable
   *     during the entire memory access.
   *     This is ensured by keeping the `pc_i` constant in a separate block
   *     until the request is completed.
@@ -265,43 +274,41 @@ module writeback #(
   generate
     if (DataWidth == 32) begin : gen_mem_controller_32
       always_comb begin : mem_controller
-        if (mem_ctrl_i != MemIdle) m_addr = exe_out_i;
-        else m_addr = '0;
+        if (mem_ctrl_i != MemIdle) addr = exe_out_i;
+        else addr = '0;
 
         if (mem_ctrl_i != MemIdle && m_req_done_q == 1'b0) begin
+          req = 1'b1;
           if (mem_ctrl_i[4] == 1'b0) begin  // Read
-            m_rden  = 1'b1;
-            m_wren  = 1'b0;
-            m_wmask = {DataWidth / 8{1'b1}};
-            m_din   = '0;
+            we    = 1'b0;
+            be    = {DataWidth / 8{1'b1}};
+            wdata = '0;
           end
           else begin  // Write
-            m_rden = 1'b0;
-            m_wren = 1'b1;
+            we = 1'b1;
 
             case (mem_ctrl_i)
               MemWb: begin
-                m_din   = ({{DataWidth - 8{1'b0}}, op3_i[7:0]}) << m_addr_offset * ByteLength;
-                m_wmask = 1'b1 << m_addr[ADDR_OFFSET_WIDTH-1 : 0];
+                wdata = ({{DataWidth - 8{1'b0}}, op3_i[7:0]}) << m_addr_offset * ByteLength;
+                be    = 1'b1 << addr[ADDR_OFFSET_WIDTH-1 : 0];
               end
 
               MemWh: begin
-                m_din   = ({{DataWidth - 16{1'b0}}, op3_i[15:0]}) << m_addr_offset * ByteLength;
-                m_wmask = 3 << m_addr[ADDR_OFFSET_WIDTH-1 : 0];
+                wdata = ({{DataWidth - 16{1'b0}}, op3_i[15:0]}) << m_addr_offset * ByteLength;
+                be    = 3 << addr[ADDR_OFFSET_WIDTH-1 : 0];
               end
 
               default: begin
-                m_din   = op3_i;
-                m_wmask = {DataWidth / 8{1'b1}};
+                wdata = op3_i;
+                be    = {DataWidth / 8{1'b1}};
               end
             endcase
           end
         end
         else begin
-          m_din   = '0;
-          m_wren  = 1'b0;
-          m_rden  = 1'b0;
-          m_wmask = {DataWidth / 8{1'b1}};
+          wdata = '0;
+          req   = 1'b0;
+          be    = {DataWidth / 8{1'b1}};
         end
       end
 
@@ -309,48 +316,46 @@ module writeback #(
     else begin : gen_mem_controller_64
 
       always_comb begin : mem_controller
-        if (mem_ctrl_i != MemIdle) m_addr = exe_out_i;
-        else m_addr = {AddrWidth{1'b0}};
+        if (mem_ctrl_i != MemIdle) addr = exe_out_i;
+        else addr = {AddrWidth{1'b0}};
 
         if (mem_ctrl_i != MemIdle && m_req_done_q == 1'b0) begin
+          req = 1'b1;
           if (!mem_ctrl_i[4]) begin  // Read
-            m_rden  = 1'b1;
-            m_wren  = 1'b0;
-            m_wmask = {DataWidth / 8{1'b1}};
-            m_din   = '0;
+            we    = 1'b0;
+            be    = {DataWidth / 8{1'b1}};
+            wdata = '0;
           end
           else begin  // Write
-            m_rden = 1'b0;
-            m_wren = 1'b1;
+            we = 1'b1;
 
             case (mem_ctrl_i)
               MemWb: begin
-                m_din   = ({{DataWidth - 8{1'b0}}, op3_i[7:0]}) << m_addr_offset * ByteLength;
-                m_wmask = 1'b1 << m_addr[ADDR_OFFSET_WIDTH-1 : 0];
+                wdata = ({{DataWidth - 8{1'b0}}, op3_i[7:0]}) << m_addr_offset * ByteLength;
+                be    = 1'b1 << addr[ADDR_OFFSET_WIDTH-1 : 0];
               end
 
               MemWh: begin
-                m_din   = ({{DataWidth - 16{1'b0}}, op3_i[15:0]}) << m_addr_offset * ByteLength;
-                m_wmask = 3 << m_addr[ADDR_OFFSET_WIDTH-1 : 0];
+                wdata = ({{DataWidth - 16{1'b0}}, op3_i[15:0]}) << m_addr_offset * ByteLength;
+                be    = 3 << addr[ADDR_OFFSET_WIDTH-1 : 0];
               end
 
               MemWw: begin
-                m_din   = ({{DataWidth - 32{1'b0}}, op3_i[31:0]}) << m_addr_offset * ByteLength;
-                m_wmask = 15 << m_addr[ADDR_OFFSET_WIDTH-1 : 0];
+                wdata = ({{DataWidth - 32{1'b0}}, op3_i[31:0]}) << m_addr_offset * ByteLength;
+                be    = 15 << addr[ADDR_OFFSET_WIDTH-1 : 0];
               end
 
               default: begin
-                m_din   = op3_i;
-                m_wmask = {DataWidth / 8{1'b1}};
+                wdata = op3_i;
+                be    = {DataWidth / 8{1'b1}};
               end
             endcase
           end
         end
         else begin
-          m_din   = '0;
-          m_wren  = 1'b0;
-          m_rden  = 1'b0;
-          m_wmask = {DataWidth / 8{1'b1}};
+          wdata = '0;
+          req   = 1'b0;
+          be    = {DataWidth / 8{1'b1}};
         end
       end
 
@@ -363,11 +368,11 @@ module writeback #(
   * This block tracks memory request completion.
   * It sets `m_req_done_q` signal when a memory transaction
   * is completed, allowing the `gen_mem_request` to disassert
-  * the `m_rden` or `m_wren` signal.
+  * the `req` signal.
   */
   always_ff @(posedge clk_i) begin : mem_ack_gen
     if (!rstn_i) m_req_done_q <= 1'b0;
-    else if ((m_wren || m_rden) && m_hit_i) m_req_done_q <= 1'b1;
+    else if (req && rvalid_i) m_req_done_q <= 1'b1;
     else m_req_done_q <= 1'b0;
   end
 
@@ -386,7 +391,7 @@ module writeback #(
   */
   always_ff @(posedge clk_i) begin : mem_offset_gen
     if (!rstn_i) m_addr_offset_q <= '0;
-    else if (m_rden) m_addr_offset_q <= m_addr_offset;
+    else if (req && !we) m_addr_offset_q <= m_addr_offset;
   end
 
   /// Address offset computation for correct alignment during write requests
@@ -394,15 +399,15 @@ module writeback #(
 
 
   /// Output driven by mem_controller
-  assign m_din_o       = m_din;
+  assign wdata_o       = wdata;
   /// Output driven by mem_controller
-  assign m_addr_o      = {m_addr[AddrWidth-1:ADDR_OFFSET_WIDTH], {ADDR_OFFSET_WIDTH{1'b0}}};
+  assign addr_o        = {addr[AddrWidth-1:ADDR_OFFSET_WIDTH], {ADDR_OFFSET_WIDTH{1'b0}}};
   /// Output driven by mem_controller
-  assign m_rden_o      = m_rden;
+  assign req_o         = req;
   /// Output driven by mem_controller
-  assign m_wren_o      = m_wren;
+  assign we_o          = we;
   /// Output driven by mem_controller
-  assign m_wmask_o     = m_wmask;
+  assign be_o          = be;
 
 
 
@@ -431,7 +436,7 @@ module writeback #(
   *   - GprAlu    : Write back ALU/execution result (`exe_out_i`)
   *   - GprPrgmc  : Write back return address (`pc_i` + 4) for JAL/JALR
   *   - GprOp3    : Write back `op3_i` (e.g., CSR read path)
-  *   - GprMem    : Write back load data from memory (`m_dout_i`)
+  *   - GprMem    : Write back load data from memory (`rdata_i`)
   *
   * Load formatting (when `gpr_ctrl_i` == GprMem):
   *   - `rd_valid` is asserted only when the outstanding memory request completes
@@ -442,7 +447,7 @@ module writeback #(
   *       - MemRw  / MemRwu : Load word (signed / zero-extented )
   *       - default           : Load word (32-bit architecture)
   *                             or Load double word (64-bit architecture)
-  *   - The byte/half-word is extracted from `m_dout_i` using `m_addr_offset_q`
+  *   - The byte/half-word is extracted from `rdata_i` using `m_addr_offset_q`
   *     (byte offset within the aligned read data) and then sign- or zero-extended
   *     to `DataWidth`.
   *     The same rule is applied to a word for RV64I.
@@ -478,7 +483,7 @@ module writeback #(
           case (mem_ctrl_i)
 
             MemRb, MemRbu: begin
-              mem_rdata = {8'b00000000, m_dout_i[(m_addr_offset_q*8)+:8]};
+              mem_rdata = {8'b00000000, rdata_i[(m_addr_offset_q*8)+:8]};
 
               if (mem_ctrl_i == MemRbu) gpr_din = {{DataWidth - 8{1'b0}}, mem_rdata[7:0]};
               else
@@ -487,7 +492,7 @@ module writeback #(
             end
 
             MemRh, MemRhu: begin
-              mem_rdata = m_dout_i[(m_addr_offset_q*8)+:16];
+              mem_rdata = rdata_i[(m_addr_offset_q*8)+:16];
               if (mem_ctrl_i == MemRhu) gpr_din = {{DataWidth - 16{1'b0}}, mem_rdata[15:0]};
               else
                 gpr_din = mem_rdata[15] == 1 ? {{DataWidth - 16{1'b1}}, mem_rdata[15:0]} :
@@ -495,7 +500,7 @@ module writeback #(
             end
 
             default: begin
-              gpr_din = m_dout_i;
+              gpr_din = rdata_i;
             end
           endcase
 
@@ -530,7 +535,7 @@ module writeback #(
           case (mem_ctrl_i)
 
             MemRb, MemRbu: begin
-              mem_rdata = {24'h000000, m_dout_i[(m_addr_offset_q*8)+:8]};
+              mem_rdata = {24'h000000, rdata_i[(m_addr_offset_q*8)+:8]};
 
               if (mem_ctrl_i == MemRbu) gpr_din = {{DataWidth - 8{1'b0}}, mem_rdata[7:0]};
               else
@@ -539,7 +544,7 @@ module writeback #(
             end
 
             MemRh, MemRhu: begin
-              mem_rdata = {16'h0000, m_dout_i[(m_addr_offset_q*8)+:16]};
+              mem_rdata = {16'h0000, rdata_i[(m_addr_offset_q*8)+:16]};
 
               if (mem_ctrl_i == MemRhu) gpr_din = {{DataWidth - 16{1'b0}}, mem_rdata[15:0]};
               else
@@ -548,7 +553,7 @@ module writeback #(
             end
 
             MemRw, MemRwu: begin
-              mem_rdata = m_dout_i[(m_addr_offset_q*8)+:32];
+              mem_rdata = rdata_i[(m_addr_offset_q*8)+:32];
 
               if (mem_ctrl_i == MemRwu) gpr_din = {{DataWidth - 32{1'b0}}, mem_rdata[31:0]};
               else
@@ -557,7 +562,7 @@ module writeback #(
             end
 
             default: begin
-              gpr_din = m_dout_i;
+              gpr_din = rdata_i;
             end
           endcase
 

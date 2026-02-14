@@ -4,8 +4,8 @@
 \file       scholar_riscv_core.sv
 \brief      SCHOLAR RISC-V Core Module
 \author     Kawanami
-\date       23/09/2025
-\version    1.1
+\date       13/02/2026
+\version    1.2
 
 \details
   This module is the top-level module of the SCHOLAR RISC-V core.
@@ -35,6 +35,7 @@
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 23/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 13/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 ********************************************************************************
 */
 module scholar_riscv_core #(
@@ -65,29 +66,37 @@ module scholar_riscv_core #(
     /// System active low reset
     input  wire                         rstn_i,
     /* Instruction memory wires */
-    /// Memory output data
-    input  wire [               31 : 0] i_m_dout_i,
-    /// Memory hit flag (1: hit, 0: miss)
-    input  wire                         i_m_hit_i,
-    /// Memory address
-    output wire [        Archi - 1 : 0] i_m_addr_o,
-    /// Memory read enable (1: enable, 0: disable)
-    output wire                         i_m_rden_o,
+    /// Address transfer request
+    output wire                         imem_req_o,
+    /// Grant: Ready to accept address transfert
+    input  wire                         imem_gnt_i,
+    /// Address for memory access
+    output wire [       Archi  - 1 : 0] imem_addr_o,
+    /// Response transfer valid
+    input  wire                         imem_rvalid_i,
+    /// Read data
+    input  wire [               31 : 0] imem_rdata_i,
+    /// Error response
+    input  wire                         imem_err_i,
     /* Data memory signals */
-    /// Data read from memory
-    input  wire [   Archi      - 1 : 0] d_m_dout_i,
-    /// Data to write to memory
-    output wire [   Archi      - 1 : 0] d_m_din_o,
-    /// Memory hit flag
-    input  wire                         d_m_hit_i,
-    /// Memory address for LOAD or STORE
-    output wire [        Archi - 1 : 0] d_m_addr_o,
-    /// Memory read enable
-    output wire                         d_m_rden_o,
-    /// Memory write enable
-    output wire                         d_m_wren_o,
-    /// Byte-level write mask for STOREs
-    output wire [   (Archi/8)  - 1 : 0] d_m_wmask_o
+    /// Address transfer request
+    output wire                         dmem_req_o,
+    /// Grant: Ready to accept address transfert
+    input  wire                         dmem_gnt_i,
+    /// Address for memory access
+    output wire [       Archi  - 1 : 0] dmem_addr_o,
+    /// Write enable (1: write - 0: read)
+    output wire                         dmem_we_o,
+    /// Write data
+    output wire [        Archi - 1 : 0] dmem_wdata_o,
+    /// Byte enable
+    output wire [    (Archi/8) - 1 : 0] dmem_be_o,
+    /// Response transfer valid
+    input  wire                         dmem_rvalid_i,
+    /// Read data
+    input  wire [        Archi - 1 : 0] dmem_rdata_i,
+    /// Error response
+    input  wire                         dmem_err_i
 );
 
   /******************** DECLARATION ********************/
@@ -334,10 +343,12 @@ module scholar_riscv_core #(
       .pc_next_i(writeback_pc_next),
       .instr_o  (fetch_instr),
       .valid_o  (fetch_valid),
-      .m_addr_o (i_m_addr_o),
-      .m_rden_o (i_m_rden_o),
-      .m_dout_i (i_m_dout_i),
-      .m_hit_i  (i_m_hit_i)
+      .req_o    (imem_req_o),
+      .gnt_i    (imem_gnt_i),
+      .addr_o   (imem_addr_o),
+      .rvalid_i (imem_rvalid_i),
+      .rdata_i  (imem_rdata_i),
+      .err_i    (imem_err_i)
   );
 
 
@@ -504,13 +515,15 @@ module scholar_riscv_core #(
       .csr_waddr_o   (writeback_csr_waddr),
       .csr_val_o     (writeback_csr_val),
       .csr_valid_o   (writeback_csr_valid),
-      .m_addr_o      (d_m_addr_o),
-      .m_rden_o      (d_m_rden_o),
-      .m_wren_o      (d_m_wren_o),
-      .m_wmask_o     (d_m_wmask_o),
-      .m_din_o       (d_m_din_o),
-      .m_dout_i      (d_m_dout_i),
-      .m_hit_i       (d_m_hit_i)
+      .req_o         (dmem_req_o),
+      .gnt_i         (dmem_gnt_i),
+      .addr_o        (dmem_addr_o),
+      .we_o          (dmem_we_o),
+      .wdata_o       (dmem_wdata_o),
+      .be_o          (dmem_be_o),
+      .rvalid_i      (dmem_rvalid_i),
+      .rdata_i       (dmem_rdata_i),
+      .err_i         (dmem_err_i)
   );
 
 endmodule

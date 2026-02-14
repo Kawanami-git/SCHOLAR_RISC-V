@@ -5,8 +5,8 @@
 \brief      Dual-Port RAM (AXI write-only / Core write/read)
 
 \author     Kawanami
-\date       12/02/2026
-\version    1.2
+\date       13/02/2026
+\version    1.3
 
 \details
   Educational dual-port RAM used to store the SCHOLAR RISC-V core
@@ -39,6 +39,7 @@
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 15/10/2025 | Kawanami   | Change module name from data_dpram to waxi_dpram.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 | 1.2     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
+| 1.3     | 13/02/2026 | Kawanami   | Replace core custom interface with OBI standard. |
 ********************************************************************************
 */
 
@@ -60,76 +61,80 @@ module waxi_dpram #(
     /// AXI transaction ID width
     parameter  int unsigned IdWidth         = 8
 ) (
-
 `ifdef SIM
     /// (Simulation only) Exposes the RAM contents for testbenches
     output logic [DataWidth-1:0] mem_o[(Size / (DataWidth / ByteLength))],
 `endif
+
     /* Global signals */
     /// Core domain clock (drives the core-side port of the RAM)
-    input wire core_clk_i,
+    input  wire                                  core_clk_i,
     /// AXI domain clock (drives the AXI-side port of the RAM and AXI control)
-    input wire axi_clk_i,
+    input  wire                                  axi_clk_i,
     /// Global active-low reset for AXI control logic (memory contents unchanged)
-    input wire rstn_i,
+    input  wire                                  rstn_i,
     /* Core signals */
+    /// Address transfer request
+    input  wire                                  req_i,
+    /// Grant: Ready to accept address transfert
+    output wire                                  gnt_o,
     /* verilator lint_off UNUSEDSIGNAL */
-    /// Core address (byte address). Upper bits beyond the RAM depth are ignored.
-    input wire [AddrWidth-1:0] core_m_addr_i,
+    /// Address for memory access
+    input  wire [            AddrWidth  - 1 : 0] addr_i,
     /* verilator lint_on UNUSEDSIGNAL */
-    /// Core write enable (1 = write)
-    input wire core_m_wren_i,
-    /// Core write data (to memory)
-    input wire [DataWidth     - 1 : 0] core_m_wdata_i,
-    /// Core byte-enable mask (one bit per byte)
-    input wire [(DataWidth/ByteLength) - 1 : 0] core_m_wmask_i,
-    /// Core read enable (1 = read)
-    input wire core_m_rden_i,
-    /// Core read data (from memory)
-    output wire [DataWidth     - 1 : 0] core_m_rdata_o,
-    /// Core hit/acknowledge: combinational “accept” (read or write issued)
-    output wire core_m_hit_o,
+    /// Write enable (1: write - 0: read)
+    input  wire                                  we_i,
+    /// Write data
+    input  wire [             DataWidth - 1 : 0] wdata_i,
+    /// Byte enable
+    input  wire [         (DataWidth/8) - 1 : 0] be_i,
+    /// Response transfer valid
+    output wire                                  rvalid_o,
+    /// Read data
+    output wire [             DataWidth - 1 : 0] rdata_o,
+    /// Error response
+    output wire                                  err_o,
     /* AXI signals */
     /// AWID: Write address transaction ID
-    input wire [IdWidth       - 1 : 0] s_axi_awid_i,
+    input  wire [         IdWidth       - 1 : 0] s_axi_awid_i,
     /// AWADDR: Start byte address for write transaction
-    input wire [AddrWidth     - 1 : 0] s_axi_awaddr_i,
+    input  wire [         AddrWidth     - 1 : 0] s_axi_awaddr_i,
     /// AWSIZE: Bytes per beat = 2**AWSIZE (should match DataWidth/ByteLength)
-    input wire [2 : 0] s_axi_awsize_i,
+    input  wire [                         2 : 0] s_axi_awsize_i,
     /* verilator lint_off UNUSEDSIGNAL */
     /// AWLEN: Number of beats minus 1 (nominally 0 for single-beat)
-    input wire [7 : 0] s_axi_awlen_i,
+    input  wire [                         7 : 0] s_axi_awlen_i,
     /// AWBURST: Burst type (FIXED/INCR/WRAP)
-    input wire [1 : 0] s_axi_awburst_i,
+    input  wire [                         1 : 0] s_axi_awburst_i,
     /// AWLOCK: Lock (unused)
-    input wire [1 : 0] s_axi_awlock_i,
+    input  wire [                         1 : 0] s_axi_awlock_i,
     /// AWCACHE: Cache hints (unused)
-    input wire [3 : 0] s_axi_awcache_i,
+    input  wire [                         3 : 0] s_axi_awcache_i,
     /// AWPROT: Protection type (unused)
-    input wire [2 : 0] s_axi_awprot_i,
+    input  wire [                         2 : 0] s_axi_awprot_i,
     /// AWVALID: Write address valid
-    input wire s_axi_awvalid_i,
+    input  wire                                  s_axi_awvalid_i,
     /* verilator lint_on UNUSEDSIGNAL */
     /// AWREADY: Write address ready
-    output wire s_axi_awready_o,
+    output wire                                  s_axi_awready_o,
     /// WDATA: Write data
-    input wire [DataWidth     - 1 : 0] s_axi_wdata_i,
+    input  wire [         DataWidth     - 1 : 0] s_axi_wdata_i,
     /// WSTRB: Byte write strobes (one bit per byte)
-    input wire [(DataWidth/ByteLength) - 1 : 0] s_axi_wstrb_i,
+    input  wire [(DataWidth/ByteLength) - 1 : 0] s_axi_wstrb_i,
     /// WLAST: Last beat of burst
-    input wire s_axi_wlast_i,
+    input  wire                                  s_axi_wlast_i,
     /// WVALID: Write data valid
-    input wire s_axi_wvalid_i,
+    input  wire                                  s_axi_wvalid_i,
     /// WREADY: Write data ready
-    output wire s_axi_wready_o,
+    output wire                                  s_axi_wready_o,
     /// BID: Write transaction response ID
-    output wire [IdWidth       - 1 : 0] s_axi_bid_o,
+    output wire [         IdWidth       - 1 : 0] s_axi_bid_o,
     /// BRESP: Write response (OKAY/SLVERR/DECERR)
-    output wire [1 : 0] s_axi_bresp_o,
+    output wire [                         1 : 0] s_axi_bresp_o,
     /// BVALID: Write transaction response valid
-    output wire s_axi_bvalid_o,
+    output wire                                  s_axi_bvalid_o,
     /// BREADY: Write transaction response ready
-    input wire s_axi_bready_i
+    input  wire                                  s_axi_bready_i
 );
 
   /******************** DECLARATION ********************/
@@ -290,20 +295,26 @@ module waxi_dpram #(
   /**/
 
 
+
+  /// The RAM is always available to the core
+  assign gnt_o           = req_i;
+  /// No error handling
+  assign err_o           = '0;
+
   /// Core-side memory hit signal.
   /*!
   * Since the dual-port RAM provides single-cycle access and is always available,
-  * the `core_m_hit_o` signal can directly reflect the validity of the core's request.
+  * the `rvalid_o` signal can directly reflect the validity of the core's request.
   *
-  * - If either a read (`core_m_rden_i`) or a write (`core_m_wren_i`) is requested,
+  * - If either a read a write is requested (`req`),
   *   the memory is assumed to complete the operation without wait states.
   *
   * This simplifies handshaking by eliminating the need for an explicit memory
   * ready/acknowledge protocol.
   *
-  * For non-perfect memory test, a latency is added to `core_m_hit_o` to emulate
+  * For non-perfect memory test, a latency is added to `rvalid_o` to emulate
   * a memory latency (even if the data is ready, the core will not capture it if
-  * the m_hit signal is not asserted).
+  * the rvalid signal is not asserted).
   * The latency depends on the address. This ensure a non-constant latency.
   */
   generate
@@ -322,11 +333,11 @@ module waxi_dpram #(
       logic [LAT_W-1:0] lat_raw;
       logic [LAT_W-1:0] lat_sel;
 
-      assign req_now = core_m_rden_i || core_m_wren_i;
+      assign req_now = req_i;
 
       // Derive a deterministic latency from address bits (ignore alignment by default).
       // Uses bits [ADDR_LAT_LSB + LAT_W - 1 : ADDR_LAT_LSB].
-      assign lat_raw = core_m_addr_i[ADDR_LAT_LSB+:LAT_W];
+      assign lat_raw = addr_i[ADDR_LAT_LSB+:LAT_W];
 
       if (NEED_CLAMP) begin : gen_clamp
         // Clamp to MAX_LAT to keep latency in 0..MAX_LAT without using modulo.
@@ -338,7 +349,7 @@ module waxi_dpram #(
 
       // Hit is high when the request is active and the wait counter reached zero.
       // Deasserts combinationally when req_now drops.
-      assign core_m_hit_o = req_now && busy_q && (wait_q == '0);
+      assign rvalid_o = req_now && busy_q && (wait_q == '0);
 
       always_ff @(posedge core_clk_i) begin
         if (!rstn_i) begin
@@ -366,7 +377,7 @@ module waxi_dpram #(
 
     end
     else begin : gen_perfect_memory
-      assign core_m_hit_o = core_m_rden_i || core_m_wren_i;
+      assign rvalid_o = req_i;
     end
   endgenerate
   /**/
@@ -391,16 +402,16 @@ module waxi_dpram #(
       .a_be_i  (s_axi_wstrb_i),
       .a_wren_i(s_axi_wvalid_i),
       .a_rden_i(1'b0),
-      .b_clk_i (core_clk_i),
-      .b_addr_i(core_m_addr_i[USED_ADDR_WIDTH+AddrOffsetWidth-1 : AddrOffsetWidth]),
-      .b_din_i (core_m_wdata_i),
-      .b_be_i  (core_m_wmask_i),
-      .b_wren_i(core_m_wren_i),
-      .b_rden_i(core_m_rden_i),
       /* verilator lint_off PINCONNECTEMPTY */
       .a_dout_o(),
       /* verilator lint_on PINCONNECTEMPTY */
-      .b_dout_o(core_m_rdata_o)
+      .b_clk_i (core_clk_i),
+      .b_addr_i(addr_i[USED_ADDR_WIDTH+AddrOffsetWidth-1 : AddrOffsetWidth]),
+      .b_din_i (wdata_i),
+      .b_be_i  (be_i),
+      .b_wren_i(req_i && we_i),
+      .b_rden_i(req_i && !we_i),
+      .b_dout_o(rdata_o)
   );
 
 endmodule

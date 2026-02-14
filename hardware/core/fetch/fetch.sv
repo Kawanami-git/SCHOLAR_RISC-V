@@ -4,8 +4,8 @@
 \file       fetch.sv
 \brief      SCHOLAR RISC-V core fetch module
 \author     Kawanami
-\date       20/09/2025
-\version    1.1
+\date       13/02/2026
+\version    1.2
 
 \details
   This module implements the instruction fetch unit
@@ -13,8 +13,8 @@
 
   It retrieves the instruction located at
   `pc_next_i` via the memory interface.
-  The instruction data is provided by `m_dout_i`
-  and is considered valid when `m_hit_i` is high.
+  The instruction data is provided by `rdata_i`
+  and is considered valid when `rvalid_i` is high.
 
   As this is a single-cycle processor, instruction fetch
   and execution occur in the same cycle.
@@ -37,6 +37,7 @@
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 20/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 13/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 ********************************************************************************
 */
 
@@ -57,14 +58,22 @@ module fetch #(
     output wire [InstrWidth - 1 : 0] instr_o,
     /// Instruction valid flag (1: valid, 0: invalid)
     output wire                      valid_o,
-    /// Memory output data
-    input  wire [InstrWidth - 1 : 0] m_dout_i,
-    /// Memory hit flag (1: hit, 0: miss)
-    input  wire                      m_hit_i,
-    /// Memory address
-    output wire [AddrWidth  - 1 : 0] m_addr_o,
-    /// Memory read enable (1: enable, 0: disable)
-    output wire                      m_rden_o
+    /// Address transfer request
+    output wire                      req_o,
+    /* verilator lint_off UNUSEDSIGNAL */
+    /// Grant: Ready to accept address transfert
+    input  wire                      gnt_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    /// Address for memory access
+    output wire [AddrWidth  - 1 : 0] addr_o,
+    /// Response transfer valid
+    input  wire                      rvalid_i,
+    /// Read data
+    input  wire [InstrWidth - 1 : 0] rdata_i,
+    /* verilator lint_off UNUSEDSIGNAL */
+    /// Error response
+    input  wire                      err_i
+    /* verilator lint_on UNUSEDSIGNAL */
 );
 
   /******************** DECLARATION ********************/
@@ -81,8 +90,8 @@ module fetch #(
   /* registers */
   /// Instruction valid flag register
   reg                        valid_q;
-  /// Memory read enable register
-  reg                        m_rden_q;
+  /// Memory request register
+  reg                        req_q;
   /********************             ********************/
 
 
@@ -90,15 +99,15 @@ module fetch #(
   /*!
   * In a single-cycle processor,
   * one instruction is fetched every cycle.
-  * Therefore, `m_rden_o` is always asserted (except during reset).
+  * Therefore, `req_q` is always asserted (except during reset).
   *
   * Since the fetch unit only performs instruction reads,
-  * the memory address (`m_addr_o`) is always set to the value
+  * the memory address (`addr_o`) is always set to the value
   * of the program counter (`pc_next_i`),
   * which corresponds to the address of the next instruction.
   *
   * The instruction is considered valid (`valid_o`)
-  * if the memory signals a hit (`m_hit_i`), and the system is not in reset.
+  * if the memory signals a hit (`rvalid_i`), and the system is not in reset.
   *
   * For instructions that take more than one cycle to complete
   * (e.g., memory accesses), the `pc_next_i` must remain stable
@@ -106,21 +115,21 @@ module fetch #(
   */
   always_ff @(posedge clk_i) begin : mem_controller
     if (!rstn_i) begin
-      valid_q  <= 1'b0;
-      m_rden_q <= 1'b0;
+      valid_q <= 1'b0;
+      req_q   <= 1'b0;
     end
     else begin
-      valid_q  <= m_hit_i;
-      m_rden_q <= 1'b1;
+      valid_q <= rvalid_i;
+      req_q   <= 1'b1;
     end
   end
 
   /// Output driven by mem_controller
-  assign m_rden_o = m_rden_q;
+  assign req_o   = req_q;
   /// Provide to memory next instruction address
-  assign m_addr_o = pc_next_i;
+  assign addr_o  = pc_next_i;
   /// Output driven mem_controller
-  assign valid_o  = valid_q;
+  assign valid_o = valid_q;
 
   /// Instruction selection logic
   /*!
@@ -129,7 +138,7 @@ module fetch #(
   *   from processing garbage data.
   *
   * - Once reset is deasserted,
-  *   the fetched instruction from memory (`m_dout_i`) is forwarded
+  *   the fetched instruction from memory (`rdata_i`) is forwarded
   *   to the decode unit.
   *
   * This ensures clean instruction flow
@@ -140,7 +149,7 @@ module fetch #(
       instr = 'b0;
     end
     else begin
-      instr = m_dout_i;
+      instr = rdata_i;
     end
   end
 

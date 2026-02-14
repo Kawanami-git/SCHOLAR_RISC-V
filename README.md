@@ -356,8 +356,8 @@ Below is a summary of synthesis results on a PolarFire MPFS095T FPGA:
 
 | **Architecture**              | **Features**                                    | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor                   | 1.24              | LEs: 3132 (1061 FFs)<br>Fmax: 69 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor (64-bit datapath) | 1.05              | LEs: 6717 (2118 FFs)<br>Fmax: 62 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor                   | 1.24              | LEs: 3141 (1062 FFs)<br>Fmax: 69 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor (64-bit datapath) | 1.05              | LEs: 6718 (2119 FFs)<br>Fmax: 65 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 
 <br>
 
@@ -453,9 +453,9 @@ Its role is to ensure a continuous flow of valid instructions into **decode** �
 
 The *mem_controller* is a synchronous block that manages when and how the instruction memory is accessed.<br>
 In this **single-cycle** processor, the control logic is intentionally minimal:
-  - Every clock cycle, it requests a new instruction by asserting `m_rden_o` = `1`.
-  - The address used for this fetch (`m_addr_o`) comes directly from `pc_next_i`, provided by **writeback**.
-  - The memory’s response (`m_hit_i`) indicates when valid instruction is available.
+  - Every clock cycle, it requests a new instruction by asserting `req_o` = `1`.
+  - The address used for this fetch (`addr_o`) comes directly from `pc_next_i`, provided by **writeback**.
+  - The memory’s response (`rvalid_i`) indicates when valid instruction is available.
 
 When the memory signals a hit, **fetch** raises its `valid_o` flag to confirm that the instruction on `instr_o` is valid and ready for decoding.
 
@@ -467,7 +467,7 @@ This simple handshake guarantees that the processor always works with correct, s
 
 The *instr_mux* is a combinational block that chooses which value is presented as the current instruction:
   - During reset, it outputs `0` to avoid executing invalid or uninitialized instruction.
-  - Once reset is released and memory responds, it forwards the instruction word from `m_dout_i` directly to **decode**.
+  - Once reset is released and memory responds, it forwards the instruction word from `rdata_i` directly to **decode**.
 
 Because this path is purely combinational, the instruction becomes immediately visible at **decode** — no clock cycle is lost.
 
@@ -667,12 +667,12 @@ It determines whether the current instruction involves a read, a write, or no me
   - *mem_ack_gen*.
 
 For LOAD instructions:<br>
-It asserts the memory read enable (`m_rden_o`), sends the computed address (`exe_out_i`) through `m_addr_o`, and waits for the memory to acknowledge via `m_hit_i`.<br>
+It requests a read operation (`req_o && !we_o`), sends the computed address (`exe_out_i`) through `addr_o`, and waits for the memory to acknowledge via `rvalid_i`.<br>
 Once acknowledged, the data is captured and at the next cycle written to the destination register (while the next instruction is executed).<br>
 To ensure correct data alignment, the address offset `m_addr_offset` is stored in the register `m_addr_offset_q`, allowing the `writeback` stage to properly align the loaded data in the GPRs.
 
 For STORE instructions:<br>
-It asserts `m_wren_o`, drives m_din_o with the value from `op3_i`, and configures the byte write mask (`m_wmask_o`) according to the access size (byte, half-word, word, or doubleword).
+It requests a write operation `req_o && we_o`, drives `wdata_o` with the value from `op3_i`, and configures the byte write mask (`be_o`) according to the access size (byte, half-word, word, or doubleword).
 
 This controller also keeps track of request completion using an internal flag (`m_req_done_q`), ensuring that memory operations never overlap or conflict.
 
@@ -687,7 +687,7 @@ The control signal `gpr_ctrl_i` determines the data source:
 | **Control** | **Data Source**                                   |
 | ----------- | ------------------------------------------------- |
 | `GprAlu`    | Result from the ALU (`exe_out_i`)                 |
-| `GprMem`    | Data loaded from memory (`m_dout_i`)              |
+| `GprMem`    | Data loaded from memory (`rdata_i`)               |
 | `GprPrgmc`  | Return address (`pc_i + 4`) for jump instructions |
 | `GprOp3`    | Third operand (used for CSR-related operations)   |
 
@@ -788,7 +788,7 @@ Here, the PC (`0x80000000`) is added to `0x10` << `12` = `0x00010000`, producing
 
 #### Reset release and instruction fetch
 
-While the processor is under reset, **fetch**'s output address (`m_addr_o`) already points to the start address (`0x80000000`).<br>
+While the processor is under reset, **fetch**'s output address (`addr_o`) already points to the start address (`0x80000000`).<br>
 This is why the first instruction is visible on `instr_o` even before reset is released.
 
 When the reset signal is deasserted (@1), the **fetch**/*instr_mux* block — being purely combinational — immediately forwards the fetched instruction word to **decode**.<br>
@@ -805,7 +805,7 @@ As long as `valid_o` is low, no state change occurs, preventing any unintended u
 #### Instruction validation
 
 **Fetch**/`mem_controller` is synchronous.<br>
-It detects the reset release only on the next rising edge of the clock and asserts `m_rden_o` (@2) to request the first instruction.<br>
+It detects the reset release only on the next rising edge of the clock and asserts `req_o` (@2) to request the first instruction.<br>
 Because the instruction memory responds in a single cycle, the valid instruction is available at the following clock edge (@3), and **fetch**.`valid_o` is asserted.
 
 <br>
@@ -860,7 +860,7 @@ Thus, the effective memory address is `x1` + `0xE0`.
 
 #### Fetch and decode
 
-At the next cycle, **fetch** updates its memory output (`m_dout_i`) with the new instruction — **LW**.<br>
+At the next cycle, **fetch** updates its memory output (`rdata_i`) with the new instruction — **LW**.<br>
 As soon as **fetch**.`valid_o` is asserted, **decode** takes over to extract the instruction fields and determine the operands.
 
 **Decode** provides:
@@ -881,11 +881,11 @@ This result is sent to **writeback** as `exe_out_i`.
 #### Memory request and data return
 
 In the same cycle, **writeback** issues a read request to data memory (@9):
-  - It asserts `m_rden_o` = `1`,
-  - Sends the computed address (`0x800100E0`) via `m_addr_o`,
-  - And waits for an acknowledgment from the memory (`m_hit_i`).
+  - It asserts `req_o && !we_o`,
+  - Sends the computed address (`0x800100E0`) via `addr_o`,
+  - And waits for an acknowledgment from the memory (`rvalid_i`).
 
-One cycle later, the memory responds with the data and asserts `m_hit_i`, which in turn sets `m_req_done_q` = `1` (@10).
+One cycle later, the memory responds with the data and asserts `rvalid_i`, which in turn sets `m_req_done_q` = `1` (@10).
 
 Because the memory is synchronous and single-cycle, this one-cycle delay ensures correct data timing without requiring any stalling mechanism.
 
@@ -893,7 +893,7 @@ Because the memory is synchronous and single-cycle, this one-cycle delay ensures
 
 #### Writeback to GPR
 
-Since **decode** configured `gpr_ctrl_i` = `GprMem`, **writeback** captures the data returned by the memory (`m_dout_i`) and writes it into **GPR** `x2` at the next clock edge (@11).<br>
+Since **decode** configured `gpr_ctrl_i` = `GprMem`, **writeback** captures the data returned by the memory (`rdata_i`) and writes it into **GPR** `x2` at the next clock edge (@11).<br>
 In this specific example, the data memory was initialized to zero, so `x2` receives the value `0x00000000`.
 
 Meanwhile, the next instruction (**BNE**) is already being decoded and executed — maintaining the single-cycle illusion while respecting the synchronous read latency of the memory.
@@ -1027,13 +1027,13 @@ This address is sent to **writeback** as `exe_out_i`.
 #### Memory write and acknowledgment
 
 In **writeback**:
-  - `m_wren_o` is asserted to initiate the write operation (@16).
-  - `m_addr_o` is driven with the computed address (`0x800100E0`) (@16).
-  - `m_din_o` receives the data from `op3_i` (`0x00000005`) (@17).
+  - `req_o && we_o` is asserted to initiate the write operation (@16).
+  - `addr_o` is driven with the computed address (`0x800100E0`) (@16).
+  - `wdata_o` receives the data from `op3_i` (`0x00000005`) (@17).
 
-The write mask (`m_wmask_o`) is configured according to the access size (word).
+The write mask (`be_o`) is configured according to the access size (word).
 
-One cycle later, the memory acknowledges the completed operation by asserting `m_hit_i`, which sets `m_req_done_q` = 1.<br>
+One cycle later, the memory acknowledges the completed operation by asserting `rvalid_i`, which sets `m_req_done_q` = 1.<br>
 This confirms that the data has been successfully stored.
 
 <br>
@@ -1052,7 +1052,7 @@ This symmetry helps students clearly understand how read and write memory transa
 **Purpose**: Jump to a new address and optionally save the return address.
 
 The **JAL** (Jump And Link) instruction is used to transfer control to a new location in the program.<br>
-It adds an immediate offset to the current program counter (PC) to form the target address, and writes the return address (PC + 4`) into a destination register.<br>
+It adds an immediate offset to the current program counter (PC) to form the target address, and writes the return address (`PC + 4`) into a destination register.<br>
 If the destination register is `x0`, as in this case, the return address is discarded — effectively turning this into an unconditional jump.
 
 This mechanism is frequently used to implement infinite loops or unconditional branches at the end of simple programs.
@@ -1130,8 +1130,8 @@ The performance of the **SCHOLAR RISC-V** processor is evaluated using three key
 
 | **Architecture**              | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `mcycle` (Zicntr)** | 1.24              | LEs: 3132 (1061 FFs)<br>Fmax: 69 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `mcycle` (Zicntr)** | 1.05              | LEs: 6717 (2118 FFs)<br>Fmax: 62 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `mcycle` (Zicntr)** | 1.24              | LEs: 3141 (1062 FFs)<br>Fmax: 69 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `mcycle` (Zicntr)** | 1.05              | LEs: 6718 (2119 FFs)<br>Fmax: 65 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 
 <br>
 <br>
@@ -1176,13 +1176,13 @@ However, memory operations (LOAD and STORE) require two cycles to complete, whic
 ### Resource Utilization and Cost Insights
 
 From a resource perspective, the processor remains relatively compact:
-  - 3132 logic elements (1061 flip-flops) for **RV32I**.
-  - 6717 logic elements (2118 flip-flops) for **RV64I**.
+  - 3141 logic elements (1062 flip-flops) for **RV32I**.
+  - 6718 logic elements (2119 flip-flops) for **RV64I**.
   - No block RAMs (uSRAM/LSRAM).
   - No hardware multipliers or DSP blocks.
 
 At first glance, this seems lightweight.<br>
-However, a closer look reveals that a third of these logic elements are used solely for the General-Purpose Registers (**GPR**) — the 32 × 32-bit register file required by the RISC-V ISA.
+However, a closer look reveals that a third of these logic elements are used solely for the General-Purpose Registers (**GPR**) — the 32 × 32-bit (for 32-bit architecture) register file required by the RISC-V ISA.
 
 That’s 1024 flip-flops dedicated to storage alone — not counting additional control logic.<br>
 This highlights a common reality in digital design: **Memory structures, even small ones, are among the most resource-expensive components in digital systems — especially on FPGAs**.
