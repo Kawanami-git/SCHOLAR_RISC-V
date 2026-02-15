@@ -4,8 +4,8 @@
 \file       ctrl.sv
 \brief      SCHOLAR RISC-V core control (front-end control & hazards)
 \author     Kawanami
-\date       28/01/2026
-\version    1.2
+\date       15/02/2026
+\version    1.3
 
 \details
   The CTRL stage coordinates front-end flow control and simple hazard handling.
@@ -39,6 +39,7 @@
 | 1.0     | 19/12/2025 | Kawanami | Initial version of the module. |
 | 1.1     | 10/01/2026 | Kawanami | Add non-perfect memory support in the controller by checking `mem_ready_i` before triggering the softreset. |
 | 1.2     | 28/01/2026 | Kawanami | Improve readability using payload structs; refine GPR hazards; add CSR hazards. |
+| 1.3     | 15/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 ********************************************************************************
 */
 
@@ -67,8 +68,8 @@ module ctrl
     input  wire                        clk_i,
     /// System active-low reset
     input  wire                        rstn_i,
-    /// Instruction memory hit handshake (request accepted; data available next cycle)
-    input  wire                        i_m_hit_i,
+    /// Instruction memory handshake (request accepted; data available next cycle)
+    input  wire                        imem_rvalid_i,
     /// IF->CTRL payload (pre-decoded sources for hazard detection)
     input  if2ctrl_t                   if2ctrl_i,
     /// EXE->CTRL payload (control-flow resolution + in-flight destination tracking)
@@ -237,11 +238,11 @@ module ctrl
 
   /// PC update enable
   /*!
-  * PC advances on an instruction fetch accept (i_m_hit_i) or when forcing a
+  * PC advances on an instruction fetch accept (imem_rvalid_i) or when forcing a
   * redirect/flush (!softresetn). This allows the PC to update immediately when
   * a control-flow change is committed.
   */
-  assign pc_en       = i_m_hit_i || !softresetn;
+  assign pc_en       = imem_rvalid_i || !softresetn;
 
 
   /// Program Counter unit

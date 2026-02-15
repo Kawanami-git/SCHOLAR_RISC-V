@@ -4,8 +4,8 @@
 \file       scholar_riscv_core.sv
 \brief      SCHOLAR RISC-V Core Module
 \author     Kawanami
-\date       03/02/2026
-\version    1.3
+\date       15/02/2026
+\version    1.4
 
 \details
   This module is the top-level module of the SCHOLAR RISC-V core.
@@ -37,6 +37,7 @@
 | 1.1     | 10/01/2026 | Kawanami   | Add non-perfect memory support in the controller by checking `mem_ready_i` before triggering the softreset. |
 | 1.2     | 15/01/2026 | Kawanami   | Expose few more signals to Verilator to improve CSRs verification.  |
 | 1.3     | 03/02/2026 | Kawanami   | Add CSR write path and non-perfect memory support. |
+| 1.4     | 15/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 ********************************************************************************
 */
 
@@ -55,6 +56,7 @@ module scholar_riscv_core
   import wb2ctrl_pkg::wb2ctrl_t;
 
   import core_pkg::ADDR_WIDTH;
+  import core_pkg::INSTR_WIDTH;
   import core_pkg::DATA_WIDTH;
   import core_pkg::RF_ADDR_WIDTH;
   import core_pkg::CSR_ADDR_WIDTH;
@@ -68,53 +70,61 @@ module scholar_riscv_core
 `ifdef SIM
     /* GPR signals */
     /// GPR write enable (SIM only)
-    input  wire                           gpr_en_i,
+    input  wire                          gpr_en_i,
     /// GPR write address (SIM only)
-    input  wire [  RF_ADDR_WIDTH - 1 : 0] gpr_addr_i,
+    input  wire [ RF_ADDR_WIDTH - 1 : 0] gpr_addr_i,
     /// GPR write data (SIM only)
-    input  wire [  DATA_WIDTH    - 1 : 0] gpr_data_i,
+    input  wire [ DATA_WIDTH    - 1 : 0] gpr_data_i,
     /// GPR memory (SIM only)
-    output wire [  DATA_WIDTH    - 1 : 0] gpr_memory_o      [NB_GPR],
+    output wire [ DATA_WIDTH    - 1 : 0] gpr_memory_o      [NB_GPR],
     /// Decode to CSR raddr
-    output wire [                 11 : 0] decode_csr_raddr_o,
+    output wire [                11 : 0] decode_csr_raddr_o,
     /// CSR mhpmcounter0 register
-    output wire [     DATA_WIDTH - 1 : 0] mhpmcounter0_o,
+    output wire [    DATA_WIDTH - 1 : 0] mhpmcounter0_o,
     /// CSR mhpmcounter3 register
-    output wire [     DATA_WIDTH - 1 : 0] mhpmcounter3_o,
+    output wire [    DATA_WIDTH - 1 : 0] mhpmcounter3_o,
     /// CSR mhpmcounter4 register
-    output wire [     DATA_WIDTH - 1 : 0] mhpmcounter4_o,
+    output wire [    DATA_WIDTH - 1 : 0] mhpmcounter4_o,
     /// Writeback instruction commited flag
-    output wire                           instr_committed_o,
+    output wire                          instr_committed_o,
 `endif
     /* Global signals */
     /// System clock
-    input  wire                           clk_i,
+    input  wire                          clk_i,
     /// System active low reset
-    input  wire                           rstn_i,
+    input  wire                          rstn_i,
     /* Instruction memory wires */
-    /// Memory output data
-    input  wire [                 31 : 0] i_m_rdata_i,
-    /// Memory hit flag (1: hit, 0: miss)
-    input  wire                           i_m_hit_i,
-    /// Memory address
-    output wire [     ADDR_WIDTH - 1 : 0] i_m_addr_o,
-    /// Memory read enable (1: enable, 0: disable)
-    output wire                           i_m_rden_o,
+    /// Address transfer request
+    output wire                          imem_req_o,
+    /// Grant: Ready to accept address transfert
+    input  wire                          imem_gnt_i,
+    /// Address for memory access
+    output wire [   ADDR_WIDTH  - 1 : 0] imem_addr_o,
+    /// Response transfer valid
+    input  wire                          imem_rvalid_i,
+    /// Read data
+    input  wire [   INSTR_WIDTH - 1 : 0] imem_rdata_i,
+    /// Error response
+    input  wire                          imem_err_i,
     /* Data memory signals */
-    /// Data read from memory
-    input  wire [DATA_WIDTH      - 1 : 0] d_m_rdata_i,
-    /// Data to write to memory
-    output wire [DATA_WIDTH      - 1 : 0] d_m_wdata_o,
-    /// Memory hit flag
-    input  wire                           d_m_hit_i,
-    /// Memory address for LOAD or STORE
-    output wire [     ADDR_WIDTH - 1 : 0] d_m_addr_o,
-    /// Memory read enable
-    output wire                           d_m_rden_o,
-    /// Memory write enable
-    output wire                           d_m_wren_o,
-    /// Byte-level write mask for STOREs
-    output wire [(DATA_WIDTH/8)  - 1 : 0] d_m_wmask_o
+    /// Address transfer request
+    output wire                          dmem_req_o,
+    /// Grant: Ready to accept address transfert
+    input  wire                          dmem_gnt_i,
+    /// Address for memory access
+    output wire [   ADDR_WIDTH  - 1 : 0] dmem_addr_o,
+    /// Write enable (1: write - 0: read)
+    output wire                          dmem_we_o,
+    /// Write data
+    output wire [    DATA_WIDTH - 1 : 0] dmem_wdata_o,
+    /// Byte enable
+    output wire [(DATA_WIDTH/8) - 1 : 0] dmem_be_o,
+    /// Response transfer valid
+    input  wire                          dmem_rvalid_i,
+    /// Read data
+    input  wire [    DATA_WIDTH - 1 : 0] dmem_rdata_i,
+    /// Error response
+    input  wire                          dmem_err_i
 );
 
   /******************** DECLARATION ********************/
@@ -204,7 +214,7 @@ module scholar_riscv_core
 
   /* registers */
   /// softresetn register
-  reg softresetn_q;
+  reg                                      softresetn_q;
   /********************             ********************/
 
   gpr #() gpr (
@@ -248,7 +258,7 @@ module scholar_riscv_core
   ) ctrl (
       .clk_i         (clk_i),
       .rstn_i        (rstn_i),
-      .i_m_hit_i     (i_m_hit_i),
+      .imem_rvalid_i (imem_rvalid_i),
       .if2ctrl_i     (if2ctrl),
       .exe2ctrl_i    (exe2ctrl),
       .mem2ctrl_i    (mem2ctrl),
@@ -281,9 +291,10 @@ module scholar_riscv_core
   * correctly flushed.
   */
   always_ff @(posedge clk_i) begin : softresetn_reg
-    if(!rstn_i) begin
+    if (!rstn_i) begin
       softresetn_q <= '0;
-    end else begin
+    end
+    else begin
       softresetn_q <= softresetn;
     end
   end
@@ -310,10 +321,12 @@ module scholar_riscv_core
       .valid_o       (fetch_valid),
       .if2id_o       (if2id),
       .if2ctrl_o     (if2ctrl),
-      .i_m_rdata_i   (i_m_rdata_i),
-      .i_m_hit_i     (i_m_hit_i),
-      .i_m_addr_o    (i_m_addr_o),
-      .i_m_rden_o    (i_m_rden_o)
+      .req_o         (imem_req_o),
+      .gnt_i         (imem_gnt_i),
+      .addr_o        (imem_addr_o),
+      .rvalid_i      (imem_rvalid_i),
+      .rdata_i       (imem_rdata_i),
+      .err_i         (imem_err_i)
   );
 
   decode #() decode (
@@ -357,12 +370,14 @@ module scholar_riscv_core
       .exe2mem_i  (exe2mem),
       .mem2wb_o   (mem2wb),
       .mem2ctrl_o (mem2ctrl),
-      .d_m_wdata_o(d_m_wdata_o),
-      .d_m_hit_i  (d_m_hit_i),
-      .d_m_addr_o (d_m_addr_o),
-      .d_m_rden_o (d_m_rden_o),
-      .d_m_wren_o (d_m_wren_o),
-      .d_m_wmask_o(d_m_wmask_o)
+      .req_o      (dmem_req_o),
+      .gnt_i      (dmem_gnt_i),
+      .addr_o     (dmem_addr_o),
+      .we_o       (dmem_we_o),
+      .wdata_o    (dmem_wdata_o),
+      .be_o       (dmem_be_o),
+      .rvalid_i   (dmem_rvalid_i),
+      .err_i      (dmem_err_i)
   );
 
   writeback #() writeback (
@@ -378,7 +393,7 @@ module scholar_riscv_core
       .gpr_wdata_o      (wb_gpr_wdata),
       .csr_waddr_o      (wb_csr_waddr),
       .csr_wdata_o      (wb_csr_wdata),
-      .d_m_rdata_i      (d_m_rdata_i),
+      .rdata_i          (dmem_rdata_i),
       .gpr_wdata_valid_o(wb_gpr_wdata_valid),
       .csr_wdata_valid_o(wb_csr_wdata_valid)
   );

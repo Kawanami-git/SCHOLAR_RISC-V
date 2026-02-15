@@ -4,8 +4,8 @@
 \file       mem.sv
 \brief      SCHOLAR RISC-V core memory module
 \author     Kawanami
-\date       30/01/2026
-\version    1.1
+\date       15/02/2026
+\version    1.2
 
 \details
   This module implements the Memory (MEM) stage of the SCHOLAR RISC-V core.
@@ -21,14 +21,13 @@
   - MEM -> WB uses valid_o to indicate the completion of a memory transaction.
 
 \remarks
-- External data memories are assumed to be perfect 1-cycle memories.
-- TODO: [possible improvements or future features]
 
 \section mem_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 17/12/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 30/01/2026 | Kawanami   | Add CSR write path, non-perfect memory support and new strucure fields forwarding. |
+| 1.2     | 15/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 ********************************************************************************
 */
 
@@ -47,33 +46,41 @@ module mem
 #(
 ) (
     /// System clock
-    input  wire                                 clk_i,
+    input  wire                                clk_i,
     /// System active low reset
-    input  wire                                 rstn_i,
+    input  wire                                rstn_i,
     /// Exe stage valid signal (1: valid  0: not valid)
-    input  wire                                 exe_valid_i,
+    input  wire                                exe_valid_i,
     /// Mem stage ready (1: can accept a new EXE->MEM payload)
-    output wire                                 ready_o,
+    output wire                                ready_o,
     /// Mem operation complete
-    output wire                                 valid_o,
+    output wire                                valid_o,
     /// EXE->MEM payload (operands + control micro-ops)
-    input  exe2mem_t                            exe2mem_i,
+    input  exe2mem_t                           exe2mem_i,
     /// MEM->WB payload (operands + control micro-ops)
-    output mem2wb_t                             mem2wb_o,
+    output mem2wb_t                            mem2wb_o,
     /// MEM->CTRL payload
-    output mem2ctrl_t                           mem2ctrl_o,
-    /// Data to write to memory
-    output wire       [DATA_WIDTH      - 1 : 0] d_m_wdata_o,
-    /// Memory hit flag
-    input  wire                                 d_m_hit_i,
-    /// Memory address for LOAD or STORE
-    output wire       [     ADDR_WIDTH - 1 : 0] d_m_addr_o,
-    /// Memory read enable
-    output wire                                 d_m_rden_o,
-    /// Memory write enable
-    output wire                                 d_m_wren_o,
-    /// Byte-level write mask for STOREs
-    output wire       [(DATA_WIDTH/8)  - 1 : 0] d_m_wmask_o
+    output mem2ctrl_t                          mem2ctrl_o,
+    /// Address transfer request
+    output wire                                req_o,
+    /* verilator lint_off UNUSEDSIGNAL */
+    /// Grant: Ready to accept address transfert
+    input  wire                                gnt_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    /// Address for memory access
+    output wire       [   ADDR_WIDTH  - 1 : 0] addr_o,
+    /// Write enable (1: write - 0: read)
+    output wire                                we_o,
+    /// Write data
+    output wire       [    DATA_WIDTH - 1 : 0] wdata_o,
+    /// Byte enable
+    output wire       [(DATA_WIDTH/8) - 1 : 0] be_o,
+    /// Response transfer valid
+    input  wire                                rvalid_i,
+    /* verilator lint_off UNUSEDSIGNAL */
+    /// Error response
+    input  wire                                err_i
+    /* verilator lint_on UNUSEDSIGNAL */
 );
 
   /******************** DECLARATION ********************/
@@ -158,12 +165,14 @@ module mem
       .op3_i      (exe2mem_q.op3),
       .exe_out_i  (exe2mem_q.exe_out),
       .mem_ctrl_i (exe2mem_q.mem_ctrl),
-      .d_m_wdata_o(d_m_wdata_o),
-      .d_m_hit_i  (d_m_hit_i),
-      .d_m_addr_o (d_m_addr_o),
-      .d_m_rden_o (d_m_rden_o),
-      .d_m_wren_o (d_m_wren_o),
-      .d_m_wmask_o(d_m_wmask_o)
+      .wdata_o    (wdata_o),
+      .rvalid_i   (rvalid_i),
+      .addr_o     (addr_o),
+      .req_o      (req_o),
+      .gnt_i      (gnt_i),
+      .we_o       (we_o),
+      .be_o       (be_o),
+      .err_i      (err_i)
   );
 
 endmodule
