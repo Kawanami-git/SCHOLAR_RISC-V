@@ -4,8 +4,8 @@
 \file       writeback_unit.sv
 \brief      SCHOLAR RISC-V core write-back unit
 \author     Kawanami
-\date       03/02/2026
-\version    1.1
+\date       15/02/2026
+\version    1.2
 
 \details
   This module implements the write-back unit of the SCHOLAR RISC-V processor core.
@@ -29,6 +29,7 @@
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 17/12/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 03/02/2026 | Kawanami   | Add CSR write path.                       |
+| 1.2     | 15/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 ********************************************************************************
 */
 
@@ -86,8 +87,8 @@ module writeback_unit
     output wire [ CSR_ADDR_WIDTH - 1 : 0] csr_waddr_o,
     /// CSR write data
     output wire [     DATA_WIDTH - 1 : 0] csr_wdata_o,
-    /// Data read from memory
-    input  wire [DATA_WIDTH      - 1 : 0] d_m_rdata_i,
+    /// Memory read data
+    input  wire [DATA_WIDTH      - 1 : 0] rdata_i,
     /// GPR data valid flag (1: valid  0: not valid)
     output wire                           gpr_wdata_valid_o,
     /// CSR data valid flag (1: valid  0: not valid)
@@ -114,13 +115,13 @@ module writeback_unit
   /// Save memory address offset (LOAD op only)
   assign m_addr_offset     = exe_out_i[ADDR_OFFSET_WIDTH-1 : 0];
 
-  ///
+  /// When CSR is written, it is always the same CSR than the read one
   assign csr_waddr_o       = csr_waddr_i;
 
-  ///
+  /// Data to update CSR comes from Exe
   assign csr_wdata_o       = exe_out_i;
 
-  ///
+  /// Only two possibilities: Write the CSR or not
   assign csr_wdata_valid_o = csr_ctrl_i != CSR_IDLE ? 1 : 0;
 
   /// General-Purpose Registers writeback
@@ -130,7 +131,7 @@ module writeback_unit
   *   - GPR_ALU    : ALU/EXE result (`exe_out_i`)
   *   - GPR_PRGMC  : Program-counter-relative path (e.g., JAL/JALR) => `op3_i + 4`
   *   - GPR_OP3    : Directly from `op3_i`
-  *   - GPR_MEM    : From memory (`d_m_rdata_i`) possibly narrowed and sign/zero-extended
+  *   - GPR_MEM    : From memory (`rdata_i`) possibly narrowed and sign/zero-extended
   *
   * When `gpr_ctrl_i == GPR_MEM`, `mem_ctrl_i` selects the width/signedness:
   *   - MEM_RB  / MEM_RBU : byte (signed / zero-extended)
@@ -160,7 +161,7 @@ module writeback_unit
           case (mem_ctrl_i)
 
             MEM_RB, MEM_RBU: begin
-              mem_rdata = {8'b00000000, d_m_rdata_i[(m_addr_offset*8)+:8]};
+              mem_rdata = {8'b00000000, rdata_i[(m_addr_offset*8)+:8]};
 
               if (mem_ctrl_i == MEM_RBU) gpr_wdata = {{DATA_WIDTH - 8{1'b0}}, mem_rdata[7:0]};
               else
@@ -169,7 +170,7 @@ module writeback_unit
             end
 
             MEM_RH, MEM_RHU: begin
-              mem_rdata = d_m_rdata_i[(m_addr_offset*8)+:16];
+              mem_rdata = rdata_i[(m_addr_offset*8)+:16];
               if (mem_ctrl_i == MEM_RHU) gpr_wdata = {{DATA_WIDTH - 16{1'b0}}, mem_rdata[15:0]};
               else
                 gpr_wdata = mem_rdata[15] == 1 ? {{DATA_WIDTH - 16{1'b1}}, mem_rdata[15:0]} :
@@ -177,7 +178,7 @@ module writeback_unit
             end
 
             default: begin
-              gpr_wdata = d_m_rdata_i;
+              gpr_wdata = rdata_i;
             end
           endcase
 
@@ -209,7 +210,7 @@ module writeback_unit
           case (mem_ctrl_i)
 
             MEM_RB, MEM_RBU: begin
-              mem_rdata = {24'h000000, d_m_rdata_i[(m_addr_offset*8)+:8]};
+              mem_rdata = {24'h000000, rdata_i[(m_addr_offset*8)+:8]};
 
               if (mem_ctrl_i == MEM_RBU) gpr_wdata = {{DATA_WIDTH - 8{1'b0}}, mem_rdata[7:0]};
               else
@@ -218,7 +219,7 @@ module writeback_unit
             end
 
             MEM_RH, MEM_RHU: begin
-              mem_rdata = {16'h0000, d_m_rdata_i[(m_addr_offset*8)+:16]};
+              mem_rdata = {16'h0000, rdata_i[(m_addr_offset*8)+:16]};
 
               if (mem_ctrl_i == MEM_RHU) gpr_wdata = {{DATA_WIDTH - 16{1'b0}}, mem_rdata[15:0]};
               else
@@ -227,7 +228,7 @@ module writeback_unit
             end
 
             MEM_RW, MEM_RWU: begin
-              mem_rdata = d_m_rdata_i[(m_addr_offset*8)+:32];
+              mem_rdata = rdata_i[(m_addr_offset*8)+:32];
 
               if (mem_ctrl_i == MEM_RWU) gpr_wdata = {{DATA_WIDTH - 32{1'b0}}, mem_rdata[31:0]};
               else
@@ -236,7 +237,7 @@ module writeback_unit
             end
 
             default: begin
-              gpr_wdata = d_m_rdata_i;
+              gpr_wdata = rdata_i;
             end
           endcase
 
@@ -256,7 +257,7 @@ module writeback_unit
   assign rd_o              = rd_i;
   /// Output driven by rd_gen
   assign gpr_wdata_o       = gpr_wdata;
-  ///
+  /// Only two possibilities: Write the GPR or not
   assign gpr_wdata_valid_o = gpr_ctrl_i != GPR_IDLE ? 1 : 0;
 
 

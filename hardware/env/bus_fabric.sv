@@ -4,8 +4,8 @@
 \file       bus_fabric.sv
 \brief      Interconnect fabric between SCHOLAR RISC-V core / AXI and memories
 \author     Kawanami
-\date       19/12/2025
-\version    1.0
+\date       15/02/2026
+\version    1.1
 
 \details
   Interconnect fabric that routes memory-mapped transactions from:
@@ -33,6 +33,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 19/12/2025 | Kawanami   | Initial version of the module.            |
+| 1.1     | 15/02/2026 | Kawanami   | Replace core custom interface with OBI standard. |
 ********************************************************************************
 */
 
@@ -64,65 +65,59 @@ module bus_fabric #(
     /// core reset, active low
     input  wire                     core_rstn_i,
     /* Core signals */
-    /// Core address (byte address)
-    input  wire [    AddrWidth-1:0] core_d_m_addr_i,
-    /// Core read enable (1 = read)
-    input  wire                     core_d_m_rden_i,
-    /// Core write enable (1 = write)
-    input  wire                     core_d_m_wren_i,
-    /// Core byte-enable mask (one bit per byte)
-    input  wire [(DataWidth/8)-1:0] core_d_m_wmask_i,
-    /// Core write data (to memory)
-    input  wire [    DataWidth-1:0] core_d_m_din_i,
-    /// Core read data (from memory)
-    output wire [    DataWidth-1:0] core_d_m_dout_o,
-    /// Core hit/acknowledge flag (1 = selected target responded)
-    output wire                     core_d_m_hit_o,
+    /// Address transfer request
+    input  wire                     core_req_i,
+    /// Grant: Ready to accept address transfert
+    output wire                     core_gnt_o,
+    /// Address for memory access
+    input  wire [    AddrWidth-1:0] core_addr_i,
+    /// Write enable (1: write - 0: read)
+    input  wire                     core_we_i,
+    /// Response transfer valid
+    output wire                     core_rvalid_o,
+    /// Read data
+    output wire [DataWidth - 1 : 0] core_rdata_o,
+    /// Error response
+    output wire                     core_err_o,
     /* Data RAM signals */
-    /// Data RAM address
-    output wire [    AddrWidth-1:0] data_ram_addr_o,
-    /// Data RAM write enable
-    output wire                     data_ram_wren_o,
-    /// Data RAM write data
-    output wire [    DataWidth-1:0] data_ram_wdata_o,
-    /// Data RAM byte-enable mask
-    output wire [(DataWidth/8)-1:0] data_ram_wmask_o,
-    /// Data RAM read enable
-    output wire                     data_ram_rden_o,
-    /// Data RAM read data
-    input  wire [    DataWidth-1:0] data_ram_rdata_i,
-    /// Data RAM hit/ready flag
-    input  wire                     data_ram_hit_i,
+    /// Address transfer request
+    output wire                     dmem_req_o,
+    /// Grant: Ready to accept address transfert
+    input  wire                     dmem_gnt_i,
+    /// Write enable (1: write - 0: read)
+    output wire                     dmem_we_o,
+    /// Response transfer valid
+    input  wire                     dmem_rvalid_i,
+    /// Read data
+    input  wire [DataWidth - 1 : 0] dmem_rdata_i,
+    /// Error response
+    input  wire                     dmem_err_i,
     /* PTC Shared RAM */
-    /// PTC shared RAM address
-    output wire [    AddrWidth-1:0] ptc_shared_ram_addr_o,
-    /// PTC shared RAM write enable
-    output wire                     ptc_shared_ram_wren_o,
-    /// PTC shared RAM write data
-    output wire [    DataWidth-1:0] ptc_shared_ram_wdata_o,
-    /// PTC shared RAM byte-enable mask
-    output wire [(DataWidth/8)-1:0] ptc_shared_ram_wmask_o,
-    /// PTC shared RAM read enable
-    output wire                     ptc_shared_ram_rden_o,
-    /// PTC shared RAM read data
-    input  wire [    DataWidth-1:0] ptc_shared_ram_rdata_i,
-    /// PTC shared RAM hit/ready flag
-    input  wire                     ptc_shared_ram_hit_i,
+    /// Address transfer request
+    output wire                     ptc_req_o,
+    /// Grant: Ready to accept address transfert
+    input  wire                     ptc_gnt_i,
+    /// Write enable (1: write - 0: read)
+    output wire                     ptc_we_o,
+    /// Response transfer valid
+    input  wire                     ptc_rvalid_i,
+    /// Read data
+    input  wire [DataWidth - 1 : 0] ptc_rdata_i,
+    /// Error response
+    input  wire                     ptc_err_i,
     /* CTP Shared RAM */
-    /// CTP shared RAM address
-    output wire [    AddrWidth-1:0] ctp_shared_ram_addr_o,
-    /// CTP shared RAM write enable
-    output wire                     ctp_shared_ram_wren_o,
-    /// CTP shared RAM write data
-    output wire [    DataWidth-1:0] ctp_shared_ram_wdata_o,
-    /// CTP shared RAM byte-enable mask
-    output wire [(DataWidth/8)-1:0] ctp_shared_ram_wmask_o,
-    /// CTP shared RAM read enable
-    output wire                     ctp_shared_ram_rden_o,
-    /// CTP shared RAM read data
-    input  wire [    DataWidth-1:0] ctp_shared_ram_rdata_i,
-    /// CTP shared RAM hit/ready flag
-    input  wire                     ctp_shared_ram_hit_i,
+    /// Address transfer request
+    output wire                     ctp_req_o,
+    /// Grant: Ready to accept address transfert
+    input  wire                     ctp_gnt_i,
+    /// Write enable (1: write - 0: read)
+    output wire                     ctp_we_o,
+    /// Response transfer valid
+    input  wire                     ctp_rvalid_i,
+    /// Read data
+    input  wire [DataWidth - 1 : 0] ctp_rdata_i,
+    /// Error response
+    input  wire                     ctp_err_i,
     /* AXI4 Slave (connected to the master) */
     // Address Write (AW)
     /// AWID: Write address transaction ID
@@ -331,7 +326,7 @@ module bus_fabric #(
   /// AXI router Finite State Machine state register
   axi_read_states_e                     axi_state_q;
   /// Core memory request address register
-  reg               [AddrWidth - 1 : 0] core_d_m_addr_q;
+  reg               [AddrWidth - 1 : 0] core_addr_q;
 
   /* functions */
   /* verilator lint_off UNUSEDSIGNAL */
@@ -420,78 +415,62 @@ module bus_fabric #(
   */
   always_ff @(posedge core_clk_i) begin : core_address
     if (!core_rstn_i) begin
-      core_d_m_addr_q <= '0;
+      core_addr_q <= '0;
     end
     else begin
-      core_d_m_addr_q <= core_d_m_addr_i;
+      core_addr_q <= core_addr_i;
     end
   end
 
+  assign dmem_req_o = is_matching_tag(core_addr_i, DataRamAddrTag) ? core_req_i : {1{1'b0}};
+  assign dmem_we_o = is_matching_tag(core_addr_i, DataRamAddrTag) ? core_we_i : {1{1'b0}};
 
 
-  assign data_ram_addr_o = is_matching_tag(
-      core_d_m_addr_i, DataRamAddrTag
-  ) ? core_d_m_addr_i : {AddrWidth{1'b0}};
-  assign data_ram_wren_o = is_matching_tag(
-      core_d_m_addr_i, DataRamAddrTag
-  ) ? core_d_m_wren_i : {1{1'b0}};
-  assign data_ram_wdata_o = is_matching_tag(
-      core_d_m_addr_i, DataRamAddrTag
-  ) ? core_d_m_din_i : {DataWidth{1'b0}};
-  assign data_ram_wmask_o = is_matching_tag(
-      core_d_m_addr_i, DataRamAddrTag
-  ) ? core_d_m_wmask_i : {DataWidth / 8{1'b0}};
-  assign data_ram_rden_o = is_matching_tag(
-      core_d_m_addr_i, DataRamAddrTag
-  ) ? core_d_m_rden_i : {1{1'b0}};
 
-  assign ptc_shared_ram_addr_o = is_matching_tag(
-      core_d_m_addr_i, PtcSharedRamAddrTag
-  ) ? core_d_m_addr_i : {AddrWidth{1'b0}};
-  assign ptc_shared_ram_wren_o = is_matching_tag(
-      core_d_m_addr_i, PtcSharedRamAddrTag
-  ) ? core_d_m_wren_i : {1{1'b0}};
-  assign ptc_shared_ram_wdata_o = is_matching_tag(
-      core_d_m_addr_i, PtcSharedRamAddrTag
-  ) ? core_d_m_din_i : {DataWidth{1'b0}};
-  assign ptc_shared_ram_wmask_o = is_matching_tag(
-      core_d_m_addr_i, PtcSharedRamAddrTag
-  ) ? core_d_m_wmask_i : {DataWidth / 8{1'b0}};
-  assign ptc_shared_ram_rden_o = is_matching_tag(
-      core_d_m_addr_i, PtcSharedRamAddrTag
-  ) ? core_d_m_rden_i : {1{1'b0}};
+  assign ptc_req_o = is_matching_tag(core_addr_i, PtcSharedRamAddrTag) ? core_req_i : {1{1'b0}};
+  assign ptc_we_o = is_matching_tag(core_addr_i, PtcSharedRamAddrTag) ? core_we_i : {1{1'b0}};
 
-  assign ctp_shared_ram_addr_o = is_matching_tag(
-      core_d_m_addr_i, CtpSharedRamAddrTag
-  ) ? core_d_m_addr_i : {AddrWidth{1'b0}};
-  assign ctp_shared_ram_wren_o = is_matching_tag(
-      core_d_m_addr_i, CtpSharedRamAddrTag
-  ) ? core_d_m_wren_i : {1{1'b0}};
-  assign ctp_shared_ram_wdata_o = is_matching_tag(
-      core_d_m_addr_i, CtpSharedRamAddrTag
-  ) ? core_d_m_din_i : {DataWidth{1'b0}};
-  assign ctp_shared_ram_wmask_o = is_matching_tag(
-      core_d_m_addr_i, CtpSharedRamAddrTag
-  ) ? core_d_m_wmask_i : {DataWidth / 8{1'b0}};
-  assign ctp_shared_ram_rden_o = is_matching_tag(
-      core_d_m_addr_i, CtpSharedRamAddrTag
-  ) ? core_d_m_rden_i : {1{1'b0}};
 
-  assign core_d_m_dout_o = is_matching_tag(
-      core_d_m_addr_q, DataRamAddrTag
-  ) ? data_ram_rdata_i : is_matching_tag(
-      core_d_m_addr_q, PtcSharedRamAddrTag
-  ) ? ptc_shared_ram_rdata_i : is_matching_tag(
-      core_d_m_addr_q, CtpSharedRamAddrTag
-  ) ? ctp_shared_ram_rdata_i : {DataWidth{1'b0}};
 
-  assign core_d_m_hit_o = is_matching_tag(
-      core_d_m_addr_i, DataRamAddrTag
-  ) ? data_ram_hit_i : is_matching_tag(
-      core_d_m_addr_i, PtcSharedRamAddrTag
-  ) ? ptc_shared_ram_hit_i : is_matching_tag(
-      core_d_m_addr_i, CtpSharedRamAddrTag
-  ) ? ctp_shared_ram_hit_i : 1'b0;
+  assign ctp_req_o = is_matching_tag(core_addr_i, CtpSharedRamAddrTag) ? core_req_i : {1{1'b0}};
+  assign ctp_we_o = is_matching_tag(core_addr_i, CtpSharedRamAddrTag) ? core_we_i : {1{1'b0}};
+
+
+
+  assign core_rdata_o = is_matching_tag(
+      core_addr_q, DataRamAddrTag
+  ) ? dmem_rdata_i : is_matching_tag(
+      core_addr_q, PtcSharedRamAddrTag
+  ) ? ptc_rdata_i : is_matching_tag(
+      core_addr_q, CtpSharedRamAddrTag
+  ) ? ctp_rdata_i : {DataWidth{1'b0}};
+
+  assign core_gnt_o = is_matching_tag(
+      core_addr_i, DataRamAddrTag
+  ) ? dmem_gnt_i : is_matching_tag(
+      core_addr_i, PtcSharedRamAddrTag
+  ) ? ptc_gnt_i : is_matching_tag(
+      core_addr_i, CtpSharedRamAddrTag
+  ) ? ctp_gnt_i : 1'b0;
+
+  assign core_rvalid_o = is_matching_tag(
+      core_addr_i, DataRamAddrTag
+  ) ? dmem_rvalid_i : is_matching_tag(
+      core_addr_i, PtcSharedRamAddrTag
+  ) ? ptc_rvalid_i : is_matching_tag(
+      core_addr_i, CtpSharedRamAddrTag
+  ) ? ctp_rvalid_i : 'b0;
+
+  assign core_err_o = is_matching_tag(
+      core_addr_i, DataRamAddrTag
+  ) ? dmem_err_i : is_matching_tag(
+      core_addr_i, PtcSharedRamAddrTag
+  ) ? ptc_err_i : is_matching_tag(
+      core_addr_i, CtpSharedRamAddrTag
+  ) ? ctp_err_i : 'b0;
+
+
+
 
   assign axi_data_ram_awid_o = is_matching_tag(
       s_axi_awaddr_i, DataRamAddrTag

@@ -4,8 +4,8 @@
 \file       fetch.sv
 \brief      SCHOLAR RISC-V core fetch stage
 \author     Kawanami
-\date       30/01/2026
-\version    1.1
+\date       15/02/2026
+\version    1.2
 
 \details
   Instruction Fetch (IF) stage for the SCHOLAR RISC-V core pipeline.
@@ -14,9 +14,9 @@
   through `core_mem_if.cpu` and forwards the returned instruction to decode.
 
   The instruction memory is assumed synchronous:
-    - `imem_if.hit` indicates in the *request* cycle whether data will be valid
+    - `rvalid_i` indicates in the *request* cycle whether data will be valid
       in the *next* cycle.
-    - `i_m_rdata_i` is consumed in the next cycle (registered validity).
+    - `rdata_i` is consumed in the next cycle (registered validity).
 
   A lightweight pre-decode is performed to extract rs1/rs2/csr_raddr early (from the
   fetched instruction) so the hazard controller can evaluate dependencies
@@ -27,14 +27,13 @@
   memory requests.
 
 \remarks
-  - The instruction memory shall be is synchrone (1-cycle) and perfect (no miss).
-  - TODO: [possible improvements or future features]
 
 \section fetch_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 12/12/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 30/01/2026 | Kawanami   | Add csr_raddr extraction & non-perfect memory support.            |
+| 1.2     | 15/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 ********************************************************************************
 */
 
@@ -77,14 +76,22 @@ module fetch
     output if2id_t                         if2id_o,
     /// IF->CTRL payload (rs1/rs1/csr_raddr)
     output if2ctrl_t                       if2ctrl_o,
-    /// Memory output data
-    input  wire      [  INSTR_WIDTH - 1:0] i_m_rdata_i,
-    /// Memory hit flag (1: hit, 0: miss)
-    input  wire                            i_m_hit_i,
-    /// Memory address
-    output wire      [ ADDR_WIDTH - 1 : 0] i_m_addr_o,
-    /// Memory read enable (1: enable, 0: disable)
-    output wire                            i_m_rden_o
+    /// Address transfer request
+    output wire                            req_o,
+    /* verilator lint_off UNUSEDSIGNAL */
+    /// Grant: Ready to accept address transfert
+    input  wire                            gnt_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    /// Address for memory access
+    output wire      [ADDR_WIDTH  - 1 : 0] addr_o,
+    /// Response transfer valid
+    input  wire                            rvalid_i,
+    /// Read data
+    input  wire      [INSTR_WIDTH - 1 : 0] rdata_i,
+    /* verilator lint_off UNUSEDSIGNAL */
+    /// Error response
+    input  wire                            err_i
+    /* verilator lint_on UNUSEDSIGNAL */
 );
 
   /******************** DECLARATION ********************/
@@ -104,48 +111,48 @@ module fetch
 
   /* registers */
   /// Registered memory "hit": indicates that `rdata` is valid in this cycle
-  reg                            hit_q;
+  reg                            rvalid_q;
   /// Registered PC matching the instruction returned in this cycle
   reg   [    ADDR_WIDTH - 1 : 0] pc_q;
   /********************             ********************/
 
   /// Instruction memory address is driven directly by the current PC
-  assign i_m_addr_o = pc_i;
+  assign addr_o = pc_i;
 
   /// Issue a read request only when decode can accept the next instruction
   /// When `decode_ready_i` is low, IF stalls and does not advance
-  assign i_m_rden_o = decode_ready_i && rstn_i;
+  assign req_o  = decode_ready_i && rstn_i;
 
   /// Synchronous instruction memory handshake
   /*!
-  * `imem_if.hit` is asserted in the request cycle if the instruction will be
-  * available in the next cycle on `i_m_rdata_i`.
+  * `rvalid_i` is asserted in the request cycle if the instruction will be
+  * available in the next cycle on `rdata_i`.
   *
-  * We register `hit` so `valid_o` aligns with `if2id_o.instr` / `if2id_o.pc`.
+  * We register `rvalid` so `valid_o` aligns with `if2id_o.instr` / `if2id_o.pc`.
   */
   always_ff @(posedge clk_i) begin : mem_ack
     if (!rstn_i) begin
-      hit_q <= 1'b0;
+      rvalid_q <= 1'b0;
     end
     else begin
-      if (i_m_hit_i) begin
-        hit_q <= 1'b1;
+      if (rvalid_i) begin
+        rvalid_q <= 1'b1;
       end
       else if (decode_ready_i) begin
-        hit_q <= 1'b0;
+        rvalid_q <= 1'b0;
       end
     end
   end
 
   /// Ouptut driven by mem_ack
-  assign valid_o = hit_q;
+  assign valid_o = rvalid_q;
 
 
   /// PC alignment for a synchronous memory
   /*!
   * Because `pc_i` may advance to request the next instruction while the
   * current instruction returns, we register the request PC so the PC forwarded
-  * to decode matches `i_m_rdata_i`.
+  * to decode matches `rdata_i`.
   */
   always_ff @(posedge clk_i) begin : pc
     if (decode_ready_i) begin
@@ -158,7 +165,7 @@ module fetch
 
 
   /// Forward the instruction data from memory
-  assign if2id_o.instr = i_m_rdata_i;
+  assign if2id_o.instr = rdata_i;
 
 
 
@@ -173,25 +180,24 @@ module fetch
   * - Some opcodes do not read CSR (e.g., stores/branches) -> csr_raddr = 0
   */
   always_comb begin : pre_decode
-    if ((i_m_rdata_i[6:0] == AUIPC_OP) || (i_m_rdata_i[6:0] == LUI_OP) ||
-        (i_m_rdata_i[6:0] == JAL_OP) ||
-        ((i_m_rdata_i[6:0] == SYS_OP) && i_m_rdata_i[14] && |i_m_rdata_i[14:12])) begin
+    if ((rdata_i[6:0] == AUIPC_OP) || (rdata_i[6:0] == LUI_OP) || (rdata_i[6:0] == JAL_OP) ||
+        ((rdata_i[6:0] == SYS_OP) && rdata_i[14] && |rdata_i[14:12])) begin
       rs1 = '0;
     end
     else begin
-      rs1 = i_m_rdata_i[19:15];
+      rs1 = rdata_i[19:15];
     end
 
-    if ((i_m_rdata_i[6:0] == STORE_OP) || (i_m_rdata_i[6:0] == REG_OP) ||
-        (i_m_rdata_i[6:0] == REGW_OP) || (i_m_rdata_i[6:0] == BRANCH_OP)) begin
-      rs2 = i_m_rdata_i[24:20];
+    if ((rdata_i[6:0] == STORE_OP) || (rdata_i[6:0] == REG_OP) || (rdata_i[6:0] == REGW_OP) ||
+        (rdata_i[6:0] == BRANCH_OP)) begin
+      rs2 = rdata_i[24:20];
     end
     else begin
       rs2 = '0;
     end
 
-    if (i_m_rdata_i[6:0] == SYS_OP && |i_m_rdata_i[14:12]) begin
-      csr_raddr = i_m_rdata_i[31:20];
+    if (rdata_i[6:0] == SYS_OP && |rdata_i[14:12]) begin
+      csr_raddr = rdata_i[31:20];
     end
     else begin
       csr_raddr = '0;

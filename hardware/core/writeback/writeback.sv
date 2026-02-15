@@ -4,8 +4,8 @@
 \file       writeback.sv
 \brief      SCHOLAR RISC-V core write-back stage
 \author     Kawanami
-\date       03/02/2026
-\version    1.1
+\date       15/02/2026
+\version    1.2
 
 \details
   This module implements the Writeback (WB) stage of the SCHOLAR RISC-V core.
@@ -22,6 +22,7 @@
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 17/12/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 03/02/2026 | Kawanami   | Add Mem->WB payload handling and expose useful signal for verilator. |
+| 1.2     | 15/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 ********************************************************************************
 */
 
@@ -64,8 +65,8 @@ module writeback
     output wire      [ CSR_ADDR_WIDTH - 1 : 0] csr_waddr_o,
     /// Data to write in the CSR
     output wire      [     DATA_WIDTH - 1 : 0] csr_wdata_o,
-    /// Data read from memory
-    input  wire      [DATA_WIDTH      - 1 : 0] d_m_rdata_i,
+    /// Memory read data
+    input  wire      [DATA_WIDTH      - 1 : 0] rdata_i,
     /// GPR data valid flag (1: valid  0: not valid)
     output wire                                gpr_wdata_valid_o,
     /// CSR data valid flag (1: valid  0: not valid)
@@ -156,7 +157,7 @@ module writeback
       .gpr_wdata_o      (gpr_wdata_o),
       .csr_waddr_o      (csr_waddr_o),
       .csr_wdata_o      (csr_wdata_o),
-      .d_m_rdata_i      (d_m_rdata_i),
+      .rdata_i          (rdata_i),
       .gpr_wdata_valid_o(gpr_wdata_valid_o),
       .csr_wdata_valid_o(csr_wdata_valid_o)
   );
