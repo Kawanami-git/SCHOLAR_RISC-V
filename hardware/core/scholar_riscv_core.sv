@@ -4,8 +4,8 @@
 \file       scholar_riscv_core.sv
 \brief      SCHOLAR RISC-V Core Module
 \author     Kawanami
-\date       15/02/2026
-\version    1.4
+\date       26/02/2026
+\version    1.5
 
 \details
   This module is the top-level module of the SCHOLAR RISC-V core.
@@ -38,6 +38,7 @@
 | 1.2     | 15/01/2026 | Kawanami   | Expose few more signals to Verilator to improve CSRs verification.  |
 | 1.3     | 03/02/2026 | Kawanami   | Add CSR write path and non-perfect memory support. |
 | 1.4     | 15/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
+| 1.5     | 26/02/2026 | Kawanami   | Fix data hazard counting. |
 ********************************************************************************
 */
 
@@ -249,7 +250,7 @@ module scholar_riscv_core
       .wen_i           (wb_csr_wdata_valid),
       .raddr_i         (decode_csr_raddr),
       .rdata_o         (csr_data),
-      .mhpmevent3      (ctrl_rs1_dirty || ctrl_rs2_dirty),
+      .mhpmevent3      ((ctrl_rs1_dirty || ctrl_rs2_dirty) && softresetn),
       .mhpmevent4      (!softresetn)
   );
 
