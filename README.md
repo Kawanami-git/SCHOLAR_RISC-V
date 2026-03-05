@@ -354,8 +354,8 @@ Below is a summary of synthesis results on a PolarFire MPFS095T FPGA:
 
 | **Architecture**              | **Features**                                    | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `CSR*` (Zicntr)** | single-issue pipelined RISC-V processor | 0.55             | LEs: 2023 (782 FFs)<br>Fmax: 172 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `CSR*` (Zicntr)** | single-issue pipelined RISC-V processor (64-bit datapath) | 0.45              | LEs: 3965 (1231 FFs)<br>Fmax: 155 MHz<br>uSRAM: 12<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `CSR*` (Zicntr)** | single-issue pipelined RISC-V processor | 0.55             | LEs: 2023 (782 FFs)<br>Fmax: 192 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `CSR*` (Zicntr)** | single-issue pipelined RISC-V processor (64-bit datapath) | 0.45              | LEs: 3965 (1231 FFs)<br>Fmax: 150 MHz<br>uSRAM: 12<br>LSRAM: 0<br>Math blocks: 0 |
 
 > 📝
 >
@@ -1498,8 +1498,8 @@ As for the **single-cycle** version, the performance of the **SCHOLAR RISC-V** p
 
 | **Architecture**                  | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 |----------------------------------|------------------:|--------------------------------------------------------------------------------|
-| **RV32I + `CSR*` (Zicntr)**      | 0.55              | LEs: 2023 (782 FFs)<br>Fmax: 172 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `mcycle` (Zicntr)**    | 0.45              | LEs: 3965 (1231 FFs)<br>Fmax: 155 MHz<br>uSRAM: 12<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `CSR*` (Zicntr)**      | 0.55              | LEs: 2023 (782 FFs)<br>Fmax: 192 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `mcycle` (Zicntr)**    | 0.45              | LEs: 3965 (1231 FFs)<br>Fmax: 150 MHz<br>uSRAM: 12<br>LSRAM: 0<br>Math blocks: 0 |
 
 > 📝 `CSR*`: `mcycle`, `mhpmcounter3` and `mhpmcounter4`.
 
@@ -1530,7 +1530,7 @@ Comparison data (CoreMark scores, which CycleMark is derived from) can be found 
 
 ### Maximum Frequency
 
-In return to a lower CycleMark/MHz score, this microarchitecture provides a higher frequency (**172 MHz**) than the **single-cycle** version (**74 MHz**), allowing more cycles per second.
+In return to a lower CycleMark/MHz score, this microarchitecture provides a higher frequency (**192 MHz**) than the **single-cycle** version (**74 MHz**), allowing more cycles per second.
 
 The current critical path is:  
 `data memory → Writeback → GPRs`  
@@ -1575,10 +1575,10 @@ The remaining flip-flops are mostly used to register bundles between pipeline st
 ## Conclusion
 
 The **pipelined** version of the **SCHOLAR RISC-V** processor focuses on improving clock frequency.  
-Even though this goal is achieved (**~132%** improvement), the overall improvement is limited:
+Even though this goal is achieved (**~159%** improvement), the overall improvement is limited:
 
-- Pipeline: `172 MHz × 0.55 ≈ 94.6 CycleMark/s`
-- Single-cycle: `74 MHz × 1.24 ≈ 91.8 CycleMark/s`
+- Pipeline: `192 MHz × 0.55 CycleMark/MHz ≈ 105.6 CycleMark/s`
+- Single-cycle: `74 MHz × 1.24 CycleMark/MHz ≈ 91.8 CycleMark/s`
 
 This limitation is mainly caused by the drawbacks of this simple pipeline implementation: **RAW data hazards** (stalls) and **control hazards** (flushes).
 
