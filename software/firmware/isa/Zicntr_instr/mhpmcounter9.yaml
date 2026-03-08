@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT
+# /*!
+# ********************************************************************************
+# \file       mhpmcounter9.yaml
+# \brief      ISA test: csrr rd, 0xB09
+# \author     Kawanami
+# \version    1.0
+# \date       06/03/2026
+#
+# \details
+#
+# \remarks
+#
+# \section mhpmcounter9_yaml_version_history Version history
+# | Version | Date       | Author     | Description         |
+# |:-------:|:----------:|:-----------|:--------------------|
+# | 1.0     | 06/03/2026 | Kawanami   | Initial version.    |
+# ********************************************************************************
+# */
+
+name: mhpmcounter9
+description: mhpmcounter9 read instruction test
+instruction_under_test: csrr rd, 0xB09
+requires: []
+
+sequence:
+  - op: lui
+    rd: random src_reg
+    imm:
+      random:
+        min: 0x00000
+        max: 0xFFFFF
+
+  - op: addi
+    rd: random unused
+    rs1: src_reg
+    imm:
+      random:
+        min: -2048
+        max: 2047
+
+  - op: addi
+    rd: random unused2
+    rs1: src_reg
+    imm:
+      random:
+        min: -2048
+        max: 2047
+
+  - op: addi
+    rd: random dst_reg
+    rs1: src_reg
+    imm:
+      random:
+        min: -2048
+        max: 2047
+
+  - op: csrr
+    rd: random dst_reg
+    format: "{op} {rd}, 0xB09"

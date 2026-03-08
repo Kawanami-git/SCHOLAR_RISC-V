@@ -1,0 +1,197 @@
+// SPDX-License-Identifier: MIT
+/*!
+********************************************************************************
+\file       mem.sv
+\brief      SCHOLAR RISC-V core memory module
+\author     Kawanami
+\date       07/03/2026
+\version    1.0
+
+\details
+  This module implements the Memory (MEM) stage of the SCHOLAR RISC-V core.
+
+  The MEM stage performs data-memory transactions when required by the current
+  micro-operation. It enforces data alignment via byte-enable masks for writes
+  and performs sign/zero extension on reads as dictated by the control signals.
+
+  Handshake:
+  - EXE -> MEM uses (exe_valid_i, ready_o). When ready_o=1, MEM can capture a
+    new uop. If ready_o=0, MEM holds its input register to complete the
+    outstanding memory transaction.
+  - MEM -> WB uses valid_o to indicate the completion of a memory transaction.
+
+\remarks
+
+\section mem_version_history Version history
+| Version | Date       | Author     | Description                               |
+|:-------:|:----------:|:-----------|:------------------------------------------|
+| 1.0     | 07/03/2026 | Kawanami   | Initial version of the module.            |
+********************************************************************************
+*/
+
+module mem
+
+  /*!
+* Import useful packages.
+*/
+  import exe2mem_pkg::exe2mem_t;
+  import wb2mem_pkg::wb2mem_t;
+  import mem2wb_pkg::mem2wb_t;
+  import mem2ctrl_pkg::mem2ctrl_t;
+  import mem2id_pkg::mem2id_t;
+  import core_pkg::ADDR_WIDTH;
+  import core_pkg::DATA_WIDTH;
+  import core_pkg::MEM_CTRL_WIDTH;
+  import core_pkg::SEL_WB;
+  import core_pkg::CSR_IDLE;
+/**/
+
+#(
+) (
+    /// System clock
+    input  wire                                clk_i,
+    /// System active low reset
+    input  wire                                rstn_i,
+    /// Exe stage valid signal (1: valid  0: not valid)
+    input  wire                                exe_valid_i,
+    /// Mem stage ready (1: can accept a new EXE->MEM payload)
+    output wire                                ready_o,
+    /// Mem operation complete
+    output wire                                valid_o,
+    /// EXE->MEM payload (operands + control micro-ops)
+    input  exe2mem_t                           exe2mem_i,
+    // Writeback to Mem bypass
+    // input  wb2mem_t                            wb2mem_i,
+    /// MEM->WB payload (operands + control micro-ops)
+    output mem2wb_t                            mem2wb_o,
+    /// MEM->CTRL payload
+    output mem2ctrl_t                          mem2ctrl_o,
+    /// MEM->EXE bypass
+    output mem2id_t                            mem2id_o,
+    /// Address transfer request
+    output wire                                req_o,
+    /* verilator lint_off UNUSEDSIGNAL */
+    /// Grant: Ready to accept address transfert
+    input  wire                                gnt_i,
+    /* verilator lint_on UNUSEDSIGNAL */
+    /// Address for memory access
+    output wire       [   ADDR_WIDTH  - 1 : 0] addr_o,
+    /// Write enable (1: write - 0: read)
+    output wire                                we_o,
+    /// Write data
+    output wire       [    DATA_WIDTH - 1 : 0] wdata_o,
+    /// Byte enable
+    output wire       [(DATA_WIDTH/8) - 1 : 0] be_o,
+    /// Response transfer valid
+    input  wire                                rvalid_i,
+    /* verilator lint_off UNUSEDSIGNAL */
+    /// Error response
+    input  wire                                err_i
+    /* verilator lint_on UNUSEDSIGNAL */
+);
+
+  /******************** DECLARATION ********************/
+  /* parameters verification */
+
+  /* local parameters */
+
+  /* functions */
+
+  /* wires */
+  /// Ready flag
+  logic                          ready;
+  /// Third operand (used for CSR writeback or stores)
+  wire      [DATA_WIDTH - 1 : 0] op3;
+  /* registers */
+  /* verilator lint_off UNUSEDSIGNAL */
+  /// EXE->MEM payload register
+  exe2mem_t                      exe2mem_q;
+  /* verilator lint_on UNUSEDSIGNAL */
+  /********************             ********************/
+
+  /// EXE->MEM pipeline register
+  /*!
+  * Capture when EXE provides a valid uop (`exe_valid_i`) and MEM is ready.
+  *
+  * Backpressure:
+  *  - If `ready` is low, MEM holds `exe2mem_q` to ensure the memory
+  *    transaction completes without losing the associated control.
+  *
+  * NOP injection:
+  *  - If `ready` is high but `exe_valid_i` is low, MEM clears control
+  *    `signals. This propagates a NOP-like uop downstream:
+  *      - Disables potential memory side effects in the next stage
+  *      - Disables any write to GPR and CSR by setting control to IDLE.
+  */
+  always_ff @(posedge clk_i) begin : exe_mem
+    if (!rstn_i) begin
+      exe2mem_q <= '0;
+    end
+    else if (exe_valid_i && ready) begin
+      exe2mem_q <= exe2mem_i;
+    end
+    else if (ready) begin
+      exe2mem_q.mem_ctrl <= '0;
+      exe2mem_q.gpr_ctrl <= '0;
+      exe2mem_q.csr_ctrl <= '0;
+      exe2mem_q.rd       <= '0;
+    end
+  end
+
+  /// Forward EXE output to writeback
+  assign mem2wb_o.exe_out     = exe2mem_q.exe_out;
+  /// Forward op3 to writeback
+  assign mem2wb_o.op3         = exe2mem_q.op3;
+  /// Forward rd to writeback
+  assign mem2wb_o.rd          = exe2mem_q.rd;
+  /// Forward CSR waddr to writeback
+  assign mem2wb_o.csr_waddr   = exe2mem_q.csr_waddr;
+  /// Forward GPR control signal to writeback
+  assign mem2wb_o.gpr_ctrl    = exe2mem_q.gpr_ctrl;
+  /// Forward CSR control signal to writeback
+  assign mem2wb_o.csr_ctrl    = exe2mem_q.csr_ctrl;
+  /// Forward MEM control signal to writeback (sign-extention)
+  assign mem2wb_o.mem_ctrl    = exe2mem_q.mem_ctrl;
+  /// Forward instruction rd to Controller
+  assign mem2ctrl_o.rd        = exe2mem_q.rd;
+  /// Forward instruction csr write address to Controller
+  assign mem2ctrl_o.csr_waddr = exe2mem_q.csr_waddr;
+  /// Forward instruction csr control to Controller
+  assign mem2ctrl_o.csr_ctrl  = exe2mem_q.csr_ctrl;
+  /// Generate is_load flag for controller bypass
+  assign mem2ctrl_o.is_load   = |exe2mem_q.mem_ctrl[MEM_CTRL_WIDTH-2:0];
+  /// Generate bypass for Decode
+  assign mem2id_o.bypass      = exe2mem_q.csr_ctrl == CSR_IDLE ? exe2mem_q.exe_out : exe2mem_q.op3;
+  /// Output driven by mem unit.
+  assign ready_o              = ready;
+
+
+  /// Third operand (CSR or store)
+  assign op3                  = exe2mem_q.op3;
+  // assign op3                  = exe2mem_q.mem_op3_sel == SEL_WB ? wb2mem_i.bypass : exe2mem_q.op3;
+
+  /// Memory unit instantiation
+  /*!
+  * Drives write/read transactions to the external data memory.
+  * `valid_o` qualifies the MEM->WB transfer.
+  */
+  mem_unit #() mem_unit (
+      .clk_i      (clk_i),
+      .rstn_i     (rstn_i),
+      .exe_valid_i(exe_valid_i),
+      .ready_o    (ready),
+      .valid_o    (valid_o),
+      .op3_i      (op3),
+      .exe_out_i  (exe2mem_q.exe_out),
+      .mem_ctrl_i (exe2mem_q.mem_ctrl),
+      .wdata_o    (wdata_o),
+      .rvalid_i   (rvalid_i),
+      .addr_o     (addr_o),
+      .req_o      (req_o),
+      .gnt_i      (gnt_i),
+      .we_o       (we_o),
+      .be_o       (be_o),
+      .err_i      (err_i)
+  );
+
+endmodule
