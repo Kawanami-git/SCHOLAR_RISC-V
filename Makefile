@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.0
-# \date       07/03/2026
+# \version    1.1
+# \date       26/03/2026
 #
 # \details
 #   Drives the complete flow:
@@ -36,6 +36,7 @@
 # | Version | Date       | Author     | Description         |
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 07/03/2026 | Kawanami   | Initial version.    |
+# | 1.1     | 26/03/2026 | Kawanami   | Re-enable cyclemark_spike target.    |
 # ********************************************************************************
 # */
 
@@ -646,12 +647,12 @@ cyclemark: dut cyclemark_firmware
 cyclemark: run
 
 # Spike cyclemark target
-# .PHONY: cyclemark_spike
-# cyclemark_spike: SIM=$(SIM_VS_SPIKE)
-# cyclemark_spike: WITH_SPIKE=SPIKE
-# cyclemark_spike: FIRMWARE=cyclemark
-# cyclemark_spike: dut cyclemark_firmware spike
-# cyclemark_spike: run
+.PHONY: cyclemark_spike
+cyclemark_spike: SIM=$(SIM_VS_SPIKE)
+cyclemark_spike: WITH_SPIKE=SPIKE
+cyclemark_spike: FIRMWARE=cyclemark
+cyclemark_spike: dut cyclemark_firmware spike
+cyclemark_spike: run
 
 
 

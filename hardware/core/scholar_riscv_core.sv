@@ -4,8 +4,8 @@
 \file       scholar_riscv_core.sv
 \brief      SCHOLAR RISC-V Core Module
 \author     Kawanami
-\date       07/03/2026
-\version    1.0
+\date       26/03/2026
+\version    1.1
 
 \details
   This module is the top-level module of the SCHOLAR RISC-V core.
@@ -34,6 +34,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 07/03/2026 | Kawanami   | Initial version of the module.            |
+| 1.1     | 26/03/2026 | Kawanami   | Replace simulation-driven GPR signals with CSR signals (spike compatibility).            |
 ********************************************************************************
 */
 
@@ -69,19 +70,16 @@ module scholar_riscv_core
   import core_pkg::SEL_MEM;
   import core_pkg::SEL_WB;
 /**/
-
 #(
     /// Core boot/start address
     parameter logic [ADDR_WIDTH - 1 : 0] StartAddress = '0
 ) (
 `ifdef SIM
-    /* GPR signals */
-    /// GPR write enable (SIM only)
-    input  wire                          gpr_en_i,
-    /// GPR write address (SIM only)
-    input  wire [ RF_ADDR_WIDTH - 1 : 0] gpr_addr_i,
-    /// GPR write data (SIM only)
-    input  wire [ DATA_WIDTH    - 1 : 0] gpr_data_i,
+    /* CSR/GPR signals */
+    /// Simulation overwrite enable
+    input  wire                          csr_en_i,
+    /// Simulation overwrite data
+    input  wire [ DATA_WIDTH    - 1 : 0] csr_data_i,
     /// GPR memory (SIM only)
     output wire [ DATA_WIDTH    - 1 : 0] gpr_memory_o      [NB_GPR],
     /// Decode to CSR raddr
@@ -288,9 +286,6 @@ module scholar_riscv_core
 
   gpr #() gpr (
 `ifdef SIM
-      .en_i      (gpr_en_i),
-      .addr_i    (gpr_addr_i),
-      .data_i    (gpr_data_i),
       .memory_o  (gpr_memory_o),
 `endif
       .clk_i     (clk_i),
@@ -307,6 +302,9 @@ module scholar_riscv_core
 
   csr #() csr (
 `ifdef SIM
+      .en_i  (csr_en_i),
+      .data_i(csr_data_i),
+
       .mhpmcounter0_q_o (mhpmcounter0_o),
       .mhpmcounter3_q_o (mhpmcounter3_o),
       .mhpmcounter4_q_o (mhpmcounter4_o),

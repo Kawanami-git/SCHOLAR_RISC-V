@@ -4,8 +4,8 @@
 \file       simulation_vs_spike.cpp
 \brief      ISA-level simulation against Spike golden trace
 \author     Kawanami
-\version    1.0
-\date       06/03/2026
+\version    1.1
+\date       26/03/2026
 
 \details
   This program:
@@ -28,6 +28,7 @@
 | Version | Date       | Author     | Description                                |
 |:-------:|:----------:|:-----------|:-------------------------------------------|
 | 1.0     | 06/03/2026 | Kawanami   | Initial version.                           |
+| 1.1     | 26/03/2026 | Kawanami   | Improve CSR handling for spike compatibility. |
 ********************************************************************************
 */
 
@@ -51,10 +52,6 @@
 
 /// Provided by the Verilator harness (DUT instance).
 extern Vriscv_env* dut;
-
-/// local mhpmcounters
-uword_t mhpmcounters[32] = {0xffffffff};
-
 
 /*------------------------------------------------------------------------------
  * Local helpers
@@ -111,16 +108,16 @@ static inline uword_t ReadBackAlignedData(uword_t mem_addr)
   if (mem_addr >= SOFTCORE_0_PTC_RAM_START_ADDR &&
       mem_addr < SOFTCORE_0_PTC_RAM_START_ADDR + SOFTCORE_0_PTC_RAM_SIZE)
   {
-    raw = dut->PtcDpramMem[word_index];
+    raw = dut->ptc_dpram_mem[word_index];
   }
   else if (mem_addr >= SOFTCORE_0_CTP_RAM_START_ADDR &&
            mem_addr < SOFTCORE_0_CTP_RAM_START_ADDR + SOFTCORE_0_CTP_RAM_SIZE)
   {
-    raw = dut->CtpDpramMem[word_index];
+    raw = dut->ctp_dpram_mem[word_index];
   }
   else
   {
-    raw = dut->DataDpramMem[word_index];
+    raw = dut->data_dpram_mem[word_index];
   }
 
   const uword_t byte_off = (mem_addr & ADDR_OFFSET) * 8; // shift in bits
@@ -131,21 +128,6 @@ static inline uword_t verify_mem(Instr* instr)
 {
   const uword_t  rb     = ReadBackAlignedData(instr->mem_addr);
   const uint32_t funct3 = (instr->instr_bin >> 12) & 0x7;
-  /*!
-   * Spike CSR implementations differ from those of this core.
-   * If the value matches a CSR value, skip the test.
-   * This should be improved in the future: here, if the store value
-   * matches an mhpmcounter value, it will be ignored even if the stored value
-   * is not actually from an mhpmcounter.
-   * To prevent most false matches, the local mhpmcounters are initialized to 0xffffffff.
-   */
-  for (int i = 0; i < 32; i++)
-  {
-    if (mhpmcounters[i] == rb)
-    {
-      return SUCCESS;
-    }
-  }
 
   if (funct3 == 0b000)
   { // SB
@@ -209,52 +191,18 @@ static inline uword_t verify_mem(Instr* instr)
 
 static inline uword_t verify_gpr(Instr* instr)
 {
-  // Non-store: register writeback or CSR
-  if (IsCSR(instr->instr_bin))
+  if (instr->rd >= 0)
   {
-    if (((instr->instr_bin >> 20) & 0x0f) > 0x0d)
+    if (dut->gpr_memory[instr->rd] != instr->rd_data)
     {
-      LogPrintf("Instruction %s (pc: 0x%x) error: Unsupported CSR operation.\n",
-                instr->instr,
-                instr->addr);
-      return FAILURE;
-    }
-
-    if (dut->GprMemory[instr->rd] != mhpmcounters[(instr->instr_bin >> 20) & 0x0f])
-    {
-      LogPrintf("Instruction %s (pc: 0x%x) error: CSR writeback x%02u expected 0x" WORD_PRINT_FMT
+      LogPrintf("Instruction %s (pc: 0x%x) error: GPR x%02u expected 0x" WORD_PRINT_FMT
                 " got 0x" WORD_PRINT_FMT ".\n",
                 instr->instr,
                 instr->addr,
                 (unsigned)instr->rd,
-                (uword_t)(mhpmcounters[(instr->instr_bin >> 20) & 0x0f]),
-                (uword_t)dut->GprMemory[instr->rd]);
+                (uword_t)instr->rd_data,
+                (uword_t)dut->gpr_memory[instr->rd]);
       return FAILURE;
-    }
-
-    // Force RD to match Spike (one-cycle-per-instruction model)
-    dut->GprAddr = instr->rd;
-    dut->GprData = instr->rd_data;
-    dut->GprEn   = 1;
-    Comb();
-    dut->GprEn = 0;
-  }
-  else
-  {
-    // Regular GPR writeback: compare RD contents to Spike
-    if (instr->rd >= 0)
-    {
-      if (dut->GprMemory[instr->rd] != instr->rd_data)
-      {
-        LogPrintf("Instruction %s (pc: 0x%x) error: GPR x%02u expected 0x" WORD_PRINT_FMT
-                  " got 0x" WORD_PRINT_FMT ".\n",
-                  instr->instr,
-                  instr->addr,
-                  (unsigned)instr->rd,
-                  (uword_t)instr->rd_data,
-                  (uword_t)dut->GprMemory[instr->rd]);
-        return FAILURE;
-      }
     }
   }
 
@@ -294,50 +242,22 @@ static uint32_t run(const std::string& firmwarefile, const std::string& spikefil
   while (std::memcmp(instr->instr, "ebreak", std::strlen("ebreak")) != 0)
   {
     /*
-     * This system does not work if several
-     * CSR read are done consecutively.
-     * ex:
-     * C1: decode has mcycle address. mhpmcounter0 is set.
-     * C2: decode has mcycles address again. mhpmcounter0 is overwritten
-     * before the verification of the previous one which is in EXE (vérificaiton
-     * is done once in wb).
+     * Spike does not implement CSRs (except for mcycle).
+     * In case of CSR op, overwrite the data read by decode
+     * with the spike data.
+     * It ensures compatibility between spike and the design.
      */
-    if (!dut->pipeline_flush)
+    if (!dut->pipeline_flush && dut->decode_csr_raddr)
     {
-      switch (dut->decode_csr_raddr)
-      {
-      case 0xb00:
-        mhpmcounters[0] = dut->mhpmcounter0;
-        break;
-      case 0xb03:
-        mhpmcounters[3] = dut->mhpmcounter3;
-        break;
-      case 0xb04:
-        mhpmcounters[4] = dut->mhpmcounter4;
-      case 0xb05:
-        mhpmcounters[5] = dut->mhpmcounter5;
-      case 0xb06:
-        mhpmcounters[6] = dut->mhpmcounter6;
-      case 0xb07:
-        mhpmcounters[7] = dut->mhpmcounter7;
-      case 0xb08:
-        mhpmcounters[8] = dut->mhpmcounter8;
-      case 0xb09:
-        mhpmcounters[9] = dut->mhpmcounter9;
-      case 0xb0a:
-        mhpmcounters[10] = dut->mhpmcounter10;
-      case 0xb0b:
-        mhpmcounters[11] = dut->mhpmcounter11;
-      case 0xb0c:
-        mhpmcounters[12] = dut->mhpmcounter12;
-      case 0xb0d:
-        mhpmcounters[13] = dut->mhpmcounter13;
-        break;
-
-      default:
-        break;
-      }
+      dut->csr_en   = 1;
+      dut->csr_data = instr->rd_data;
     }
+    else
+    {
+      dut->csr_en   = 0;
+      dut->csr_data = 0;
+    }
+    Comb();
 
     if (dut->instr_committed)
     {

@@ -4,8 +4,8 @@
 \file       gpr.sv
 \brief      SCHOLAR RISC-V core General Purpose Registers file module
 \author     Kawanami
-\date       07/03/2026
-\version    1.0
+\date       26/03/2026
+\version    1.1
 
 \details
   This module implements the SCHOLAR RISC-V register file.
@@ -21,6 +21,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 07/03/2026 | Kawanami   | Initial version of the module.            |
+| 1.1     | 26/03/2026 | Kawanami   | Remove simulation-driven signals.         |
 ********************************************************************************
 */
 
@@ -37,16 +38,9 @@ module gpr
 #(
 ) (
 `ifdef SIM
-    /// GPR write enable (SIM only)
-    input  wire                         en_i,
-    /// GPR write address (SIM only)
-    input  wire [RF_ADDR_WIDTH - 1 : 0] addr_i,
-    /// GPR write data (SIM only)
-    input  wire [DATA_WIDTH    - 1 : 0] data_i,
     /// GPR memory (SIM only)
-    output wire [DATA_WIDTH    - 1 : 0] memory_o[NB_GPR],
+    output wire [DATA_WIDTH    - 1 : 0] memory_o  [NB_GPR],
 `endif
-
     /// System clock
     input  wire                         clk_i,
     /// System active low reset
@@ -117,20 +111,8 @@ module gpr
   /// Register source 2 value according to Register source address (SIM ONLY)
   assign rs2_data_o = mem[rs2_i];
 
-
-  /// GPR debug access (SIM ONLY)
-  /*
-  * This block is active only when the design is simulated (SIM).
-  * It forwards the General Purpose Registers (GPRs)
-  * to Verilator for verification of the core's internal states.
-  * This also allows Verilator to modify these internal states during testing.
-  */
-  always_latch begin : gpr_debug
-    if (en_i && (addr_i != '0)) mem[addr_i] = data_i;
-  end
-
   /// Provide access to the GPR internal memory through `memory_o` (SIM ONLY)
-  assign memory_o = mem;
+  assign memory_o   = mem;
 
 `else
 

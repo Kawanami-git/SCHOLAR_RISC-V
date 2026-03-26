@@ -4,8 +4,8 @@
 \file       eprintf.c
 \brief      Tiny printf that writes into CTP shared memory (bare-metal).
 \author     Kawanami
-\version    1.0
-\date       07/03/2026
+\version    1.1
+\date       26/03/2026
 
 \details
 
@@ -13,6 +13,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 07/03/2026 | Kawanami   | Initial version.                          |
+| 1.1     | 26/03/2026 | Kawanami   | Modify Eprintf to bu usable with spike.   |
 ********************************************************************************
 */
 
@@ -93,9 +94,6 @@ static uword_t Euts(uword_t num, uword_t base, volatile char** out)
  */
 uword_t Eprintf(const char* fmt, ...)
 {
-#ifdef SPIKE
-  return 0;
-#endif
 
   if (!fmt)
   {
@@ -105,9 +103,11 @@ uword_t Eprintf(const char* fmt, ...)
   va_list args;
   va_start(args, fmt);
 
+#ifndef SPIKE
   while (!SharedWriteReady())
   { /* spin */
   }
+#endif
 
   volatile char* out   = (volatile char*)SOFTCORE_0_CTP_RAM_DATA_ADDR;
   uword_t        count = 0;

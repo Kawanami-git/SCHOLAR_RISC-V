@@ -4,8 +4,8 @@
 \file       csr.sv
 \brief      SCHOLAR RISC-V core control/status registers file module
 \author     Kawanami
-\date       07/03/2026
-\version    1.0
+\date       26/03/2026
+\version    1.1
 
 \details
   This module implements the SCHOLAR RISC-V Control and Status Register (CSR) file.
@@ -43,6 +43,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 07/03/2026 | Kawanami   | Initial version of the module.            |
+| 1.1     | 26/03/2026 | Kawanami   | Add simulation driven signals to overwrite CSR value (for spike compatibility).            |
 ********************************************************************************
 */
 
@@ -60,30 +61,34 @@ module csr
 
 #(
 ) (
+    /// Simulation overwrite enable
+    input  wire                         en_i,
+    /// Simulation overwrite data
+    input  wire [DATA_WIDTH    - 1 : 0] data_i,
     /// CSR mhpmcounter0 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter0_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter0_q_o,
     /// CSR mhpmcounter3 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter3_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter3_q_o,
     /// CSR mhpmcounter4 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter4_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter4_q_o,
     /// CSR mhpmcounter5 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter5_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter5_q_o,
     /// CSR mhpmcounter6 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter6_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter6_q_o,
     /// CSR mhpmcounter7 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter7_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter7_q_o,
     /// CSR mhpmcounter8 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter8_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter8_q_o,
     /// CSR mhpmcounter9 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter9_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter9_q_o,
     /// CSR mhpmcounter10 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter10_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter10_q_o,
     /// CSR mhpmcounter11 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter11_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter11_q_o,
     /// CSR mhpmcounter12 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter12_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter12_q_o,
     /// CSR mhpmcounter13 register (SIM only)
-    output wire [DATA_WIDTH - 1 : 0] mhpmcounter13_q_o,
+    output wire [   DATA_WIDTH - 1 : 0] mhpmcounter13_q_o,
 
     /// System clock
     input  wire                          clk_i,
@@ -292,8 +297,8 @@ module csr
     end
   endgenerate
 
-  /// Output driven by csrs_read
-  assign rdata_o           = rdata;
+  ///
+  assign rdata_o           = en_i ? data_i : rdata;
 
   /// Provide access to the CSR mhpmcounter0_q through `mhpmcounter0_q_o`
   assign mhpmcounter0_q_o  = mhpmcounter0_q[DATA_WIDTH-1:0];
