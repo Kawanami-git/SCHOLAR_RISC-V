@@ -4,8 +4,8 @@
 \file       writeback.sv
 \brief      SCHOLAR RISC-V core write-back module
 \author     Kawanami
-\date       13/02/2026
-\version    1.2
+\date       28/03/2026
+\version    1.3
 
 \details
  This module implements the write-back  unit
@@ -60,6 +60,7 @@
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 21/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 | 1.2     | 13/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
+| 1.3     | 28/03/2026 | Kawanami   | Improve spike compatibility by detecting whenever a instruction is committed. |
 ********************************************************************************
 */
 module writeback #(
@@ -125,6 +126,10 @@ module writeback #(
     /// Core boot/start address
     parameter logic [   AddrWidth - 1 : 0] StartAddress = '0
 ) (
+`ifdef SIM
+    /// To verilator (used in simulation_vs_spike)
+    output wire                          instr_committed_o,
+`endif
     /// System clock
     input  wire                          clk_i,
     /// System active low reset
@@ -224,6 +229,30 @@ module writeback #(
   reg                               m_req_done_q;
 
   /********************             ********************/
+
+`ifdef SIM
+  /// Instruction committed flag
+  reg instr_committed_q;
+  /// Instruction commit
+  /*!
+  * Detect when a new instruction is committed.
+  * Used by Verilator for simulation_vs_spike.
+  */
+  always_ff @(posedge clk_i) begin : instr_commit
+    if (!rstn_i) begin
+      instr_committed_q <= '0;
+    end
+    else if (decode_valid_i && (mem_ctrl_i == MemIdle || m_req_done_q)) begin
+      instr_committed_q <= 1'b1;
+    end
+    else begin
+      instr_committed_q <= '0;
+    end
+  end
+  /// Output driven by instr_commit
+  assign instr_committed_o = instr_committed_q;
+`endif
+
 
   /// Memory access control signals
   /*!

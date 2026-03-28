@@ -4,8 +4,8 @@
 \file       gpr.sv
 \brief      SCHOLAR RISC-V core General Purpose Registers file module
 \author     Kawanami
-\date       22/09/2025
-\version    1.1
+\date       28/03/2026
+\version    1.2
 
 \details
   This module implements the SCHOLAR RISC-V register file.
@@ -25,6 +25,7 @@
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 22/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 28/03/2026 | Kawanami   | Remove simulation-drive signals used to overwrite CSR data written in the GPR (spike compatibility). This is now handled in the CSR module. |
 ********************************************************************************
 */
 module gpr #(
@@ -40,18 +41,11 @@ module gpr #(
     parameter logic [AddrWidth - 1 : 0] StartAddress = '0
 ) (
 `ifdef SIM
-    /// GPR write enable (SIM only)
-    input  wire                        en_i,
-    /// GPR write address (SIM only)
-    input  wire [ RfAddrWidth - 1 : 0] addr_i,
-    /// GPR write data (SIM only)
-    input  wire [DataWidth    - 1 : 0] data_i,
     /// GPR memory (SIM only)
     output wire [DataWidth    - 1 : 0] memory_o[NbGpr],
     /// GPR program counter (SIM only)
     output wire [AddrWidth    - 1 : 0] pc_q_o,
 `endif
-
     /// System clock
     input  wire                        clk_i,
     /// System active low reset
@@ -131,10 +125,6 @@ module gpr #(
   * This also allows Verilator to modify these internal states during testing.
   */
 `ifdef SIM
-  always_latch begin : gpr_debug
-    if (en_i && (addr_i != '0)) mem[addr_i] = data_i;
-  end
-
   /// Provide access to the GPR internal memory through `memory_o`
   assign memory_o = mem;
   /// Provide access to the PC through `pc_q_o`

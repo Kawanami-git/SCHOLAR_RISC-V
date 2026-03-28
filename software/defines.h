@@ -4,8 +4,8 @@
 \file       defines.h
 \brief      Global constants and memory map for the test environment.
 \author     Kawanami
-\date       23/10/2025
-\version    1.1
+\date       28/03/2026
+\version    1.2
 
 \details
   This file provides shared definitions used throughout the SCHOLAR RISC-V
@@ -28,8 +28,8 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 04/06/2025 | Kawanami   | Initial version.                          |
-| 1.1     | 23/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style
-compliance.<br>Update the whole file comments for doxygen support. |
+| 1.1     | 23/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 28/03/2026 | Kawanami   | Update softcore tag to improve compatibility with spike. |
 ********************************************************************************
 */
 
@@ -113,7 +113,7 @@ typedef uint64_t uword_t;
 
 /******************** SOFTCORE 0: SECOND-LEVEL TAGGING ********************/
 /// Tag value used to identify memory-mapped regions belonging to SOFTCORE 0
-#define SOFTCORE_0_TAG 0b0000
+#define SOFTCORE_0_TAG 0b0001
 /// SOFTCORE 0 memory regions start address
 #define SOFTCORE_0_START_ADDR (SOFTCORE_0_TAG << FPGA_FABRIC_TAG_LSB)
 /// Most significant bit of the tag field used to address memory-mapped regions within SOFTCORE 0

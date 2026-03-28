@@ -5,8 +5,8 @@
 \brief      SCHOLAR RISC-V Integration Environment (core + RAMs + AXI fabric)
 
 \author     Kawanami
-\date       13/02/2026
-\version    1.3
+\date       28/03/2026
+\version    1.4
 
 \details
   Top-level integration for the SCHOLAR RISC-V core with:
@@ -38,15 +38,16 @@
 | 1.1     | 17/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support.              |
 | 1.2     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
 | 1.3     | 13/02/2026 | Kawanami   | Replace core custom interface with OBI standard. |
+| 1.4     | 28/03/2026 | Kawanami   | Improve spike compatibility.              |
 ********************************************************************************
 */
 
 `ifdef XLEN64
 `define ARCHITECTURE 64
-`define START_ADDR 64'h0000000080000000
+`define START_ADDR 64'h0000000000100000
 `else
 `define ARCHITECTURE 32
-`define START_ADDR 32'h80000000
+`define START_ADDR 32'h00100000
 `endif
 
 module riscv_env #(
@@ -62,26 +63,28 @@ module riscv_env #(
     parameter int unsigned             IdWidth         = 8
 ) (
 `ifdef SIM
-    /// Write-enable for GPR poke (testbench)
-    input  wire                           GprEn,
-    /// GPR index to write (testbench)
-    input  wire  [RF_ADDR_WIDTH  - 1 : 0] GprAddr,
-    /// GPR value to write (testbench)
-    input  wire  [Archi          - 1 : 0] GprData,
+    /// Simulation CSR overwrite enable
+    input  wire                           csr_en,
+    /// Simulation CSR overwrite data
+    input  wire  [Archi          - 1 : 0] csr_data,
+    /// Decode to CSR raddr
+    output wire  [                11 : 0] decode_csr_raddr,
     /// Full GPR file view (read-only mirror)
-    output wire  [Archi          - 1 : 0] GprMemory        [              NB_GPR],
+    output wire  [Archi          - 1 : 0] gpr_memory      [              NB_GPR],
     /// Program counter mirror
-    output wire  [Archi          - 1 : 0] GprPcReg,
+    output wire  [Archi          - 1 : 0] gpr_pc_reg,
     /// CSR mcycle mirror
-    output wire  [Archi          - 1 : 0] CsrMcycle,
+    output wire  [Archi          - 1 : 0] csr_mcycle,
     /// Instruction RAM contents (exposed to TB)
-    output logic [ INSTR_WIDTH   - 1 : 0] InstrDpramMem    [     INSTR_RAM_DEPTH],
+    output logic [ INSTR_WIDTH   - 1 : 0] instr_dpram_mem [     INSTR_RAM_DEPTH],
     /// Data RAM contents (exposed to TB)
-    output logic [ Archi         - 1 : 0] DataDpramMem     [      DATA_RAM_DEPTH],
+    output logic [ Archi         - 1 : 0] data_dpram_mem  [      DATA_RAM_DEPTH],
     /// CTP shared RAM contents (exposed to TB)
-    output logic [ Archi         - 1 : 0] CtpSharedDpramMem[CTP_SHARED_RAM_DEPTH],
+    output logic [ Archi         - 1 : 0] ctp_dpram_mem   [CTP_SHARED_RAM_DEPTH],
     /// PTC shared RAM contents (exposed to TB)
-    output logic [ Archi         - 1 : 0] PtcSharedDpramMem[PTC_SHARED_RAM_DEPTH],
+    output logic [ Archi         - 1 : 0] ptc_dpram_mem   [PTC_SHARED_RAM_DEPTH],
+    /// Writeback to GPR write enable
+    output wire                           instr_committed,
 `endif
 
     /* Global signals*/
@@ -216,8 +219,6 @@ module riscv_env #(
 `ifdef SIM
   /// Number of integer registers
   localparam int unsigned NB_GPR = 32;
-  /// Address width of the GPR file
-  localparam int unsigned RF_ADDR_WIDTH = $clog2(NB_GPR);
 `endif
   /// Instruction width (bits)
   localparam int unsigned INSTR_WIDTH = 32;
@@ -442,32 +443,33 @@ module riscv_env #(
       .StartAddress(StartAddr)
   ) scholar_riscv_core (
 `ifdef SIM
-      .gpr_en_i      (GprEn),
-      .gpr_addr_i    (GprAddr),
-      .gpr_data_i    (GprData),
-      .gpr_memory_o  (GprMemory),
-      .gpr_pc_q_o    (GprPcReg),
-      .csr_mcycle_q_o(CsrMcycle),
+      .csr_en_i          (csr_en),
+      .csr_data_i        (csr_data),
+      .decode_csr_raddr_o(decode_csr_raddr),
+      .gpr_memory_o      (gpr_memory),
+      .gpr_pc_q_o        (gpr_pc_reg),
+      .csr_mcycle_q_o    (csr_mcycle),
+      .instr_committed_o (instr_committed),
 `endif
-      .clk_i         (core_clk_i),
-      .rstn_i        (core_rstn_i),
+      .clk_i             (core_clk_i),
+      .rstn_i            (core_rstn_i),
       // IF
-      .imem_req_o    (core_imem_req),
-      .imem_gnt_i    (core_imem_gnt),
-      .imem_addr_o   (core_imem_addr),
-      .imem_rvalid_i (core_imem_rvalid),
-      .imem_rdata_i  (core_imem_rdata),
-      .imem_err_i    (core_imem_err),
+      .imem_req_o        (core_imem_req),
+      .imem_gnt_i        (core_imem_gnt),
+      .imem_addr_o       (core_imem_addr),
+      .imem_rvalid_i     (core_imem_rvalid),
+      .imem_rdata_i      (core_imem_rdata),
+      .imem_err_i        (core_imem_err),
       // DF
-      .dmem_req_o    (core_dmem_req),
-      .dmem_gnt_i    (core_dmem_gnt),
-      .dmem_addr_o   (core_dmem_addr),
-      .dmem_we_o     (core_dmem_we),
-      .dmem_wdata_o  (core_dmem_wdata),
-      .dmem_be_o     (core_dmem_be),
-      .dmem_rvalid_i (core_dmem_rvalid),
-      .dmem_rdata_i  (core_dmem_rdata),
-      .dmem_err_i    (core_dmem_err)
+      .dmem_req_o        (core_dmem_req),
+      .dmem_gnt_i        (core_dmem_gnt),
+      .dmem_addr_o       (core_dmem_addr),
+      .dmem_we_o         (core_dmem_we),
+      .dmem_wdata_o      (core_dmem_wdata),
+      .dmem_be_o         (core_dmem_be),
+      .dmem_rvalid_i     (core_dmem_rvalid),
+      .dmem_rdata_i      (core_dmem_rdata),
+      .dmem_err_i        (core_dmem_err)
   );
 
   /// Instructions RAM: core read-only, AXI write (firmware instructions loader)
@@ -478,7 +480,7 @@ module riscv_env #(
       .Size           (INSTR_RAM_SIZE)
   ) instr_dpram (
 `ifdef SIM
-      .mem_o          (InstrDpramMem),
+      .mem_o          (instr_dpram_mem),
 `endif
       .core_clk_i     (core_clk_i),
       .axi_clk_i      (axi_clk_i),
@@ -523,7 +525,7 @@ module riscv_env #(
       .Size           (DATA_RAM_SIZE)
   ) data_ram (
 `ifdef SIM
-      .mem_o          (DataDpramMem),
+      .mem_o          (data_dpram_mem),
 `endif
       .core_clk_i     (core_clk_i),
       .axi_clk_i      (axi_clk_i),
@@ -568,7 +570,7 @@ module riscv_env #(
       .Size           (PTC_SHARED_RAM_SIZE)
   ) w_axi_shared_ram (
 `ifdef SIM
-      .mem_o          (PtcSharedDpramMem),
+      .mem_o          (ptc_dpram_mem),
 `endif
       .core_clk_i     (core_clk_i),
       .axi_clk_i      (axi_clk_i),
@@ -613,7 +615,7 @@ module riscv_env #(
       .Size           (CTP_SHARED_RAM_SIZE)
   ) r_axi_shared_ram (
 `ifdef SIM
-      .mem_o          (CtpSharedDpramMem),
+      .mem_o          (ctp_dpram_mem),
 `endif
       .core_clk_i     (core_clk_i),
       .axi_clk_i      (axi_clk_i),

@@ -4,8 +4,8 @@
 \file       decode.sv
 \brief      SCHOLAR RISC-V core decode module
 \author     Kawanami
-\date       20/09/2025
-\version    1.1
+\date       28/03/2026
+\version    1.2
 
 \details
   This module implements the decode unit
@@ -42,6 +42,7 @@
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 20/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 28/03/2026 | Kawanami   | Seperate CSR_OP from LOAD and JALR which prevents to detect a CSR operation (spike compatibility). |
 ********************************************************************************
 */
 
@@ -334,11 +335,17 @@ module decode #(
         csr_raddr = '0;
       end
 
-      LOAD_OP, JALR_OP, CSR_OP: begin
+      LOAD_OP, JALR_OP: begin
         funct7    = '0;
         rs2       = '0;
         csr_raddr = '0;
       end
+
+      CSR_OP: begin
+        funct7 = '0;
+        rs2    = '0;
+      end
+
 
       REG_OP, REGW_OP: begin
         csr_raddr = '0;

@@ -4,8 +4,8 @@
 \file       eprintf.c
 \brief      Tiny printf that writes into CTP shared memory (bare-metal).
 \author     Kawanami
-\version    1.0
-\date       25/10/2025
+\version    1.1
+\date       28/03/2026
 
 \details
 
@@ -13,7 +13,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 25/10/2025 | Kawanami   | Initial version.                          |
-| 1.1     | xx/xx/xxxx | Author     |                                           |
+| 1.1     | 28/03/2026 | Kawanami   | Ignore SharedWriteReady function in case of spike simulation (Spike will never set the memory as ready).                                     |
 ********************************************************************************
 */
 
@@ -102,9 +102,11 @@ uword_t Eprintf(const char* fmt, ...)
   va_list args;
   va_start(args, fmt);
 
+#ifndef SPIKE
   while (!SharedWriteReady())
   { /* spin */
   }
+#endif
 
   volatile char* out   = (volatile char*)SOFTCORE_0_CTP_RAM_DATA_ADDR;
   uword_t        count = 0;

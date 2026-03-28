@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.4
-# \date       14/02/2026
+# \version    1.5
+# \date       28/03/2026
 #
 # \details
 #   Drives the complete flow:
@@ -38,6 +38,7 @@
 # | 1.2     | 23/12/2025 | Kawanami   | Fix Linux/sdk fetching.    |
 # | 1.3     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
 # | 1.4     | 14/02/2026 | Kawanami   | Update sdk fetching and use.           |
+# | 1.5     | 28/03/2026 | Kawanami   | Add targets to compare loader/cyclemark with spike trace.           |
 # ********************************************************************************
 # */
 
@@ -204,6 +205,9 @@ CYCLEMARK_FILES 				= "$(CYCLEMARK_DIR)core_list_join.c \
 								  $(CYCLEMARK_DIR)core_state.c \
 								  $(CYCLEMARK_DIR)core_util.c"
 
+# Firmware Linker file
+LINKER=$(FIRMWARE_DIR)linker/linker.ld
+
 # Platform common files
 PLATFORM_FILES					= $(PLATFORM_DIR)args_parser.cpp \
 								  $(PLATFORM_DIR)axi4.cpp \
@@ -240,7 +244,10 @@ SIM_LOG_FILE					= $(SIM_LOG_DIR)log.txt
 SPIKE							= $(SPIKE_DIR)spike
 
 # Spike flags
-SPIKE_FLAGS						= -m2 --isa=$(ISA) -l --log-commits
+SPIKE_FLAGS						= -m0x00100000:0x00100000 --isa=$(ISA) -l --log-commits
+
+# Is the simulation with spike ?
+WITH_SPIKE						= NO_SPIKE
 
 # Verilator binary
 SIMULATOR						= $(VERILATOR_DIR)verilator
@@ -488,7 +495,7 @@ isa_firmware: work
 			GLOBAL_DEFINES_DIR=$(SOFTWARE_DIR) \
 			FIRMWARE_FILES=$(FIRMWARE_BUILD_DIR)/$$(basename $$source .yaml).s \
 			COMMON_FILES=" " \
-			LINKER=$(FIRMWARE_DIR)linker/linker_ISA.ld \
+			LINKER=$(LINKER) \
 			BUILD_DIR=$(FIRMWARE_BUILD_DIR) \
 			LOG_DIR=$(FIRMWARE_LOG_DIR) \
 			FIRMWARE=$$(basename $$source .yaml); \
@@ -530,6 +537,8 @@ firmware: work
 	WORK_DIR=$(WORK_DIR) \
 	GLOBAL_DEFINES_DIR=$(SOFTWARE_DIR) \
 	FIRMWARE_FILES=$(FIRMWARE_FILES) \
+	LINKER=$(LINKER) \
+	WITH_SPIKE=$(WITH_SPIKE) \
 	BUILD_DIR=$(FIRMWARE_BUILD_DIR) \
 	LOG_DIR=$(FIRMWARE_LOG_DIR) \
 	FIRMWARE=$(FIRMWARE) \
@@ -539,8 +548,12 @@ firmware: work
 	@echo
 
 
-
-
+# Spike target (build spike golden trace)
+.PHONY: spike
+spike:
+	$(SPIKE) $(SPIKE_FLAGS) \
+	--log=$(FIRMWARE_BUILD_DIR)$(FIRMWARE).spike \
+	$(FIRMWARE_BUILD_DIR)$(FIRMWARE).elf
 
 # Loader firmware target
 .PHONY: loader_firmware
@@ -554,6 +567,16 @@ loader_firmware: firmware
 loader: FIRMWARE=loader
 loader: dut loader_firmware
 loader: run
+
+# Spike loader target
+.PHONY: loader_spike
+loader_spike: SIM=$(SIM_VS_SPIKE)
+loader_spike: WITH_SPIKE=SPIKE
+loader_spike: FIRMWARE=loader
+loader_spike: dut loader_firmware spike
+loader_spike: run
+
+
 
 # Echo firmware target
 .PHONY: echo_firmware
@@ -570,8 +593,6 @@ echo: run
 
 
 
-
-
 # Cyclemark firmware target
 .PHONY: cyclemark_firmware
 cyclemark_firmware: work
@@ -585,7 +606,13 @@ cyclemark: FIRMWARE=cyclemark
 cyclemark: dut cyclemark_firmware
 cyclemark: run
 
-
+# Spike cyclemark target
+.PHONY: cyclemark_spike
+cyclemark_spike: SIM=$(SIM_VS_SPIKE)
+cyclemark_spike: WITH_SPIKE=SPIKE
+cyclemark_spike: FIRMWARE=cyclemark
+cyclemark_spike: dut cyclemark_firmware spike
+cyclemark_spike: run
 
 
 

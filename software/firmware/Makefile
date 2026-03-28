@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Firmware build pipeline for SCHOLAR RISC-V (ELF → BIN/DUMP/HEX).
 # \author     Kawanami
-# \version    1.1
-# \date       11/11/2025
+# \version    1.2
+# \date       28/03/2026
 #
 # \details
 #   Invokes the RISC-V GNU toolchain to compile and link firmware sources,
@@ -37,6 +37,7 @@
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 04/11/2025 | Kawanami   | Initial version.    |
 # | 1.1     | 11/11/2025 | Kawanami   | Update tools default directory.    |
+# | 1.2     | 28/03/2026 | Kawanami   | Improve spike compatibility by adding a preprocessing define allowing to skip part of codes.    |
 # ********************************************************************************
 # */
 
@@ -75,6 +76,9 @@ TOOLS_DIR  				?= $(ROOT_DIR)../../scripts/
 
 # elf converter (to hex, format -> addr:data)
 MAKE_HEX				?= $(TOOLS_DIR)makehex.py
+
+# Simulation with spike ?
+WITH_SPIKE				= NO_SPIKE
 #################################### 	 				####################################
 
 
@@ -85,7 +89,7 @@ COMMON_FILES_DIR		?= $(ROOT_DIR)common/
 # Firmware common files
 COMMON_FILES			?= $(COMMON_FILES_DIR)eprintf.c \
 						  $(COMMON_FILES_DIR)memory.c \
-						  $(COMMON_FILES_DIR)start.s
+						  $(COMMON_FILES_DIR)start.S
 
 # Firmware linker(s) directory
 LINKER_DIR				?= $(ROOT_DIR)linker/
@@ -94,7 +98,7 @@ LINKER					?= $(LINKER_DIR)linker.ld
 # Firmware compiler flag
 ECFLAGS  				?= -I$(COMMON_FILES_DIR) -I$(GLOBAL_DEFINES_DIR) \
 						  -DITERATIONS=$(ITERATIONS) \
-						  -D$(XLEN) -march=$(ISA) -mabi=$(ABI) -Wall -nostdlib \
+						  -D$(XLEN) -D$(WITH_SPIKE) -march=$(ISA) -mabi=$(ABI) -Wall -nostdlib \
 						  -ffreestanding -O3 -ffunction-sections -fdata-sections
 
 # Firmware linker flag

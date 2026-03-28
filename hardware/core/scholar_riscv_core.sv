@@ -4,8 +4,8 @@
 \file       scholar_riscv_core.sv
 \brief      SCHOLAR RISC-V Core Module
 \author     Kawanami
-\date       13/02/2026
-\version    1.2
+\date       28/03/2026
+\version    1.3
 
 \details
   This module is the top-level module of the SCHOLAR RISC-V core.
@@ -36,6 +36,7 @@
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 23/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 | 1.2     | 13/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
+| 1.3     | 28/03/2026 | Kawanami   | Improve spike compatibility.              |
 ********************************************************************************
 */
 module scholar_riscv_core #(
@@ -45,58 +46,58 @@ module scholar_riscv_core #(
     parameter logic [Archi - 1 : 0] StartAddress = '0
 ) (
 `ifdef SIM
-    /* GPR signals */
-    /// GPR write enable (SIM only)
-    input  wire                         gpr_en_i,
-    /// GPR write address (SIM only)
-    input  wire [RF_ADDR_WIDTH - 1 : 0] gpr_addr_i,
-    /// GPR write data (SIM only)
-    input  wire [     Archi    - 1 : 0] gpr_data_i,
+    /// Simulation CSR overwrite enable
+    input  wire                          csr_en_i,
+    /// Simulation CSR overwrite data
+    input  wire [Archi          - 1 : 0] csr_data_i,
+    /// Decode to CSR raddr
+    output wire [                11 : 0] decode_csr_raddr_o,
     /// GPR memory (SIM only)
-    output wire [     Archi    - 1 : 0] gpr_memory_o  [NB_GPR],
+    output wire [      Archi    - 1 : 0] gpr_memory_o      [NB_GPR],
     /// GPR program counter (SIM only)
-    output wire [     Archi    - 1 : 0] gpr_pc_q_o,
-    /* CSR signals */
+    output wire [      Archi    - 1 : 0] gpr_pc_q_o,
     /// CSR mcycle register (SIM only)
-    output wire [        Archi - 1 : 0] csr_mcycle_q_o,
+    output wire [         Archi - 1 : 0] csr_mcycle_q_o,
+    /// Writeback instruction commited flag
+    output wire                          instr_committed_o,
 `endif
     /* Global signals */
     /// System clock
-    input  wire                         clk_i,
+    input  wire                          clk_i,
     /// System active low reset
-    input  wire                         rstn_i,
+    input  wire                          rstn_i,
     /* Instruction memory wires */
     /// Address transfer request
-    output wire                         imem_req_o,
+    output wire                          imem_req_o,
     /// Grant: Ready to accept address transfert
-    input  wire                         imem_gnt_i,
+    input  wire                          imem_gnt_i,
     /// Address for memory access
-    output wire [       Archi  - 1 : 0] imem_addr_o,
+    output wire [        Archi  - 1 : 0] imem_addr_o,
     /// Response transfer valid
-    input  wire                         imem_rvalid_i,
+    input  wire                          imem_rvalid_i,
     /// Read data
-    input  wire [               31 : 0] imem_rdata_i,
+    input  wire [                31 : 0] imem_rdata_i,
     /// Error response
-    input  wire                         imem_err_i,
+    input  wire                          imem_err_i,
     /* Data memory signals */
     /// Address transfer request
-    output wire                         dmem_req_o,
+    output wire                          dmem_req_o,
     /// Grant: Ready to accept address transfert
-    input  wire                         dmem_gnt_i,
+    input  wire                          dmem_gnt_i,
     /// Address for memory access
-    output wire [       Archi  - 1 : 0] dmem_addr_o,
+    output wire [        Archi  - 1 : 0] dmem_addr_o,
     /// Write enable (1: write - 0: read)
-    output wire                         dmem_we_o,
+    output wire                          dmem_we_o,
     /// Write data
-    output wire [        Archi - 1 : 0] dmem_wdata_o,
+    output wire [         Archi - 1 : 0] dmem_wdata_o,
     /// Byte enable
-    output wire [    (Archi/8) - 1 : 0] dmem_be_o,
+    output wire [     (Archi/8) - 1 : 0] dmem_be_o,
     /// Response transfer valid
-    input  wire                         dmem_rvalid_i,
+    input  wire                          dmem_rvalid_i,
     /// Read data
-    input  wire [        Archi - 1 : 0] dmem_rdata_i,
+    input  wire [         Archi - 1 : 0] dmem_rdata_i,
     /// Error response
-    input  wire                         dmem_err_i
+    input  wire                          dmem_err_i
 );
 
   /******************** DECLARATION ********************/
@@ -292,9 +293,6 @@ module scholar_riscv_core #(
       .StartAddress(StartAddress)
   ) gpr (
 `ifdef SIM
-      .en_i      (gpr_en_i),
-      .addr_i    (gpr_addr_i),
-      .data_i    (gpr_data_i),
       .memory_o  (gpr_memory_o),
       .pc_q_o    (gpr_pc_q_o),
 `endif
@@ -319,6 +317,8 @@ module scholar_riscv_core #(
       .CsrAddrWidth(CSR_ADDR_WIDTH)
   ) csr (
 `ifdef SIM
+      .en_i       (csr_en_i),
+      .data_i     (csr_data_i),
       .mcycle_q_o (csr_mcycle_q_o),
 `endif
       .clk_i      (clk_i),
@@ -330,6 +330,9 @@ module scholar_riscv_core #(
       .csr_val_o  (csr_val)
   );
 
+`ifdef SIM
+  assign decode_csr_raddr_o = decode_csr_raddr;
+`endif
 
 
 
@@ -497,33 +500,36 @@ module scholar_riscv_core #(
       .CsrCtrlWidth(CSR_CTRL_WIDTH),
       .StartAddress(StartAddress)
   ) writeback (
-      .clk_i         (clk_i),
-      .rstn_i        (rstn_i),
-      .decode_valid_i(decode_valid),
-      .exe_out_i     (exe_out),
-      .op3_i         (decode_op3),
-      .rd_i          (decode_rd),
-      .pc_ctrl_i     (decode_pc_ctrl),
-      .mem_ctrl_i    (decode_mem_ctrl),
-      .gpr_ctrl_i    (decode_gpr_ctrl),
-      .csr_ctrl_i    (decode_csr_ctrl),
-      .rd_val_o      (writeback_rd_val),
-      .rd_o          (writeback_rd),
-      .rd_valid_o    (writeback_rd_valid),
-      .pc_i          (gpr_pc),
-      .pc_next_o     (writeback_pc_next),
-      .csr_waddr_o   (writeback_csr_waddr),
-      .csr_val_o     (writeback_csr_val),
-      .csr_valid_o   (writeback_csr_valid),
-      .req_o         (dmem_req_o),
-      .gnt_i         (dmem_gnt_i),
-      .addr_o        (dmem_addr_o),
-      .we_o          (dmem_we_o),
-      .wdata_o       (dmem_wdata_o),
-      .be_o          (dmem_be_o),
-      .rvalid_i      (dmem_rvalid_i),
-      .rdata_i       (dmem_rdata_i),
-      .err_i         (dmem_err_i)
+`ifdef SIM
+      .instr_committed_o(instr_committed_o),
+`endif
+      .clk_i            (clk_i),
+      .rstn_i           (rstn_i),
+      .decode_valid_i   (decode_valid),
+      .exe_out_i        (exe_out),
+      .op3_i            (decode_op3),
+      .rd_i             (decode_rd),
+      .pc_ctrl_i        (decode_pc_ctrl),
+      .mem_ctrl_i       (decode_mem_ctrl),
+      .gpr_ctrl_i       (decode_gpr_ctrl),
+      .csr_ctrl_i       (decode_csr_ctrl),
+      .rd_val_o         (writeback_rd_val),
+      .rd_o             (writeback_rd),
+      .rd_valid_o       (writeback_rd_valid),
+      .pc_i             (gpr_pc),
+      .pc_next_o        (writeback_pc_next),
+      .csr_waddr_o      (writeback_csr_waddr),
+      .csr_val_o        (writeback_csr_val),
+      .csr_valid_o      (writeback_csr_valid),
+      .req_o            (dmem_req_o),
+      .gnt_i            (dmem_gnt_i),
+      .addr_o           (dmem_addr_o),
+      .we_o             (dmem_we_o),
+      .wdata_o          (dmem_wdata_o),
+      .be_o             (dmem_be_o),
+      .rvalid_i         (dmem_rvalid_i),
+      .rdata_i          (dmem_rdata_i),
+      .err_i            (dmem_err_i)
   );
 
 endmodule
