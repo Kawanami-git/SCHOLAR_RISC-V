@@ -28,46 +28,45 @@
 | 1.2     | 28/03/2026 | Kawanami   | Remove simulation-drive signals used to overwrite CSR data written in the GPR (spike compatibility). This is now handled in the CSR module. |
 ********************************************************************************
 */
-module gpr #(
-    /// Number of bits for addressing
-    parameter int                       AddrWidth    = 32,
-    /// Width of data paths (in bits)
-    parameter int                       DataWidth    = 32,
-    /// Width of the GPR index (in bits, usually 5 for 32 regs)
-    parameter int                       RfAddrWidth  = 5,
-    /// Number of General Purpose Registers
-    parameter int                       NbGpr        = 32,
+module gpr
+
+  import core_pkg::RF_ADDR_WIDTH;
+  import core_pkg::NB_GPR;
+
+#(
+    ///
+    parameter int unsigned                 Archi        = 32,
     /// Core boot/start address
-    parameter logic [AddrWidth - 1 : 0] StartAddress = '0
+    parameter logic        [Archi - 1 : 0] StartAddress = '0
 ) (
 `ifdef SIM
     /// GPR memory (SIM only)
-    output wire [DataWidth    - 1 : 0] memory_o[NbGpr],
+    output wire [     Archi    - 1 : 0] memory_o  [NB_GPR],
     /// GPR program counter (SIM only)
-    output wire [AddrWidth    - 1 : 0] pc_q_o,
+    output wire [     Archi    - 1 : 0] pc_q_o,
 `endif
     /// System clock
-    input  wire                        clk_i,
+    input  wire                         clk_i,
     /// System active low reset
-    input  wire                        rstn_i,
+    input  wire                         rstn_i,
     /// Register Source 1 (rs1)
-    input  wire [ RfAddrWidth - 1 : 0] rs1_i,
+    input  wire [RF_ADDR_WIDTH - 1 : 0] rs1_i,
     /// Register Source 2 (rs2)
-    input  wire [ RfAddrWidth - 1 : 0] rs2_i,
+    input  wire [RF_ADDR_WIDTH - 1 : 0] rs2_i,
     /// Destination register address
-    input  wire [ RfAddrWidth - 1 : 0] rd_i,
+    input  wire [RF_ADDR_WIDTH - 1 : 0] rd_i,
     /// Data written to destination register
-    input  wire [DataWidth    - 1 : 0] rd_val_i,
+    input  wire [     Archi    - 1 : 0] rd_val_i,
     /// Data written to destination register valid flag
-    input  wire                        rd_valid_i,
+    input  wire                         rd_valid_i,
     /// Next value of PC
-    input  wire [AddrWidth    - 1 : 0] pc_next_i,
+    input  wire [     Archi    - 1 : 0] pc_next_i,
     /// Register Source 1 value
-    output wire [DataWidth    - 1 : 0] rs1_val_o,
+    output wire [     Archi    - 1 : 0] rs1_val_o,
     /// Register Source 2 value
-    output wire [DataWidth    - 1 : 0] rs2_val_o,
+    output wire [     Archi    - 1 : 0] rs2_val_o,
     /// Program counter
-    output wire [AddrWidth    - 1 : 0] pc_o
+    output wire [     Archi    - 1 : 0] pc_o
 );
 
   /******************** DECLARATION ********************/
@@ -81,9 +80,9 @@ module gpr #(
 
   /* registers */
   /// General Purpose Registers. x0 = mem[0], x1 = mem[1] ... x31 = mem[31].
-  reg [DataWidth - 1 : 0] mem  [NbGpr];
+  reg [Archi - 1 : 0] mem  [NB_GPR];
   /// Program Counter register
-  reg [AddrWidth - 1 : 0] pc_q;
+  reg [Archi - 1 : 0] pc_q;
   /********************             ********************/
 
   /// GPR & PC management

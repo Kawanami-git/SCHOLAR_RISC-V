@@ -4,8 +4,8 @@
 \file       writeback.sv
 \brief      SCHOLAR RISC-V core write-back module
 \author     Kawanami
-\date       28/03/2026
-\version    1.3
+\date       29/03/2026
+\version    1.4
 
 \details
  This module implements the write-back  unit
@@ -61,134 +61,113 @@
 | 1.1     | 21/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 | 1.2     | 13/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 | 1.3     | 28/03/2026 | Kawanami   | Improve spike compatibility by detecting whenever a instruction is committed. |
+| 1.4     | 29/03/2026 | Kawanami   | Improve global lisibility by using package instead of parameters. |
 ********************************************************************************
 */
-module writeback #(
-    /* Global parameters */
-    /// Number of bits in a byte
-    parameter int                          ByteLength   = 8,
-    /// Number of bits for addressing
-    parameter int                          AddrWidth    = 32,
-    /// Width of data paths (in bits)
-    parameter int                          DataWidth    = 32,
-    /// Width of the GPR index (in bits, usually 5 for 32 regs)
-    parameter int                          RfAddrWidth  = 5,
-    /// Width of the CSR address field (in bits, usually 12)
-    parameter int                          CsrAddrWidth = 12,
-    /* Program counter control parameters */
-    /// Width of the program counter control signal
-    parameter int                          PcCtrlWidth  = 2,
-    /// PC increment (+4)
-    parameter logic [ PcCtrlWidth - 1 : 0] PcInc        = 2'b00,
-    /// PC set to ALU output (absolute jump)
-    parameter logic [ PcCtrlWidth - 1 : 0] PcSet        = 2'b01,
-    /// PC Add with ALU output (PC-relative)
-    parameter logic [ PcCtrlWidth - 1 : 0] PcAdd        = 2'b10,
-    /// Conditional PC update (based on branch condition)
-    parameter logic [ PcCtrlWidth - 1 : 0] PcCond       = 2'b11,
-    /* Memory control parameters */
-    /// Width of the memory control signal
-    parameter int                          MemCtrlWidth = 5,
-    /// Memory idle (no memory operation)
-    parameter logic [MemCtrlWidth - 1 : 0] MemIdle      = 5'b00000,
-    /// Load byte (sign-extended)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRb        = 5'b00001,
-    /// Load byte (zero-extended)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRbu       = 5'b01001,
-    /// Store byte
-    parameter logic [MemCtrlWidth - 1 : 0] MemWb        = 5'b10001,
-    /// Load half-word (sign-extended, 16 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRh        = 5'b00010,
-    /// Load half-word (zero-extended, 16 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRhu       = 5'b01010,
-    /// Store half-word
-    parameter logic [MemCtrlWidth - 1 : 0] MemWh        = 5'b10010,
-    /// Load word (sign-extended, 32 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRw        = 5'b00011,
-    /// Load word (zero-extended, 32 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRwu       = 5'b01011,
-    /// Store word (32 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemWw        = 5'b10011,
-    /* General Purpose Registers control parameters */
-    /// Width of the GPR write-back control signal
-    parameter int                          GprCtrlWidth = 3,
-    /// Write-back from memory output
-    parameter logic [GprCtrlWidth - 1 : 0] GprMem       = 3'b100,
-    /// Write-back from ALU output
-    parameter logic [GprCtrlWidth - 1 : 0] GprAlu       = 3'b101,
-    /// Write-back from program counter (link reg)
-    parameter logic [GprCtrlWidth - 1 : 0] GprPrgmc     = 3'b110,
-    /// Write-back from operand 3 (e.g., for CSR ops)
-    parameter logic [GprCtrlWidth - 1 : 0] GprOp3       = 3'b111,
-    /* Control & Status Registers control parameters */
-    /// Width of the CSR control signal
-    parameter int                          CsrCtrlWidth = 1,
+module writeback
+
+  import core_pkg::BYTE_LENGTH;
+  import core_pkg::RF_ADDR_WIDTH;
+  import core_pkg::CSR_ADDR_WIDTH;
+  import core_pkg::PC_CTRL_WIDTH;
+  import core_pkg::PC_INC;
+  import core_pkg::PC_SET;
+  import core_pkg::PC_ADD;
+  import core_pkg::PC_COND;
+  import core_pkg::MEM_CTRL_WIDTH;
+  import core_pkg::MEM_IDLE;
+  import core_pkg::MEM_RB;
+  import core_pkg::MEM_RBU;
+  import core_pkg::MEM_WB;
+  import core_pkg::MEM_RH;
+  import core_pkg::MEM_RHU;
+  import core_pkg::MEM_WH;
+  import core_pkg::MEM_RW;
+  import core_pkg::MEM_RWU;
+  import core_pkg::MEM_WW;
+  import core_pkg::MEM_RD;
+  import core_pkg::MEM_WD;
+  import core_pkg::GPR_CTRL_WIDTH;
+  import core_pkg::GPR_IDLE;
+  import core_pkg::GPR_MEM;
+  import core_pkg::GPR_ALU;
+  import core_pkg::GPR_PRGMC;
+  import core_pkg::GPR_OP3;
+  import core_pkg::CSR_CTRL_WIDTH;
+  import core_pkg::CSR_IDLE;
+  import core_pkg::CSR_ALU;
+
+#(
+    /// Architecture to build (either 32-bit or 64-bit)
+    parameter int unsigned                 Archi        = 32,
+    /// Number of bits of bytes enable
+    parameter int unsigned                 BeWidth      = Archi / BYTE_LENGTH,
     /// Core boot/start address
-    parameter logic [   AddrWidth - 1 : 0] StartAddress = '0
+    parameter logic        [Archi - 1 : 0] StartAddress = '0
 ) (
 `ifdef SIM
     /// To verilator (used in simulation_vs_spike)
-    output wire                          instr_committed_o,
+    output wire                           instr_committed_o,
 `endif
     /// System clock
-    input  wire                          clk_i,
+    input  wire                           clk_i,
     /// System active low reset
-    input  wire                          rstn_i,
+    input  wire                           rstn_i,
     /// Result from the execute (EXE) unit
-    input  wire [DataWidth      - 1 : 0] exe_out_i,
+    input  wire [     Archi      - 1 : 0] exe_out_i,
     /// Decode unit valid signal
-    input  wire                          decode_valid_i,
+    input  wire                           decode_valid_i,
     /// Operand 3 from (used for STOREs and branches)
-    input  wire [DataWidth      - 1 : 0] op3_i,
+    input  wire [     Archi      - 1 : 0] op3_i,
     /// Destination register index
-    input  wire [ RfAddrWidth   - 1 : 0] rd_i,
+    input  wire [RF_ADDR_WIDTH   - 1 : 0] rd_i,
     /// Program counter control signal
-    input  wire [ PcCtrlWidth   - 1 : 0] pc_ctrl_i,
+    input  wire [PC_CTRL_WIDTH   - 1 : 0] pc_ctrl_i,
     /// General-purpose register file control signal
-    input  wire [ GprCtrlWidth  - 1 : 0] gpr_ctrl_i,
+    input  wire [GPR_CTRL_WIDTH  - 1 : 0] gpr_ctrl_i,
     /* verilator lint_off UNUSED */
     /// Control and status register (CSR) control signal
-    input  wire [ CsrCtrlWidth  - 1 : 0] csr_ctrl_i,
+    input  wire [CSR_CTRL_WIDTH  - 1 : 0] csr_ctrl_i,
     /* verilator lint_on UNUSED */
     /// Memory control signal
-    input  wire [ MemCtrlWidth  - 1 : 0] mem_ctrl_i,
+    input  wire [MEM_CTRL_WIDTH  - 1 : 0] mem_ctrl_i,
     /// Register index to be written (GPR destination)
-    output wire [ RfAddrWidth   - 1 : 0] rd_o,
+    output wire [RF_ADDR_WIDTH   - 1 : 0] rd_o,
     /// Write enable for GPR destination register
-    output wire                          rd_valid_o,
+    output wire                           rd_valid_o,
     /// Data to write to the destination register
-    output wire [DataWidth      - 1 : 0] rd_val_o,
+    output wire [     Archi      - 1 : 0] rd_val_o,
     /// Current program counter value
-    input  wire [AddrWidth      - 1 : 0] pc_i,
+    input  wire [     Archi      - 1 : 0] pc_i,
     /// Next program counter value
-    output wire [AddrWidth      - 1 : 0] pc_next_o,
+    output wire [     Archi      - 1 : 0] pc_next_o,
     /// Write address for CSR file
-    output wire [  CsrAddrWidth - 1 : 0] csr_waddr_o,
+    output wire [ CSR_ADDR_WIDTH - 1 : 0] csr_waddr_o,
     /// Data to write to CSR
-    output wire [ DataWidth     - 1 : 0] csr_val_o,
+    output wire [      Archi     - 1 : 0] csr_val_o,
     /// CSR write enable signal
-    output wire                          csr_valid_o,
+    output wire                           csr_valid_o,
     /// Address transfer request
-    output wire                          req_o,
+    output wire                           req_o,
     /* verilator lint_off UNUSEDSIGNAL */
     /// Grant: Ready to accept address transfert
-    input  wire                          gnt_i,
+    input  wire                           gnt_i,
     /* verilator lint_on UNUSEDSIGNAL */
     /// Address for memory access
-    output wire [    AddrWidth  - 1 : 0] addr_o,
+    output wire [         Archi  - 1 : 0] addr_o,
     /// Write enable (1: write - 0: read)
-    output wire                          we_o,
+    output wire                           we_o,
     /// Write data
-    output wire [     DataWidth - 1 : 0] wdata_o,
+    output wire [          Archi - 1 : 0] wdata_o,
     /// Byte enable
-    output wire [ (DataWidth/8) - 1 : 0] be_o,
+    output wire [        BeWidth - 1 : 0] be_o,
     /// Response transfer valid
-    input  wire                          rvalid_i,
+    input  wire                           rvalid_i,
     /// Read data
-    input  wire [     DataWidth - 1 : 0] rdata_i,
+    input  wire [          Archi - 1 : 0] rdata_i,
     /* verilator lint_off UNUSEDSIGNAL */
     /// Error response
-    input  wire                          err_i
+    input  wire                           err_i
     /* verilator lint_on UNUSEDSIGNAL */
 );
 
@@ -197,14 +176,14 @@ module writeback #(
 
   /* local parameters */
   /// Address granularity in bytes (e.g., 4 bytes for 32-bit, 8 for 64-bit)
-  localparam int unsigned ADDR_OFFSET = DataWidth / ByteLength;
+  localparam int unsigned ADDR_OFFSET = Archi / BYTE_LENGTH;
   /// Number of bits needed to encode byte offset within a word
   localparam int unsigned ADDR_OFFSET_WIDTH = $clog2(ADDR_OFFSET);
   /* functions */
 
   /* wires */
   /// Address used for memory access (read or write)
-  logic [   AddrWidth      - 1 : 0] addr;
+  logic [       Archi      - 1 : 0] addr;
   /// Byte offset within the accessed word (used for write alignment)
   wire  [ADDR_OFFSET_WIDTH - 1 : 0] m_addr_offset;
   ///
@@ -212,15 +191,15 @@ module writeback #(
   /// Memory write enable (1 = write)
   logic                             we;
   /// Byte-wise write mask for memory store operations
-  logic [   (DataWidth/8)  - 1 : 0] be;
+  logic [         BeWidth  - 1 : 0] be;
   /// Destination register validity flag
   logic                             rd_valid;
   /// Data to write into memory
-  logic [   DataWidth      - 1 : 0] wdata;
+  logic [       Archi      - 1 : 0] wdata;
   /// Data to write into GPR (register file)
-  logic [   DataWidth      - 1 : 0] gpr_din;
+  logic [       Archi      - 1 : 0] gpr_din;
   /// Next value for the program counter (pc_i)
-  logic [   AddrWidth      - 1 : 0] pc_next;
+  logic [       Archi      - 1 : 0] pc_next;
 
   /* registers */
   /// Byte offset within the accessed word (used for read alignment)
@@ -242,7 +221,7 @@ module writeback #(
     if (!rstn_i) begin
       instr_committed_q <= '0;
     end
-    else if (decode_valid_i && (mem_ctrl_i == MemIdle || m_req_done_q)) begin
+    else if (decode_valid_i && (mem_ctrl_i == MEM_IDLE || m_req_done_q)) begin
       instr_committed_q <= 1'b1;
     end
     else begin
@@ -301,35 +280,35 @@ module writeback #(
   *     since register and CSR reads are combinational.
   */
   generate
-    if (DataWidth == 32) begin : gen_mem_controller_32
+    if (Archi == 32) begin : gen_mem_controller_32
       always_comb begin : mem_controller
-        if (mem_ctrl_i != MemIdle) addr = exe_out_i;
+        if (mem_ctrl_i != MEM_IDLE) addr = exe_out_i;
         else addr = '0;
 
-        if (mem_ctrl_i != MemIdle && m_req_done_q == 1'b0) begin
+        if (mem_ctrl_i != MEM_IDLE && m_req_done_q == 1'b0) begin
           req = 1'b1;
-          if (mem_ctrl_i[4] == 1'b0) begin  // Read
+          if (mem_ctrl_i[3] == 1'b0) begin  // Read
             we    = 1'b0;
-            be    = {DataWidth / 8{1'b1}};
+            be    = '0;
             wdata = '0;
           end
           else begin  // Write
             we = 1'b1;
 
             case (mem_ctrl_i)
-              MemWb: begin
-                wdata = ({{DataWidth - 8{1'b0}}, op3_i[7:0]}) << m_addr_offset * ByteLength;
+              MEM_WB: begin
+                wdata = ({{Archi - 8{1'b0}}, op3_i[7:0]}) << m_addr_offset * BYTE_LENGTH;
                 be    = 1'b1 << addr[ADDR_OFFSET_WIDTH-1 : 0];
               end
 
-              MemWh: begin
-                wdata = ({{DataWidth - 16{1'b0}}, op3_i[15:0]}) << m_addr_offset * ByteLength;
+              MEM_WH: begin
+                wdata = ({{Archi - 16{1'b0}}, op3_i[15:0]}) << m_addr_offset * BYTE_LENGTH;
                 be    = 3 << addr[ADDR_OFFSET_WIDTH-1 : 0];
               end
 
               default: begin
                 wdata = op3_i;
-                be    = {DataWidth / 8{1'b1}};
+                be    = {Archi / 8{1'b1}};
               end
             endcase
           end
@@ -337,7 +316,8 @@ module writeback #(
         else begin
           wdata = '0;
           req   = 1'b0;
-          be    = {DataWidth / 8{1'b1}};
+          we    = 1'b0;
+          be    = '0;
         end
       end
 
@@ -345,38 +325,38 @@ module writeback #(
     else begin : gen_mem_controller_64
 
       always_comb begin : mem_controller
-        if (mem_ctrl_i != MemIdle) addr = exe_out_i;
-        else addr = {AddrWidth{1'b0}};
+        if (mem_ctrl_i != MEM_IDLE) addr = exe_out_i;
+        else addr = '0;
 
-        if (mem_ctrl_i != MemIdle && m_req_done_q == 1'b0) begin
+        if (mem_ctrl_i != MEM_IDLE && m_req_done_q == 1'b0) begin
           req = 1'b1;
-          if (!mem_ctrl_i[4]) begin  // Read
+          if (!mem_ctrl_i[3]) begin  // Read
             we    = 1'b0;
-            be    = {DataWidth / 8{1'b1}};
+            be    = '0;
             wdata = '0;
           end
           else begin  // Write
             we = 1'b1;
 
             case (mem_ctrl_i)
-              MemWb: begin
-                wdata = ({{DataWidth - 8{1'b0}}, op3_i[7:0]}) << m_addr_offset * ByteLength;
+              MEM_WB: begin
+                wdata = ({{Archi - 8{1'b0}}, op3_i[7:0]}) << m_addr_offset * BYTE_LENGTH;
                 be    = 1'b1 << addr[ADDR_OFFSET_WIDTH-1 : 0];
               end
 
-              MemWh: begin
-                wdata = ({{DataWidth - 16{1'b0}}, op3_i[15:0]}) << m_addr_offset * ByteLength;
+              MEM_WH: begin
+                wdata = ({{Archi - 16{1'b0}}, op3_i[15:0]}) << m_addr_offset * BYTE_LENGTH;
                 be    = 3 << addr[ADDR_OFFSET_WIDTH-1 : 0];
               end
 
-              MemWw: begin
-                wdata = ({{DataWidth - 32{1'b0}}, op3_i[31:0]}) << m_addr_offset * ByteLength;
+              MEM_WW: begin
+                wdata = ({{Archi - 32{1'b0}}, op3_i[31:0]}) << m_addr_offset * BYTE_LENGTH;
                 be    = 15 << addr[ADDR_OFFSET_WIDTH-1 : 0];
               end
 
               default: begin
                 wdata = op3_i;
-                be    = {DataWidth / 8{1'b1}};
+                be    = {Archi / 8{1'b1}};
               end
             endcase
           end
@@ -384,7 +364,8 @@ module writeback #(
         else begin
           wdata = '0;
           req   = 1'b0;
-          be    = {DataWidth / 8{1'b1}};
+          we    = 1'b0;
+          be    = '0;
         end
       end
 
@@ -430,7 +411,7 @@ module writeback #(
   /// Output driven by mem_controller
   assign wdata_o       = wdata;
   /// Output driven by mem_controller
-  assign addr_o        = {addr[AddrWidth-1:ADDR_OFFSET_WIDTH], {ADDR_OFFSET_WIDTH{1'b0}}};
+  assign addr_o        = {addr[Archi-1:ADDR_OFFSET_WIDTH], {ADDR_OFFSET_WIDTH{1'b0}}};
   /// Output driven by mem_controller
   assign req_o         = req;
   /// Output driven by mem_controller
@@ -462,23 +443,23 @@ module writeback #(
   * and its validity (`rd_valid`) based on the decoded control signals.
   *
   * Source selection (`gpr_ctrl_i`):
-  *   - GprAlu    : Write back ALU/execution result (`exe_out_i`)
-  *   - GprPrgmc  : Write back return address (`pc_i` + 4) for JAL/JALR
-  *   - GprOp3    : Write back `op3_i` (e.g., CSR read path)
-  *   - GprMem    : Write back load data from memory (`rdata_i`)
+  *   - GPR_ALU    : Write back ALU/execution result (`exe_out_i`)
+  *   - GPR_PRGMC  : Write back return address (`pc_i` + 4) for JAL/JALR
+  *   - GPR_OP3    : Write back `op3_i` (e.g., CSR read path)
+  *   - GPR_MEM    : Write back load data from memory (`rdata_i`)
   *
-  * Load formatting (when `gpr_ctrl_i` == GprMem):
+  * Load formatting (when `gpr_ctrl_i` == GPR_MEM):
   *   - `rd_valid` is asserted only when the outstanding memory request completes
   *      (`m_req_done_q` == 1).
   *   - `mem_ctrl_i` selects width and signedness:
-  *       - MemRb  / MemRbu : Load byte (signed / zero-extended)
-  *       - MemRh  / MemRhu : Load half-word (signed / zero-extended)
-  *       - MemRw  / MemRwu : Load word (signed / zero-extented )
+  *       - MEM_RB  / MEM_RBU : Load byte (signed / zero-extended)
+  *       - MEM_RH  / MEM_RHU : Load half-word (signed / zero-extended)
+  *       - MEM_RW  / MEM_RWU : Load word (signed / zero-extented )
   *       - default           : Load word (32-bit architecture)
   *                             or Load double word (64-bit architecture)
   *   - The byte/half-word is extracted from `rdata_i` using `m_addr_offset_q`
   *     (byte offset within the aligned read data) and then sign- or zero-extended
-  *     to `DataWidth`.
+  *     to `Archi`.
   *     The same rule is applied to a word for RV64I.
   *
   *  Default / no write-back:
@@ -490,7 +471,7 @@ module writeback #(
   */
   generate
 
-    if (DataWidth == 32) begin : gen_rd_32
+    if (Archi == 32) begin : gen_rd_32
 
       logic [15 : 0] mem_rdata;
 
@@ -498,34 +479,34 @@ module writeback #(
         mem_rdata = 'b0;
         rd_valid  = decode_valid_i;
 
-        if (gpr_ctrl_i == GprAlu) begin
+        if (gpr_ctrl_i == GPR_ALU) begin
           gpr_din = exe_out_i;
         end
-        else if (gpr_ctrl_i == GprPrgmc) begin
+        else if (gpr_ctrl_i == GPR_PRGMC) begin
           gpr_din = pc_i + 4;
         end
-        else if (gpr_ctrl_i == GprOp3) begin
+        else if (gpr_ctrl_i == GPR_OP3) begin
           gpr_din = op3_i;
         end
-        else if (gpr_ctrl_i == GprMem) begin
+        else if (gpr_ctrl_i == GPR_MEM) begin
           rd_valid = m_req_done_q;
           case (mem_ctrl_i)
 
-            MemRb, MemRbu: begin
+            MEM_RB, MEM_RBU: begin
               mem_rdata = {8'b00000000, rdata_i[(m_addr_offset_q*8)+:8]};
 
-              if (mem_ctrl_i == MemRbu) gpr_din = {{DataWidth - 8{1'b0}}, mem_rdata[7:0]};
+              if (mem_ctrl_i == MEM_RBU) gpr_din = {{Archi - 8{1'b0}}, mem_rdata[7:0]};
               else
-                gpr_din = mem_rdata[7] == 1 ? {{DataWidth - 8{1'b1}}, mem_rdata[7:0]} :
-                    {{DataWidth - 8{1'b0}}, mem_rdata[7:0]};
+                gpr_din = mem_rdata[7] == 1 ?
+                    {{Archi - 8{1'b1}}, mem_rdata[7:0]} : {{Archi - 8{1'b0}}, mem_rdata[7:0]};
             end
 
-            MemRh, MemRhu: begin
+            MEM_RH, MEM_RHU: begin
               mem_rdata = rdata_i[(m_addr_offset_q*8)+:16];
-              if (mem_ctrl_i == MemRhu) gpr_din = {{DataWidth - 16{1'b0}}, mem_rdata[15:0]};
+              if (mem_ctrl_i == MEM_RHU) gpr_din = {{Archi - 16{1'b0}}, mem_rdata[15:0]};
               else
-                gpr_din = mem_rdata[15] == 1 ? {{DataWidth - 16{1'b1}}, mem_rdata[15:0]} :
-                    {{DataWidth - 16{1'b0}}, mem_rdata[15:0]};
+                gpr_din = mem_rdata[15] == 1 ?
+                    {{Archi - 16{1'b1}}, mem_rdata[15:0]} : {{Archi - 16{1'b0}}, mem_rdata[15:0]};
             end
 
             default: begin
@@ -550,44 +531,44 @@ module writeback #(
         mem_rdata = 'b0;
         rd_valid  = decode_valid_i;
 
-        if (gpr_ctrl_i == GprAlu) begin
+        if (gpr_ctrl_i == GPR_ALU) begin
           gpr_din = exe_out_i;
         end
-        else if (gpr_ctrl_i == GprPrgmc) begin
+        else if (gpr_ctrl_i == GPR_PRGMC) begin
           gpr_din = pc_i + 4;
         end
-        else if (gpr_ctrl_i == GprOp3) begin
+        else if (gpr_ctrl_i == GPR_OP3) begin
           gpr_din = op3_i;
         end
-        else if (gpr_ctrl_i == GprMem) begin
+        else if (gpr_ctrl_i == GPR_MEM) begin
           rd_valid = m_req_done_q;
           case (mem_ctrl_i)
 
-            MemRb, MemRbu: begin
+            MEM_RB, MEM_RBU: begin
               mem_rdata = {24'h000000, rdata_i[(m_addr_offset_q*8)+:8]};
 
-              if (mem_ctrl_i == MemRbu) gpr_din = {{DataWidth - 8{1'b0}}, mem_rdata[7:0]};
+              if (mem_ctrl_i == MEM_RBU) gpr_din = {{Archi - 8{1'b0}}, mem_rdata[7:0]};
               else
-                gpr_din = mem_rdata[7] == 1 ? {{DataWidth - 8{1'b1}}, mem_rdata[7:0]} :
-                    {{DataWidth - 8{1'b0}}, mem_rdata[7:0]};
+                gpr_din = mem_rdata[7] == 1 ?
+                    {{Archi - 8{1'b1}}, mem_rdata[7:0]} : {{Archi - 8{1'b0}}, mem_rdata[7:0]};
             end
 
-            MemRh, MemRhu: begin
+            MEM_RH, MEM_RHU: begin
               mem_rdata = {16'h0000, rdata_i[(m_addr_offset_q*8)+:16]};
 
-              if (mem_ctrl_i == MemRhu) gpr_din = {{DataWidth - 16{1'b0}}, mem_rdata[15:0]};
+              if (mem_ctrl_i == MEM_RHU) gpr_din = {{Archi - 16{1'b0}}, mem_rdata[15:0]};
               else
-                gpr_din = mem_rdata[15] == 1 ? {{DataWidth - 16{1'b1}}, mem_rdata[15:0]} :
-                    {{DataWidth - 16{1'b0}}, mem_rdata[15:0]};
+                gpr_din = mem_rdata[15] == 1 ?
+                    {{Archi - 16{1'b1}}, mem_rdata[15:0]} : {{Archi - 16{1'b0}}, mem_rdata[15:0]};
             end
 
-            MemRw, MemRwu: begin
+            MEM_RW, MEM_RWU: begin
               mem_rdata = rdata_i[(m_addr_offset_q*8)+:32];
 
-              if (mem_ctrl_i == MemRwu) gpr_din = {{DataWidth - 32{1'b0}}, mem_rdata[31:0]};
+              if (mem_ctrl_i == MEM_RWU) gpr_din = {{Archi - 32{1'b0}}, mem_rdata[31:0]};
               else
-                gpr_din = mem_rdata[31] == 1 ? {{DataWidth - 32{1'b1}}, mem_rdata[31:0]} :
-                    {{DataWidth - 32{1'b0}}, mem_rdata[31:0]};
+                gpr_din = mem_rdata[31] == 1 ?
+                    {{Archi - 32{1'b1}}, mem_rdata[31:0]} : {{Archi - 32{1'b0}}, mem_rdata[31:0]};
             end
 
             default: begin
@@ -637,14 +618,14 @@ module writeback #(
   *
   *   - For non-memory instructions,
   *     `pc_ctrl_i` determines the update mode:
-  *     - `PcInc`  → Increment `pc_i` by `ADDR_OFFSET` (sequential execution)
+  *     - `PC_INC`  → Increment `pc_i` by `ADDR_OFFSET` (sequential execution)
   *
-  *     - `PcSet`  → Load `pc_i` with `exe_out_i`,
+  *     - `PC_SET`  → Load `pc_i` with `exe_out_i`,
   *                   typically for JALR (address is already computed and aligned)
   *
-  *     - `PcAdd`  → Perform a `pc_i`-relative jump: `pc_i` + `exe_out_i` (used for JAL)
+  *     - `PC_ADD`  → Perform a `pc_i`-relative jump: `pc_i` + `exe_out_i` (used for JAL)
   *
-  *     - `PcCond` → Conditional branch: if `exe_out_i[0]` is set (condition true),
+  *     - `PC_COND` → Conditional branch: if `exe_out_i[0]` is set (condition true),
   *                   `pc_i` += `op3_i`; otherwise, continue sequentially.
   *
   *   - If the instruction is not valid, hold `pc_i`.
@@ -658,16 +639,16 @@ module writeback #(
       pc_next = StartAddress;
     end
     else if (decode_valid_i) begin
-      if (mem_ctrl_i != MemIdle) begin
+      if (mem_ctrl_i != MEM_IDLE) begin
         if (m_req_done_q) pc_next = pc_i + 4;
         else pc_next = pc_i;
       end
       else begin
         case (pc_ctrl_i)
-          PcInc:   pc_next = pc_i + 4;
-          PcSet:   pc_next = {exe_out_i[DataWidth-1:1], 1'b0};
-          PcAdd:   pc_next = pc_i + exe_out_i;
-          PcCond:  pc_next = exe_out_i[0] ? pc_i + op3_i : pc_i + 4;
+          PC_INC:  pc_next = pc_i + 4;
+          PC_SET:  pc_next = {exe_out_i[Archi-1:1], 1'b0};
+          PC_ADD:  pc_next = pc_i + exe_out_i;
+          PC_COND: pc_next = exe_out_i[0] ? pc_i + op3_i : pc_i + 4;
           default: pc_next = pc_i + 4;
         endcase
       end

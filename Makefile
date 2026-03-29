@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.5
-# \date       28/03/2026
+# \version    1.6
+# \date       29/03/2026
 #
 # \details
 #   Drives the complete flow:
@@ -39,6 +39,7 @@
 # | 1.3     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
 # | 1.4     | 14/02/2026 | Kawanami   | Update sdk fetching and use.           |
 # | 1.5     | 28/03/2026 | Kawanami   | Add targets to compare loader/cyclemark with spike trace.           |
+# | 1.6     | 29/03/2026 | Kawanami   | Pass 'Archi' parameter in simulation for conditional build and add 'core_pkg' for core lisibility.           |
 # ********************************************************************************
 # */
 
@@ -167,8 +168,10 @@ MPFS_DISCO_KIT_BOARD			= $(WORK_DIR)board/
 
 
 #################################### Files ####################################
+
 # Design under test files
-DUT_FILES						= $(DUT_DIR)scholar_riscv_core.sv \
+DUT_FILES						= $(DUT_DIR)common/core_pkg.sv \
+								  $(DUT_DIR)scholar_riscv_core.sv \
 								  $(DUT_DIR)gpr/gpr.sv \
 								  $(DUT_DIR)csr/csr.sv \
 								  $(DUT_DIR)fetch/fetch.sv \
@@ -253,7 +256,8 @@ WITH_SPIKE						= NO_SPIKE
 SIMULATOR						= $(VERILATOR_DIR)verilator
 
 # Verilator hardware flags
-SIM_FLAGS						= -j $(shell nproc) -D$(XLEN) -DSIM \
+SIM_FLAGS						= -j $(shell nproc) -DSIM \
+								  -GArchi=$(CPU_XLEN) \
 								  -GNoPerfectMemory=$(NOT_PERFECT_MEMORY) \
 								  --Wno-TIMESCALEMOD -O3 --threads 4 --unroll-count 5120
 

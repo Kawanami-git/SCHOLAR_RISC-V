@@ -4,8 +4,8 @@
 \file       csr.sv
 \brief      SCHOLAR RISC-V core control/status registers file module
 \author     Kawanami
-\date       28/03/2026
-\version    1.3
+\date       29/03/2026
+\version    1.4
 
 \details
   This module implements the SCHOLAR RISC-V
@@ -36,38 +36,41 @@
 | 1.1     | 23/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 | 1.2     | 29/12/2025 | Kawanami   | Update header documentation. |
 | 1.3     | 28/03/2026 | Kawanami   | Add simulation-driven signals for spike compatibility. |
+| 1.4     | 29/03/2026 | Kawanami   | Improve global lisibility by using package instead of parameters. |
 ********************************************************************************
 */
-module csr #(
-    /// Width of data paths (in bits)
-    parameter int DataWidth    = 32,
-    /// Number of bits for addressing the CSRs
-    parameter int CsrAddrWidth = 12
+module csr
+
+  import core_pkg::CSR_ADDR_WIDTH;
+
+#(
+    /// Architecture to build (either 32-bit or 64-bit)
+    parameter int unsigned Archi = 32
 ) (
 `ifdef SIM
     /// Simulation CSR overwrite enable
-    input  wire                              en_i,
+    input  wire                          en_i,
     /// Simulation CSR overwrite data
-    input  wire [DataWidth          - 1 : 0] data_i,
+    input  wire [Archi          - 1 : 0] data_i,
     /// CSR mcycle register (SIM only)
-    output wire [         DataWidth - 1 : 0] mcycle_q_o,
+    output wire [         Archi - 1 : 0] mcycle_q_o,
 `endif
     /// System clock
-    input  wire                              clk_i,
+    input  wire                          clk_i,
     /// System active low reset
-    input  wire                              rstn_i,
+    input  wire                          rstn_i,
     /* verilator lint_off UNUSED */
     /// CSR write address
-    input  wire [      CsrAddrWidth - 1 : 0] csr_waddr_i,
+    input  wire [CSR_ADDR_WIDTH - 1 : 0] csr_waddr_i,
     /// Data to write in the CSR
-    input  wire [     DataWidth     - 1 : 0] csr_val_i,
+    input  wire [     Archi     - 1 : 0] csr_val_i,
     /// Data to write in the CSR valid flag
-    input  wire                              csr_valid_i,
+    input  wire                          csr_valid_i,
     /// CSR read address
-    input  wire [      CsrAddrWidth - 1 : 0] raddr_i,
+    input  wire [CSR_ADDR_WIDTH - 1 : 0] raddr_i,
     /* verilator lint_on UNUSED */
     /// CSR read value
-    output wire [     DataWidth     - 1 : 0] csr_val_o
+    output wire [     Archi     - 1 : 0] csr_val_o
 );
 
   /******************** DECLARATION ********************/
@@ -94,7 +97,7 @@ module csr #(
   *
   * - The CSR is read-only and does not support write operations.
   *   Since `mcycle` is the only CSR available in this module,
-  *   the output `csr_val_o` always returns its lower bits (`mcycle[DataWidth-1:0]`),
+  *   the output `csr_val_o` always returns its lower bits (`mcycle[Archi-1:0]`),
   *   regardless of the address.
   *
   * - Reads are handled combinatorially and reflect
@@ -110,10 +113,10 @@ module csr #(
 
 `ifdef SIM
   /// Output driven by mcycle
-  assign csr_val_o = en_i ? data_i : mcycle_q[DataWidth-1:0];
+  assign csr_val_o = en_i ? data_i : mcycle_q[Archi-1:0];
 `else
   /// Output driven by mcycle
-  assign csr_val_o = mcycle_q[DataWidth-1:0];
+  assign csr_val_o = mcycle_q[Archi-1:0];
 `endif
 
 
@@ -125,7 +128,7 @@ module csr #(
   */
 `ifdef SIM
   /// Provide access to the CSR mcycle through `csr_mcycle_q_o`
-  assign mcycle_q_o = mcycle_q[DataWidth-1:0];
+  assign mcycle_q_o = mcycle_q[Archi-1:0];
 `endif
 
 endmodule

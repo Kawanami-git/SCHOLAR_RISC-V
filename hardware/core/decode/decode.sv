@@ -4,8 +4,8 @@
 \file       decode.sv
 \brief      SCHOLAR RISC-V core decode module
 \author     Kawanami
-\date       28/03/2026
-\version    1.2
+\date       29/03/2026
+\version    1.3
 
 \details
   This module implements the decode unit
@@ -41,200 +41,131 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
-| 1.1     | 20/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
-| 1.2     | 28/03/2026 | Kawanami   | Seperate CSR_OP from LOAD and JALR which prevents to detect a CSR operation (spike compatibility). |
+| 1.1     | 20/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>EXE_ADD RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 28/03/2026 | Kawanami   | Seperate SYS_OP from LOAD and JALR which prevents to detect a CSR operation (spike compatibility). |
+| 1.3     | 29/03/2026 | Kawanami   | Improve global lisibility by using package instead of parameters. |
 ********************************************************************************
 */
 
-module decode #(
-    /* Global parameters */
-    /// Number of bits for addressing
-    parameter int                          AddrWidth    = 32,
-    /// Width of data paths (in bits)
-    parameter int                          DataWidth    = 32,
-    /// Instruction width (in bits, usually 32)
-    parameter int                          InstrWidth   = 32,
-    /// Width of the GPR index (in bits, usually 5 for 32 regs)
-    parameter int                          RfAddrWidth  = 5,
-    /// Width of the CSR address field (in bits, usually 12)
-    parameter int                          CsrAddrWidth = 12,
-    /* Exe control parameters */
-    /// Width of the execution unit control signal
-    parameter int                          ExeCtrlWidth = 5,
-    /// Add operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Add          = 5'b00000,
-    /// Sub operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Sub          = 5'b00001,
-    /// Shift Left Logical operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Sll          = 5'b00010,
-    /// Shift Right Logical operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Srl          = 5'b00011,
-    /// Shift Right Arithmetic operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Sra          = 5'b00100,
-    /// Set on Less Than operation code (signed)
-    parameter logic [ExeCtrlWidth - 1 : 0] Slt          = 5'b00101,
-    /// Set on Less Than operation code (unsigned)
-    parameter logic [ExeCtrlWidth - 1 : 0] Sltu         = 5'b00110,
-    /// Bitwise Xor operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Xor          = 5'b00111,
-    /// Bitwise Or operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Or           = 5'b01000,
-    /// Bitwise And operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] And          = 5'b01001,
-    /// Compare Equal operation code (branch condition)
-    parameter logic [ExeCtrlWidth - 1 : 0] Eq           = 5'b01010,
-    /// Compare Not Equal operation code (branch condition)
-    parameter logic [ExeCtrlWidth - 1 : 0] Ne           = 5'b01011,
-    /// Greater or Equal operation code (signed compare)
-    parameter logic [ExeCtrlWidth - 1 : 0] Ge           = 5'b01100,
-    /// Greater or Equal Unsigned operation code (unsigned compare)
-    parameter logic [ExeCtrlWidth - 1 : 0] Geu          = 5'b01101,
-    /* verilator lint_off UNUSEDPARAM */
-    /// Add Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Addw         = 5'b10000,
-    /// Sub Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Subw         = 5'b10001,
-    /// Shift Left Logical Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Sllw         = 5'b10010,
-    /// Shift Right Logical Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Srlw         = 5'b10011,
-    /// Shift Right Arithmetic Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Sraw         = 5'b10100,
-    /* verilator lint_on UNUSEDPARAM */
-    /* Program counter control parameters */
-    /// Width of the program counter control signal
-    parameter int                          PcCtrlWidth  = 2,
-    /// PC increment (+4)
-    parameter logic [ PcCtrlWidth - 1 : 0] PcInc        = 2'b00,
-    /// PC set to ALU output (absolute jump)
-    parameter logic [ PcCtrlWidth - 1 : 0] PcSet        = 2'b01,
-    /// PC Add with ALU output (PC-relative)
-    parameter logic [ PcCtrlWidth - 1 : 0] PcAdd        = 2'b10,
-    /// Conditional PC update (based on branch condition)
-    parameter logic [ PcCtrlWidth - 1 : 0] PcCond       = 2'b11,
-    /* Memory control parameters */
-    /// Width of the memory control signal
-    parameter int                          MemCtrlWidth = 5,
-    /// Memory idle (no memory operation)
-    parameter logic [MemCtrlWidth - 1 : 0] MemIdle      = 5'b00000,
-    /// Load byte (sign-extended)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRb        = 5'b00001,
-    /// Load byte (zero-extended)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRbu       = 5'b01001,
-    /// Store byte
-    parameter logic [MemCtrlWidth - 1 : 0] MemWb        = 5'b10001,
-    /// Load half-word (sign-extended, 16 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRh        = 5'b00010,
-    /// Load half-word (zero-extended, 16 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRhu       = 5'b01010,
-    /// Store half-word
-    parameter logic [MemCtrlWidth - 1 : 0] MemWh        = 5'b10010,
-    /// Load word (sign-extended, 32 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRw        = 5'b00011,
-    /// Load word (zero-extended, 32 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRwu       = 5'b01011,
-    /// Store word (32 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemWw        = 5'b10011,
-    /// Load double-word (64 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemRd        = 5'b00100,
-    /// Store double-word (64 bits)
-    parameter logic [MemCtrlWidth - 1 : 0] MemWd        = 5'b10100,
-    /* General Purpose Registers control parameters */
-    /// Width of the GPR write-back control signal
-    parameter int                          GprCtrlWidth = 3,
-    /// No update to GPR
-    parameter logic [GprCtrlWidth - 1 : 0] GprIdle      = 3'b000,
-    /// Write-back from memory output
-    parameter logic [GprCtrlWidth - 1 : 0] GprMem       = 3'b100,
-    /// Write-back from ALU output
-    parameter logic [GprCtrlWidth - 1 : 0] GprAlu       = 3'b101,
-    /// Write-back from program counter (link reg)
-    parameter logic [GprCtrlWidth - 1 : 0] GprPrgmc     = 3'b110,
-    /// Write-back from operand 3 (e.g., for CSR ops)
-    parameter logic [GprCtrlWidth - 1 : 0] GprOp3       = 3'b111,
-    /* Control & Status Registers control parameters */
-    /// Width of the CSR control signal
-    parameter int                          CsrCtrlWidth = 1,
-    /// No update to CSR
-    parameter logic [CsrCtrlWidth - 1 : 0] CsrIdle      = 1'b0
+module decode
+
+  import core_pkg::INSTR_WIDTH;
+  import core_pkg::RF_ADDR_WIDTH;
+  import core_pkg::CSR_ADDR_WIDTH;
+  import core_pkg::OP_WIDTH;
+  import core_pkg::FUNCT3_WIDTH;
+  import core_pkg::FUNCT7_WIDTH;
+  import core_pkg::LOAD_OP;
+  import core_pkg::IMM_OP;
+  import core_pkg::IMMW_OP;
+  import core_pkg::REGW_OP;
+  import core_pkg::AUIPC_OP;
+  import core_pkg::STORE_OP;
+  import core_pkg::REG_OP;
+  import core_pkg::LUI_OP;
+  import core_pkg::BRANCH_OP;
+  import core_pkg::JALR_OP;
+  import core_pkg::JAL_OP;
+  import core_pkg::SYS_OP;
+  import core_pkg::EXE_CTRL_WIDTH;
+  import core_pkg::EXE_ADD;
+  import core_pkg::EXE_SUB;
+  import core_pkg::EXE_SLL;
+  import core_pkg::EXE_SRL;
+  import core_pkg::EXE_SRA;
+  import core_pkg::EXE_SLT;
+  import core_pkg::EXE_SLTU;
+  import core_pkg::EXE_XOR;
+  import core_pkg::EXE_OR;
+  import core_pkg::EXE_AND;
+  import core_pkg::EXE_EQ;
+  import core_pkg::EXE_NE;
+  import core_pkg::EXE_GE;
+  import core_pkg::EXE_GEU;
+  import core_pkg::EXE_ADDW;
+  import core_pkg::EXE_SUBW;
+  import core_pkg::EXE_SLLW;
+  import core_pkg::EXE_SRLW;
+  import core_pkg::EXE_SRAW;
+  import core_pkg::PC_CTRL_WIDTH;
+  import core_pkg::PC_INC;
+  import core_pkg::PC_SET;
+  import core_pkg::PC_ADD;
+  import core_pkg::PC_COND;
+  import core_pkg::MEM_CTRL_WIDTH;
+  import core_pkg::MEM_IDLE;
+  import core_pkg::MEM_RB;
+  import core_pkg::MEM_RBU;
+  import core_pkg::MEM_WB;
+  import core_pkg::MEM_RH;
+  import core_pkg::MEM_RHU;
+  import core_pkg::MEM_WH;
+  import core_pkg::MEM_RW;
+  import core_pkg::MEM_RWU;
+  import core_pkg::MEM_WW;
+  import core_pkg::MEM_RD;
+  import core_pkg::MEM_WD;
+  import core_pkg::GPR_CTRL_WIDTH;
+  import core_pkg::GPR_IDLE;
+  import core_pkg::GPR_MEM;
+  import core_pkg::GPR_ALU;
+  import core_pkg::GPR_PRGMC;
+  import core_pkg::GPR_OP3;
+  import core_pkg::CSR_CTRL_WIDTH;
+  import core_pkg::CSR_IDLE;
+  import core_pkg::CSR_ALU;
+
+
+#(
+    /// Architecture to build (either 32-bit or 64-bit)
+    parameter int unsigned Archi = 32
 ) (
     /// System active low reset
-    input  wire                         rstn_i,
+    input  wire                          rstn_i,
     /// valid flag (1: valid, 0: invalid)
-    output wire                         valid_o,
+    output wire                          valid_o,
     /// Instruction to decode
-    input  wire [InstrWidth    - 1 : 0] instr_i,
+    input  wire [INSTR_WIDTH    - 1 : 0] instr_i,
     /// Instruction valid flag
-    input  wire                         instr_valid_i,
+    input  wire                          instr_valid_i,
     /// General purpose register file RS1 value
-    input  wire [DataWidth     - 1 : 0] rs1_val_i,
+    input  wire [     Archi     - 1 : 0] rs1_val_i,
     /// General purpose register file RS2 value
-    input  wire [DataWidth     - 1 : 0] rs2_val_i,
+    input  wire [     Archi     - 1 : 0] rs2_val_i,
     /// Program counter
-    input  wire [AddrWidth     - 1 : 0] pc_i,
+    input  wire [     Archi     - 1 : 0] pc_i,
     /// General purpose register file port 0 read address
-    output wire [ RfAddrWidth  - 1 : 0] rs1_o,
+    output wire [RF_ADDR_WIDTH  - 1 : 0] rs1_o,
     /// General purpose register file port 1 read address
-    output wire [ RfAddrWidth  - 1 : 0] rs2_o,
+    output wire [RF_ADDR_WIDTH  - 1 : 0] rs2_o,
     /// Control/status register file output data
-    input  wire [DataWidth     - 1 : 0] csr_val_i,
+    input  wire [     Archi     - 1 : 0] csr_val_i,
     /// Control/status register file read address
-    output wire [ CsrAddrWidth - 1 : 0] csr_raddr_o,
+    output wire [CSR_ADDR_WIDTH - 1 : 0] csr_raddr_o,
     /// RS1 value or zeroes
-    output wire [DataWidth     - 1 : 0] op1_o,
+    output wire [     Archi     - 1 : 0] op1_o,
     /// RS2 value (REG_OP or BRANCH_OP) or immediate
-    output wire [DataWidth     - 1 : 0] op2_o,
+    output wire [     Archi     - 1 : 0] op2_o,
     /// Exe unit control
-    output wire [ ExeCtrlWidth - 1 : 0] exe_ctrl_o,
-    /// Immediate (BRANCH_OP or CSR_OP) or RS2 value (STORE_OP) or zeroes
-    output wire [DataWidth     - 1 : 0] op3_o,
+    output wire [EXE_CTRL_WIDTH - 1 : 0] exe_ctrl_o,
+    /// Immediate (BRANCH_OP or SYS_OP) or RS2 value (STORE_OP) or zeroes
+    output wire [     Archi     - 1 : 0] op3_o,
     /// Destination register
-    output wire [ RfAddrWidth  - 1 : 0] rd_o,
+    output wire [RF_ADDR_WIDTH  - 1 : 0] rd_o,
     /// Program counter control
-    output wire [ PcCtrlWidth  - 1 : 0] pc_ctrl_o,
+    output wire [PC_CTRL_WIDTH  - 1 : 0] pc_ctrl_o,
     /// Control/status register file control
-    output wire [ CsrCtrlWidth - 1 : 0] csr_ctrl_o,
+    output wire [CSR_CTRL_WIDTH - 1 : 0] csr_ctrl_o,
     /// General purpose register file control
-    output wire [ GprCtrlWidth - 1 : 0] gpr_ctrl_o,
+    output wire [GPR_CTRL_WIDTH - 1 : 0] gpr_ctrl_o,
     /// Memory control
-    output wire [ MemCtrlWidth - 1 : 0] mem_ctrl_o
+    output wire [MEM_CTRL_WIDTH - 1 : 0] mem_ctrl_o
 );
 
   /******************** DECLARATION ********************/
   /* parameters verification */
 
   /* local parameters */
-  /// Number of bits used for the RISC-V opcode field
-  localparam int OP_WIDTH = 7;
-  /// The RISC-V funct7 field is 7 bits wide,
-  /// but only bit 5 (funct7[5]) is used in this design
-  localparam int FUNCT7_WIDTH = 1;
-  /// Number of bits used for the RISC-V funct3 field
-  localparam int FUNCT3_WIDTH = 3;
-  /// Opcode for load instructions (e.g., LW)
-  localparam logic [OP_WIDTH - 1 : 0] LOAD_OP = 7'b0000011;
-  /// Opcode for ALU operations with immediate (I-type)
-  localparam logic [OP_WIDTH - 1 : 0] IMM_OP = 7'b0010011;
-  /// Opcode for 32-bits operations with immediate on 64 bits architecture
-  localparam logic [OP_WIDTH - 1 : 0] IMMW_OP = 7'b0011011;
-  /// Opcode for 32-bits operations with registers on 64 bits architecture
-  localparam logic [OP_WIDTH - 1 : 0] REGW_OP = 7'b0111011;
-  /// Opcode for AUIPC instruction (Add Upper Immediate to pc_i)
-  localparam logic [OP_WIDTH - 1 : 0] AUIPC_OP = 7'b0010111;
-  /// Opcode for store instructions (e.g., SW)
-  localparam logic [OP_WIDTH - 1 : 0] STORE_OP = 7'b0100011;
-  /// Opcode for register-register ALU operations (R-type)
-  localparam logic [OP_WIDTH - 1 : 0] REG_OP = 7'b0110011;
-  /// Opcode for LUI instruction (Load Upper Immediate)
-  localparam logic [OP_WIDTH - 1 : 0] LUI_OP = 7'b0110111;
-  /// Opcode for branch instructions (e.g., BEQ, BNE)
-  localparam logic [OP_WIDTH - 1 : 0] BRANCH_OP = 7'b1100011;
-  /// Opcode for JALR (Jump and Link Register, I-type)
-  localparam logic [OP_WIDTH - 1 : 0] JALR_OP = 7'b1100111;
-  /// Opcode for JAL (Jump and Link, J-type)
-  localparam logic [OP_WIDTH - 1 : 0] JAL_OP = 7'b1101111;
-  /// Opcode for CSR instructions (Control and Status Registers)
-  localparam logic [OP_WIDTH - 1 : 0] CSR_OP = 7'b1110011;
 
   /* functions */
 
@@ -245,31 +176,31 @@ module decode #(
   /// Instruction opcode field
   logic [OP_WIDTH       - 1 : 0] op;
   /// Read address for GPR port 0
-  logic [  RfAddrWidth  - 1 : 0] rs1;
+  logic [RF_ADDR_WIDTH  - 1 : 0] rs1;
   /// Read address for GPR port 1
-  logic [  RfAddrWidth  - 1 : 0] rs2;
+  logic [RF_ADDR_WIDTH  - 1 : 0] rs2;
   /// Read address for CSR access
-  logic [  CsrAddrWidth - 1 : 0] csr_raddr;
-  /// Instruction funct3 field (operation Sub-type)
+  logic [CSR_ADDR_WIDTH - 1 : 0] csr_raddr;
+  /// Instruction funct3 field (operation EXE_SUB-type)
   logic [FUNCT3_WIDTH   - 1 : 0] funct3;
   /// Instruction funct7[5] field (for R-type variants)
   logic [FUNCT7_WIDTH   - 1 : 0] funct7;
   /// ALU operation control signal (exe unit)
-  logic [  ExeCtrlWidth - 1 : 0] exe_ctrl;
+  logic [EXE_CTRL_WIDTH - 1 : 0] exe_ctrl;
   /// Program counter update control (write-back unit)
-  logic [  PcCtrlWidth  - 1 : 0] pc_ctrl;
+  logic [PC_CTRL_WIDTH  - 1 : 0] pc_ctrl;
   /// Memory access control signal (write-back unit)
-  logic [  MemCtrlWidth - 1 : 0] mem_ctrl;
+  logic [MEM_CTRL_WIDTH - 1 : 0] mem_ctrl;
   /// Register write-back control signal (write-back unit)
-  logic [  GprCtrlWidth - 1 : 0] gpr_ctrl;
+  logic [GPR_CTRL_WIDTH - 1 : 0] gpr_ctrl;
   /// Value of source register RS1 or zero if unused
-  logic [ DataWidth     - 1 : 0] op1;
+  logic [     Archi     - 1 : 0] op1;
   /// RS2 value (REG/BRANCH) or immediate (IMM/CSR)
-  logic [ DataWidth     - 1 : 0] op2;
+  logic [     Archi     - 1 : 0] op2;
   /// Immediate (BRANCH/CSR) or RS2 (STORE) or zero if unused
-  logic [ DataWidth     - 1 : 0] op3;
+  logic [     Archi     - 1 : 0] op3;
   /// Destination register address
-  logic [  RfAddrWidth  - 1 : 0] rd;
+  logic [RF_ADDR_WIDTH  - 1 : 0] rd;
   /********************             ********************/
 
 
@@ -292,8 +223,8 @@ module decode #(
   *   but is not meaningful for AUIPC, LUI, and JAL,
   *   which do not require function-specific variants.
   *
-  * - `funct7` is only used by R-type instructions (like Add, Sub, etc.)
-  *   to differentiate between operations such as Add and Sub.
+  * - `funct7` is only used by R-type instructions (like EXE_ADD, EXE_SUB, etc.)
+  *   to differentiate between operations such as EXE_ADD and EXE_SUB.
   *   It is not relevant for STORE, BRANCH, AUIPC, LUI, or JAL.
   *
   * - The register source 1 (`rs1_o`) is extracted for all instructions
@@ -341,7 +272,7 @@ module decode #(
         csr_raddr = '0;
       end
 
-      CSR_OP: begin
+      SYS_OP: begin
         funct7 = '0;
         rs2    = '0;
       end
@@ -403,83 +334,83 @@ module decode #(
   *
   * - For arithmetic/logical operations (`REG_OP`, `IMM_OP`),
   *   the ALU operation is selected using `funct3` and in some cases,
-  *  `funct7[5]` (e.g., to distinguish Add/Sub or Srl/Sra).
+  *  `funct7[5]` (e.g., to distinguish EXE_ADD/EXE_SUB or EXE_SRL/EXE_SRA).
   *
   * - For branch instructions (`BRANCH_OP`),
-  *   `funct3` specifies the comparison type (e.g., Beq, Bne, Slt).
+  *   `funct3` specifies the comparison type (e.g., Beq, Bne, EXE_SLT).
   *
   * - For other instructions (LOAD, STORE, AUIPC, LUI, JAL, CSR, unsupported),
-  *   the default ALU operation is Add.
+  *   the default ALU operation is EXE_ADD.
   *   This is functionally correct for U-Type instructions
   *   and address calculations, and harmless for current CSR implementation
   *   or unsupported instructions where the result is unused
   *   but required to maintain data flow consistency.
   */
   generate
-    if (DataWidth == 64) begin : gen_exe_ctrl_gen_64
+    if (Archi == 64) begin : gen_exe_ctrl_gen_64
       always_comb begin : exe_ctrl_gen
         if (op == REG_OP || op == IMM_OP) begin
           case (funct3)
-            3'b000:  exe_ctrl = (op == REG_OP) && funct7 ? Sub : Add;
-            3'b001:  exe_ctrl = Sll;
-            3'b010:  exe_ctrl = Slt;
-            3'b011:  exe_ctrl = Sltu;
-            3'b100:  exe_ctrl = Xor;
-            3'b101:  exe_ctrl = funct7 ? Sra : Srl;
-            3'b110:  exe_ctrl = Or;
-            3'b111:  exe_ctrl = And;
-            default: exe_ctrl = Add;
+            3'b000:  exe_ctrl = (op == REG_OP) && funct7 ? EXE_SUB : EXE_ADD;
+            3'b001:  exe_ctrl = EXE_SLL;
+            3'b010:  exe_ctrl = EXE_SLT;
+            3'b011:  exe_ctrl = EXE_SLTU;
+            3'b100:  exe_ctrl = EXE_XOR;
+            3'b101:  exe_ctrl = funct7 ? EXE_SRA : EXE_SRL;
+            3'b110:  exe_ctrl = EXE_OR;
+            3'b111:  exe_ctrl = EXE_AND;
+            default: exe_ctrl = EXE_ADD;
           endcase
         end
         else if (op == REGW_OP || op == IMMW_OP) begin
           case (funct3)
-            3'b000:  exe_ctrl = (op == REGW_OP) && funct7 ? Subw : Addw;
-            3'b001:  exe_ctrl = Sllw;
-            3'b101:  exe_ctrl = funct7 ? Sraw : Srlw;
-            default: exe_ctrl = Addw;
+            3'b000:  exe_ctrl = (op == REGW_OP) && funct7 ? EXE_SUBW : EXE_ADDW;
+            3'b001:  exe_ctrl = EXE_SLLW;
+            3'b101:  exe_ctrl = funct7 ? EXE_SRAW : EXE_SRLW;
+            default: exe_ctrl = EXE_ADDW;
           endcase
         end
         else if (op == BRANCH_OP) begin
           case (funct3)
-            3'b000:  exe_ctrl = Eq;
-            3'b001:  exe_ctrl = Ne;
-            3'b100:  exe_ctrl = Slt;
-            3'b101:  exe_ctrl = Ge;
-            3'b110:  exe_ctrl = Sltu;
-            3'b111:  exe_ctrl = Geu;
+            3'b000:  exe_ctrl = EXE_EQ;
+            3'b001:  exe_ctrl = EXE_NE;
+            3'b100:  exe_ctrl = EXE_SLT;
+            3'b101:  exe_ctrl = EXE_GE;
+            3'b110:  exe_ctrl = EXE_SLTU;
+            3'b111:  exe_ctrl = EXE_GEU;
             default: exe_ctrl = 'x;
           endcase
         end
-        else exe_ctrl = Add;
+        else exe_ctrl = EXE_ADD;
       end
     end
     else begin : gen_exe_ctrl_gen_32
       always_comb begin : exe_ctrl_gen
         if (op == REG_OP || op == IMM_OP) begin
           case (funct3)
-            3'b000:  exe_ctrl = (op == REG_OP) && funct7 ? Sub : Add;
-            3'b001:  exe_ctrl = Sll;
-            3'b010:  exe_ctrl = Slt;
-            3'b011:  exe_ctrl = Sltu;
-            3'b100:  exe_ctrl = Xor;
-            3'b101:  exe_ctrl = funct7 ? Sra : Srl;
-            3'b110:  exe_ctrl = Or;
-            3'b111:  exe_ctrl = And;
-            default: exe_ctrl = Add;
+            3'b000:  exe_ctrl = (op == REG_OP) && funct7 ? EXE_SUB : EXE_ADD;
+            3'b001:  exe_ctrl = EXE_SLL;
+            3'b010:  exe_ctrl = EXE_SLT;
+            3'b011:  exe_ctrl = EXE_SLTU;
+            3'b100:  exe_ctrl = EXE_XOR;
+            3'b101:  exe_ctrl = funct7 ? EXE_SRA : EXE_SRL;
+            3'b110:  exe_ctrl = EXE_OR;
+            3'b111:  exe_ctrl = EXE_AND;
+            default: exe_ctrl = EXE_ADD;
           endcase
         end
         else if (op == BRANCH_OP) begin
           case (funct3)
-            3'b000:  exe_ctrl = Eq;
-            3'b001:  exe_ctrl = Ne;
-            3'b100:  exe_ctrl = Slt;
-            3'b101:  exe_ctrl = Ge;
-            3'b110:  exe_ctrl = Sltu;
-            3'b111:  exe_ctrl = Geu;
+            3'b000:  exe_ctrl = EXE_EQ;
+            3'b001:  exe_ctrl = EXE_NE;
+            3'b100:  exe_ctrl = EXE_SLT;
+            3'b101:  exe_ctrl = EXE_GE;
+            3'b110:  exe_ctrl = EXE_SLTU;
+            3'b111:  exe_ctrl = EXE_GEU;
             default: exe_ctrl = 'x;
           endcase
         end
-        else exe_ctrl = Add;
+        else exe_ctrl = EXE_ADD;
       end
     end
   endgenerate
@@ -503,10 +434,10 @@ module decode #(
   */
   always_comb begin : pc_ctrl_gen
     case (op)
-      JALR_OP:   pc_ctrl = PcSet;
-      JAL_OP:    pc_ctrl = PcAdd;
-      BRANCH_OP: pc_ctrl = PcCond;
-      default:   pc_ctrl = PcInc;
+      JALR_OP:   pc_ctrl = PC_SET;
+      JAL_OP:    pc_ctrl = PC_ADD;
+      BRANCH_OP: pc_ctrl = PC_COND;
+      default:   pc_ctrl = PC_INC;
     endcase
   end
 
@@ -539,33 +470,33 @@ module decode #(
   *     • default → Write word (32-bit) or write double word (64-bit)
   *
   * - For all other instruction types,
-  *   no memory operation is performed (`MemIdle`).
+  *   no memory operation is performed (`MEM_IDLE`).
   *   This also prevents unsupported instructions to write into memory.
   */
   generate
-    if (DataWidth == 32) begin : gen_mem_ctrl_32
+    if (Archi == 32) begin : gen_mem_ctrl_32
       always_comb begin : mem_ctrl_gen
         if (!rstn_i) begin
-          mem_ctrl = MemIdle;
+          mem_ctrl = MEM_IDLE;
         end
         else begin
           if (op == LOAD_OP) begin
             case (funct3)
-              3'b000:  mem_ctrl = MemRb;
-              3'b001:  mem_ctrl = MemRh;
-              3'b100:  mem_ctrl = MemRbu;
-              3'b101:  mem_ctrl = MemRhu;
-              default: mem_ctrl = MemRw;
+              3'b000:  mem_ctrl = MEM_RB;
+              3'b001:  mem_ctrl = MEM_RH;
+              3'b100:  mem_ctrl = MEM_RBU;
+              3'b101:  mem_ctrl = MEM_RHU;
+              default: mem_ctrl = MEM_RW;
             endcase
           end
           else if (op == STORE_OP) begin
             case (funct3)
-              3'b000:  mem_ctrl = MemWb;
-              3'b001:  mem_ctrl = MemWh;
-              default: mem_ctrl = MemWw;
+              3'b000:  mem_ctrl = MEM_WB;
+              3'b001:  mem_ctrl = MEM_WH;
+              default: mem_ctrl = MEM_WW;
             endcase
           end
-          else mem_ctrl = MemIdle;
+          else mem_ctrl = MEM_IDLE;
         end
       end
 
@@ -574,29 +505,29 @@ module decode #(
 
       always_comb begin : mem_ctrl_gen
         if (!rstn_i) begin
-          mem_ctrl = MemIdle;
+          mem_ctrl = MEM_IDLE;
         end
         else begin
           if (op == LOAD_OP) begin
             case (funct3)
-              3'b000:  mem_ctrl = MemRb;
-              3'b001:  mem_ctrl = MemRh;
-              3'b010:  mem_ctrl = MemRw;
-              3'b100:  mem_ctrl = MemRbu;
-              3'b101:  mem_ctrl = MemRhu;
-              3'b110:  mem_ctrl = MemRwu;
-              default: mem_ctrl = MemRd;
+              3'b000:  mem_ctrl = MEM_RB;
+              3'b001:  mem_ctrl = MEM_RH;
+              3'b010:  mem_ctrl = MEM_RW;
+              3'b100:  mem_ctrl = MEM_RBU;
+              3'b101:  mem_ctrl = MEM_RHU;
+              3'b110:  mem_ctrl = MEM_RWU;
+              default: mem_ctrl = MEM_RD;
             endcase
           end
           else if (op == STORE_OP) begin
             case (funct3)
-              3'b000:  mem_ctrl = MemWb;
-              3'b001:  mem_ctrl = MemWh;
-              3'b010:  mem_ctrl = MemWw;
-              default: mem_ctrl = MemWd;
+              3'b000:  mem_ctrl = MEM_WB;
+              3'b001:  mem_ctrl = MEM_WH;
+              3'b010:  mem_ctrl = MEM_WW;
+              default: mem_ctrl = MEM_WD;
             endcase
           end
-          else mem_ctrl = MemIdle;
+          else mem_ctrl = MEM_IDLE;
         end
       end
 
@@ -617,17 +548,17 @@ module decode #(
   *
   * The `gpr_ctrl_o` signal is used to drive a multiplexer at the write-back unit:
   *
-  * - `LOAD_OP`         → Write the value loaded from memory (`GprMem`)
+  * - `LOAD_OP`         → Write the value loaded from memory (`GPR_MEM`)
   * - `IMM_OP`,
   *   `IMMW_OP`,
   *   `AUIPC_OP`,
   *   `REG_OP`,
   *   `REGW_OP`,
-  *   `LUI_OP`          → Write the result from the ALU (`GprAlu`)
+  *   `LUI_OP`          → Write the result from the ALU (`GPR_ALU`)
   *                      (AUIPC uses ALU to compute `pc_i` + imm)
   * - `JAL_OP`,
-  *   `JALR_OP`         → Write the return address (`pc_i` + 4) (`GprPrgmc`)
-  * - `CSR_OP`          → Write the content of source register op3_o (`GprOp3`)
+  *   `JALR_OP`         → Write the return address (`pc_i` + 4) (`GPR_PRGMC`)
+  * - `SYS_OP`          → Write the content of source register op3_o (`GPR_OP3`)
   *                       which contain the mcycle register value
   * - Others            → No register write-back (`RD_IDLE`).
   *                       This also prevent unsupported instructions to write
@@ -635,16 +566,16 @@ module decode #(
   */
   always_comb begin : gpr_ctrl_gen
     if (!rstn_i) begin
-      gpr_ctrl = GprIdle;
+      gpr_ctrl = GPR_IDLE;
     end
     else begin
       case (op)
-        LOAD_OP:                                            gpr_ctrl = GprMem;
-        IMM_OP, IMMW_OP, REGW_OP, AUIPC_OP, REG_OP, LUI_OP: gpr_ctrl = GprAlu;
-        JALR_OP, JAL_OP:                                    gpr_ctrl = GprPrgmc;
-        CSR_OP:                                             gpr_ctrl = GprOp3;
+        LOAD_OP:                                            gpr_ctrl = GPR_MEM;
+        IMM_OP, IMMW_OP, REGW_OP, AUIPC_OP, REG_OP, LUI_OP: gpr_ctrl = GPR_ALU;
+        JALR_OP, JAL_OP:                                    gpr_ctrl = GPR_PRGMC;
+        SYS_OP:                                             gpr_ctrl = GPR_OP3;
 
-        default: gpr_ctrl = GprIdle;
+        default: gpr_ctrl = GPR_IDLE;
       endcase
     end
   end
@@ -660,7 +591,7 @@ module decode #(
   * The CSR automatically returns the 32 LSb of the mcycle value.
   * Thus, nothing to control.
   */
-  assign csr_ctrl_o = CsrIdle;
+  assign csr_ctrl_o = CSR_IDLE;
 
 
   /// Operands generator
@@ -682,7 +613,7 @@ module decode #(
   * - `op3_o` : second operand (for STORE),
   *             branch offset (BRANCH), or CSR value.
   *
-  * All immediate values are sign-extended to match `DataWidth`.
+  * All immediate values are sign-extended to match `Archi`.
   */
   always_comb begin : operands_gen
     op1 = rs1_val_i;
@@ -691,17 +622,17 @@ module decode #(
     case (op)
 
       LOAD_OP: begin
-        op2 = {{DataWidth - 12{instr_i[31]}}, instr_i[31:20]};
+        op2 = {{Archi - 12{instr_i[31]}}, instr_i[31:20]};
       end
 
       STORE_OP: begin
-        op2 = {{DataWidth - 12{instr_i[31]}}, instr_i[31:25], instr_i[11:7]};
+        op2 = {{Archi - 12{instr_i[31]}}, instr_i[31:25], instr_i[11:7]};
         op3 = rs2_val_i;
       end
 
       IMM_OP, IMMW_OP: begin
-        if (funct3 == 3'b001 || funct3 == 3'b101) op2 = {{DataWidth - 12{1'b0}}, instr_i[31:20]};
-        else op2 = {{DataWidth - 12{instr_i[31]}}, instr_i[31:20]};
+        if (funct3 == 3'b001 || funct3 == 3'b101) op2 = {{Archi - 12{1'b0}}, instr_i[31:20]};
+        else op2 = {{Archi - 12{instr_i[31]}}, instr_i[31:20]};
       end
 
       REG_OP, REGW_OP: begin
@@ -709,45 +640,35 @@ module decode #(
 
       AUIPC_OP: begin
         op1 = pc_i;
-        op2 = instr_i[31] == 1'b1 ? {{DataWidth - 32{1'b1}}, instr_i[31:12], {12{1'b0}}} :
-            {{DataWidth - 32{1'b0}}, instr_i[31:12], {12{1'b0}}};
+        op2 = instr_i[31] == 1'b1 ? {{Archi - 32{1'b1}}, instr_i[31:12], {12{1'b0}}} :
+            {{Archi - 32{1'b0}}, instr_i[31:12], {12{1'b0}}};
       end
 
       LUI_OP: begin
         op1 = '0;
-        op2 = instr_i[31] == 1'b1 ? {{DataWidth - 32{1'b1}}, instr_i[31:12], {12{1'b0}}} :
-            {{DataWidth - 32{1'b0}}, instr_i[31:12], {12{1'b0}}};
+        op2 = instr_i[31] == 1'b1 ? {{Archi - 32{1'b1}}, instr_i[31:12], {12{1'b0}}} :
+            {{Archi - 32{1'b0}}, instr_i[31:12], {12{1'b0}}};
       end
 
       BRANCH_OP: begin
         op3 = {
-          {DataWidth - 13{instr_i[31]}},
-          instr_i[31],
-          instr_i[7],
-          instr_i[30:25],
-          instr_i[11:8],
-          1'b0
+          {Archi - 13{instr_i[31]}}, instr_i[31], instr_i[7], instr_i[30:25], instr_i[11:8], 1'b0
         };
       end
 
       JALR_OP: begin
-        op2 = {{DataWidth - 12{instr_i[31]}}, instr_i[31:20]};
+        op2 = {{Archi - 12{instr_i[31]}}, instr_i[31:20]};
       end
 
       JAL_OP: begin
         op1 = '0;
         op2 = {
-          {DataWidth - 21{instr_i[31]}},
-          instr_i[31],
-          instr_i[19:12],
-          instr_i[20],
-          instr_i[30:21],
-          1'b0
+          {Archi - 21{instr_i[31]}}, instr_i[31], instr_i[19:12], instr_i[20], instr_i[30:21], 1'b0
         };
       end
 
-      CSR_OP: begin
-        op2 = {{DataWidth - 12{instr_i[31]}}, instr_i[31:20]};
+      SYS_OP: begin
+        op2 = {{Archi - 12{instr_i[31]}}, instr_i[31:20]};
         op3 = csr_val_i;
       end
 

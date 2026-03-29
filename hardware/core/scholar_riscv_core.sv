@@ -4,8 +4,8 @@
 \file       scholar_riscv_core.sv
 \brief      SCHOLAR RISC-V Core Module
 \author     Kawanami
-\date       28/03/2026
-\version    1.3
+\date       29/03/2026
+\version    1.4
 
 \details
   This module is the top-level module of the SCHOLAR RISC-V core.
@@ -37,13 +37,83 @@
 | 1.1     | 23/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 | 1.2     | 13/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 | 1.3     | 28/03/2026 | Kawanami   | Improve spike compatibility.              |
+| 1.4     | 29/03/2026 | Kawanami   | Improve global lisibility by using package instead of parameters. |
 ********************************************************************************
 */
-module scholar_riscv_core #(
+module scholar_riscv_core
+
+  import core_pkg::INSTR_WIDTH;
+  import core_pkg::NB_GPR;
+  import core_pkg::RF_ADDR_WIDTH;
+  import core_pkg::CSR_ADDR_WIDTH;
+  import core_pkg::OP_WIDTH;
+  import core_pkg::FUNCT3_WIDTH;
+  import core_pkg::FUNCT7_WIDTH;
+  import core_pkg::LOAD_OP;
+  import core_pkg::IMM_OP;
+  import core_pkg::IMMW_OP;
+  import core_pkg::REGW_OP;
+  import core_pkg::AUIPC_OP;
+  import core_pkg::STORE_OP;
+  import core_pkg::REG_OP;
+  import core_pkg::LUI_OP;
+  import core_pkg::BRANCH_OP;
+  import core_pkg::JALR_OP;
+  import core_pkg::JAL_OP;
+  import core_pkg::SYS_OP;
+  import core_pkg::EXE_CTRL_WIDTH;
+  import core_pkg::EXE_ADD;
+  import core_pkg::EXE_SUB;
+  import core_pkg::EXE_SLL;
+  import core_pkg::EXE_SRL;
+  import core_pkg::EXE_SRA;
+  import core_pkg::EXE_SLT;
+  import core_pkg::EXE_SLTU;
+  import core_pkg::EXE_XOR;
+  import core_pkg::EXE_OR;
+  import core_pkg::EXE_AND;
+  import core_pkg::EXE_EQ;
+  import core_pkg::EXE_NE;
+  import core_pkg::EXE_GE;
+  import core_pkg::EXE_GEU;
+  import core_pkg::EXE_ADDW;
+  import core_pkg::EXE_SUBW;
+  import core_pkg::EXE_SLLW;
+  import core_pkg::EXE_SRLW;
+  import core_pkg::EXE_SRAW;
+  import core_pkg::PC_CTRL_WIDTH;
+  import core_pkg::PC_INC;
+  import core_pkg::PC_SET;
+  import core_pkg::PC_ADD;
+  import core_pkg::PC_COND;
+  import core_pkg::MEM_CTRL_WIDTH;
+  import core_pkg::MEM_IDLE;
+  import core_pkg::MEM_RB;
+  import core_pkg::MEM_RBU;
+  import core_pkg::MEM_WB;
+  import core_pkg::MEM_RH;
+  import core_pkg::MEM_RHU;
+  import core_pkg::MEM_WH;
+  import core_pkg::MEM_RW;
+  import core_pkg::MEM_RWU;
+  import core_pkg::MEM_WW;
+  import core_pkg::MEM_RD;
+  import core_pkg::MEM_WD;
+  import core_pkg::GPR_CTRL_WIDTH;
+  import core_pkg::GPR_IDLE;
+  import core_pkg::GPR_MEM;
+  import core_pkg::GPR_ALU;
+  import core_pkg::GPR_PRGMC;
+  import core_pkg::GPR_OP3;
+  import core_pkg::CSR_CTRL_WIDTH;
+  import core_pkg::CSR_IDLE;
+  import core_pkg::CSR_ALU;
+
+#(
     /// Architecture to build (either 32-bit or 64-bit)
-    parameter int                   Archi        = 32,
+    parameter int unsigned                 Archi        = 32,
     /// Core boot/start address
-    parameter logic [Archi - 1 : 0] StartAddress = '0
+    parameter logic        [Archi - 1 : 0] StartAddress = '0
 ) (
 `ifdef SIM
     /// Simulation CSR overwrite enable
@@ -102,122 +172,12 @@ module scholar_riscv_core #(
 
   /******************** DECLARATION ********************/
   /* parameters verification */
+  /// Ensure XLEN is supported by the build (32 or 64)
   if (Archi != 32 && Archi != 64) begin : gen_architecture_check
     $fatal("FATAL ERROR: Only 32-bit and 64-bit architectures are supported.");
   end
 
   /* local parameters */
-  /// Number of bits in a byte
-  localparam int BYTE_LENGTH = 8;
-  /// Width of an instruction (in bits)
-  localparam int INSTR_WIDTH = 32;
-  /// Number of general-purpose registers
-  localparam int NB_GPR = 32;
-  /// Address width of the general-purpose register file
-  localparam int RF_ADDR_WIDTH = $clog2(NB_GPR);
-  /// Address width of Control and Status Registers (CSR)
-  localparam int CSR_ADDR_WIDTH = 12;
-  /* EXE control signal */
-  /// EXE control signal width
-  localparam int EXE_CTRL_WIDTH = 5;
-  /// Addition operation
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] ADD = 5'b00000;
-  /// Subtraction operation
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] SUB = 5'b00001;
-  /// Logical shift left
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] SLL = 5'b00010;
-  /// Logical shift right
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] SRL = 5'b00011;
-  /// Arithmetic shift right
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] SRA = 5'b00100;
-  /// Set if less than (signed comparison)
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] SLT = 5'b00101;
-  /// Set if less than (unsigned comparison)
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] SLTU = 5'b00110;
-  /// Bitwise XOR
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] XOR = 5'b00111;
-  /// Bitwise OR
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] OR = 5'b01000;
-  /// Bitwise AND
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] AND = 5'b01001;
-  /// Equality comparison
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] EQ = 5'b01010;
-  /// Not equal comparison
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] NE = 5'b01011;
-  /// Greater than or equal (signed comparison)
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] GE = 5'b01100;
-  /// Greater than or equal (unsigned comparison)
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] GEU = 5'b01101;
-  /// Addition operation on word (64 bits Architecture)
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] ADDW = 5'b10000;
-  /// Subtraction operation on word (64 bits Architecture)
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] SUBW = 5'b10001;
-  /// Logical shift left on word (64 bits Architecture)
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] SLLW = 5'b10010;
-  /// Logical shift right on word (64 bits Architecture)
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] SRLW = 5'b10011;
-  /// Arithmetic shift right on word (64 bits Architecture)
-  localparam logic [EXE_CTRL_WIDTH - 1 : 0] SRAW = 5'b10100;
-  /* Program Counter (PC) Control Signal */
-  /// PC control signal width
-  localparam int PC_CTRL_WIDTH = 2;
-  /// Increment PC (PC = PC + ADDR_OFFSET)
-  localparam logic [PC_CTRL_WIDTH - 1 : 0] PC_INC = 2'b00;
-  /// Set PC to EXE output (used in JALR)
-  localparam logic [PC_CTRL_WIDTH - 1 : 0] PC_SET = 2'b01;
-  /// Compute PC as PC + EXE output (used in JAL)
-  localparam logic [PC_CTRL_WIDTH - 1 : 0] PC_ADD = 2'b10;
-  /// Conditional branch (PC = PC + offset if condition met, else PC + ADDR_OFFSET)
-  localparam logic [PC_CTRL_WIDTH - 1 : 0] PC_COND = 2'b11;
-  /* Memory Control Signal */
-  /// Memory control signal width
-  localparam int MEM_CTRL_WIDTH = 5;
-  /// No memory operation (idle)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_IDLE = 5'b00000;
-  /// Read byte (8-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_RB = 5'b00001;
-  /// Read unsigned byte (8-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_RBU = 5'b01001;
-  /// Write byte (8-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_WB = 5'b10001;
-  /// Read half-word (16-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_RH = 5'b00010;
-  /// Read unsigned half-word (16-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_RHU = 5'b01010;
-  /// Write half-word (16-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_WH = 5'b10010;
-  /// Read word (32-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_RW = 5'b00011;
-  /// Write word (32-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_WW = 5'b10011;
-  /// Read unsigned word (32-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_RWU = 5'b01011;
-  /// Read double word (64-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_RD = 5'b00100;
-  /// Write double word (64-bit)
-  localparam logic [MEM_CTRL_WIDTH - 1 : 0] MEM_WD = 5'b10100;
-  /* General purpose register file Control Signal */
-  /// Register file control signal width
-  localparam int GPR_CTRL_WIDTH = 3;
-  /// No register update (idle)
-  localparam logic [GPR_CTRL_WIDTH - 1 : 0] GPR_IDLE = 3'b000;
-  /// writeback from memory to register file (load byte/half/word/double)
-  localparam logic [GPR_CTRL_WIDTH - 1 : 0] GPR_MEM = 3'b100;
-  /// writeback from EXE output to register file (ALU operations)
-  localparam logic [GPR_CTRL_WIDTH - 1 : 0] GPR_ALU = 3'b101;
-  /// writeback from PC to register file (JAL, JALR instructions)
-  localparam logic [GPR_CTRL_WIDTH - 1 : 0] GPR_PRGMC = 3'b110;
-  /// writeback from RS2 operand to register file (used in CSR operations)
-  localparam logic [GPR_CTRL_WIDTH - 1 : 0] GPR_OP3 = 3'b111;
-  /* Control and Status Register (CSR) Control Signal */
-  /// CSR control signal width
-  localparam int CSR_CTRL_WIDTH = 1;
-  /// No CSR update (idle)
-  localparam logic [CSR_CTRL_WIDTH - 1 : 0] CSR_IDLE = 1'b0;
-  /* verilator lint_off UNUSED */
-  /// Writeback from EXE output to CSR (CSR instructions)
-  localparam logic [CSR_CTRL_WIDTH - 1 : 0] CSR_ALU = 1'b1;
-  /* verilator lint_on UNUSED */
 
   /* functions */
 
@@ -286,10 +246,7 @@ module scholar_riscv_core #(
 
 
   gpr #(
-      .AddrWidth   (Archi),
-      .DataWidth   (Archi),
-      .NbGpr       (NB_GPR),
-      .RfAddrWidth (RF_ADDR_WIDTH),
+      .Archi       (Archi),
       .StartAddress(StartAddress)
   ) gpr (
 `ifdef SIM
@@ -309,12 +266,8 @@ module scholar_riscv_core #(
       .pc_o      (gpr_pc)
   );
 
-
-
-
   csr #(
-      .DataWidth   (Archi),
-      .CsrAddrWidth(CSR_ADDR_WIDTH)
+      .Archi(Archi)
   ) csr (
 `ifdef SIM
       .en_i       (csr_en_i),
@@ -335,11 +288,8 @@ module scholar_riscv_core #(
 `endif
 
 
-
-
   fetch #(
-      .AddrWidth (Archi),
-      .InstrWidth(INSTR_WIDTH)
+      .Archi(Archi)
   ) fetch (
       .clk_i    (clk_i),
       .rstn_i   (rstn_i),
@@ -354,62 +304,8 @@ module scholar_riscv_core #(
       .err_i    (imem_err_i)
   );
 
-
-
-
-
   decode #(
-      .AddrWidth   (Archi),
-      .DataWidth   (Archi),
-      .InstrWidth  (INSTR_WIDTH),
-      .RfAddrWidth (RF_ADDR_WIDTH),
-      .CsrAddrWidth(CSR_ADDR_WIDTH),
-      .ExeCtrlWidth(EXE_CTRL_WIDTH),
-      .Add         (ADD),
-      .Sub         (SUB),
-      .Sll         (SLL),
-      .Srl         (SRL),
-      .Sra         (SRA),
-      .Slt         (SLT),
-      .Sltu        (SLTU),
-      .Xor         (XOR),
-      .Or          (OR),
-      .And         (AND),
-      .Eq          (EQ),
-      .Ne          (NE),
-      .Ge          (GE),
-      .Geu         (GEU),
-      .Addw        (ADDW),
-      .Subw        (SUBW),
-      .Sllw        (SLLW),
-      .Srlw        (SRLW),
-      .Sraw        (SRAW),
-      .PcCtrlWidth (PC_CTRL_WIDTH),
-      .PcInc       (PC_INC),
-      .PcSet       (PC_SET),
-      .PcAdd       (PC_ADD),
-      .PcCond      (PC_COND),
-      .MemCtrlWidth(MEM_CTRL_WIDTH),
-      .MemIdle     (MEM_IDLE),
-      .MemRb       (MEM_RB),
-      .MemRbu      (MEM_RBU),
-      .MemWb       (MEM_WB),
-      .MemRh       (MEM_RH),
-      .MemRhu      (MEM_RHU),
-      .MemWh       (MEM_WH),
-      .MemRw       (MEM_RW),
-      .MemWw       (MEM_WW),
-      .MemRwu      (MEM_RWU),
-      .MemRd       (MEM_RD),
-      .MemWd       (MEM_WD),
-      .GprCtrlWidth(GPR_CTRL_WIDTH),
-      .GprIdle     (GPR_IDLE),
-      .GprMem      (GPR_MEM),
-      .GprAlu      (GPR_ALU),
-      .GprPrgmc    (GPR_PRGMC),
-      .GprOp3      (GPR_OP3),
-      .CsrCtrlWidth(CSR_CTRL_WIDTH),
-      .CsrIdle     (CSR_IDLE)
+      .Archi(Archi)
   ) decode (
       .rstn_i       (rstn_i),
       .valid_o      (decode_valid),
@@ -433,32 +329,8 @@ module scholar_riscv_core #(
       .csr_ctrl_o   (decode_csr_ctrl)
   );
 
-
-
-
-
   exe #(
-      .DataWidth   (Archi),
-      .ExeCtrlWidth(EXE_CTRL_WIDTH),
-      .Add         (ADD),
-      .Sub         (SUB),
-      .Sll         (SLL),
-      .Srl         (SRL),
-      .Sra         (SRA),
-      .Slt         (SLT),
-      .Sltu        (SLTU),
-      .Xor         (XOR),
-      .Or          (OR),
-      .And         (AND),
-      .Eq          (EQ),
-      .Ne          (NE),
-      .Ge          (GE),
-      .Geu         (GEU),
-      .Addw        (ADDW),
-      .Subw        (SUBW),
-      .Sllw        (SLLW),
-      .Srlw        (SRLW),
-      .Sraw        (SRAW)
+      .Archi(Archi)
   ) exe (
       .op1_i     (decode_op1),
       .op2_i     (decode_op2),
@@ -466,38 +338,8 @@ module scholar_riscv_core #(
       .out_o     (exe_out)
   );
 
-
-
-
-
   writeback #(
-      .ByteLength  (BYTE_LENGTH),
-      .AddrWidth   (Archi),
-      .DataWidth   (Archi),
-      .RfAddrWidth (RF_ADDR_WIDTH),
-      .CsrAddrWidth(CSR_ADDR_WIDTH),
-      .PcCtrlWidth (PC_CTRL_WIDTH),
-      .PcInc       (PC_INC),
-      .PcSet       (PC_SET),
-      .PcAdd       (PC_ADD),
-      .PcCond      (PC_COND),
-      .MemCtrlWidth(MEM_CTRL_WIDTH),
-      .MemIdle     (MEM_IDLE),
-      .MemRb       (MEM_RB),
-      .MemRbu      (MEM_RBU),
-      .MemWb       (MEM_WB),
-      .MemRh       (MEM_RH),
-      .MemRhu      (MEM_RHU),
-      .MemWh       (MEM_WH),
-      .MemRw       (MEM_RW),
-      .MemWw       (MEM_WW),
-      .MemRwu      (MEM_RWU),
-      .GprCtrlWidth(GPR_CTRL_WIDTH),
-      .GprMem      (GPR_MEM),
-      .GprAlu      (GPR_ALU),
-      .GprPrgmc    (GPR_PRGMC),
-      .GprOp3      (GPR_OP3),
-      .CsrCtrlWidth(CSR_CTRL_WIDTH),
+      .Archi       (Archi),
       .StartAddress(StartAddress)
   ) writeback (
 `ifdef SIM

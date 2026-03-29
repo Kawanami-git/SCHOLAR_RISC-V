@@ -4,8 +4,8 @@
 \file       exe.sv
 \brief      SCHOLAR RISC-V core execution module
 \author     Kawanami
-\date       21/09/2025
-\version    1.1
+\date       29/03/2026
+\version    1.2
 
 \details
   This module implements the execution (exe) unit
@@ -32,63 +32,47 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
-| 1.1     | 21/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.1     | 21/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>EXE_ADD RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 29/03/2026 | Kawanami   | Improve global lisibility by using package instead of parameters. |
 ********************************************************************************
 */
-module exe #(
-    /// Width of data paths (in bits)
-    parameter int                          DataWidth    = 32,
-    /// Width of the execution unit control signal
-    parameter int                          ExeCtrlWidth = 5,
-    /// Add operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Add          = 5'b00000,
-    /// Sub operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Sub          = 5'b00001,
-    /// Shift Left Logical operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Sll          = 5'b00010,
-    /// Shift Right Logical operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Srl          = 5'b00011,
-    /// Shift Right Arithmetic operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Sra          = 5'b00100,
-    /// Set on Less Than operation code (signed)
-    parameter logic [ExeCtrlWidth - 1 : 0] Slt          = 5'b00101,
-    /// Set on Less Than operation code (unsigned)
-    parameter logic [ExeCtrlWidth - 1 : 0] Sltu         = 5'b00110,
-    /// Bitwise Xor operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Xor          = 5'b00111,
-    /// Bitwise Or operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] Or           = 5'b01000,
-    /// Bitwise And operation code
-    parameter logic [ExeCtrlWidth - 1 : 0] And          = 5'b01001,
-    /// Compare Equal operation code (branch condition)
-    parameter logic [ExeCtrlWidth - 1 : 0] Eq           = 5'b01010,
-    /// Compare Not Equal operation code (branch condition)
-    parameter logic [ExeCtrlWidth - 1 : 0] Ne           = 5'b01011,
-    /// Greater or Equal operation code (signed compare)
-    parameter logic [ExeCtrlWidth - 1 : 0] Ge           = 5'b01100,
-    /// Greater or Equal Unsigned operation code (unsigned compare)
-    parameter logic [ExeCtrlWidth - 1 : 0] Geu          = 5'b01101,
-    /// Add Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Addw         = 5'b10000,
-    /// Sub Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Subw         = 5'b10001,
-    /// Shift Left Logical Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Sllw         = 5'b10010,
-    /// Shift Right Logical Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Srlw         = 5'b10011,
-    /// Shift Right Arithmetic Word operation code (RV64 only)
-    parameter logic [ExeCtrlWidth - 1 : 0] Sraw         = 5'b10100
+module exe
+
+  import core_pkg::EXE_CTRL_WIDTH;
+  import core_pkg::EXE_ADD;
+  import core_pkg::EXE_SUB;
+  import core_pkg::EXE_SLL;
+  import core_pkg::EXE_SRL;
+  import core_pkg::EXE_SRA;
+  import core_pkg::EXE_SLT;
+  import core_pkg::EXE_SLTU;
+  import core_pkg::EXE_XOR;
+  import core_pkg::EXE_OR;
+  import core_pkg::EXE_AND;
+  import core_pkg::EXE_EQ;
+  import core_pkg::EXE_NE;
+  import core_pkg::EXE_GE;
+  import core_pkg::EXE_GEU;
+  import core_pkg::EXE_ADDW;
+  import core_pkg::EXE_SUBW;
+  import core_pkg::EXE_SLLW;
+  import core_pkg::EXE_SRLW;
+  import core_pkg::EXE_SRAW;
+
+#(
+    /// Architecture to build (either 32-bit or 64-bit)
+    parameter int unsigned Archi = 32
 ) (
     /* Decode signals */
     /// First operand
-    input  wire [DataWidth     - 1 : 0] op1_i,
+    input  wire [     Archi     - 1 : 0] op1_i,
     /// Second operand
-    input  wire [DataWidth     - 1 : 0] op2_i,
+    input  wire [     Archi     - 1 : 0] op2_i,
     /// Operation to perform
-    input  wire [ ExeCtrlWidth - 1 : 0] exe_ctrl_i,
+    input  wire [EXE_CTRL_WIDTH - 1 : 0] exe_ctrl_i,
     /* Output signal */
     /// Operation result
-    output wire [DataWidth     - 1 : 0] out_o
+    output wire [     Archi     - 1 : 0] out_o
 );
 
   /******************** DECLARATION ********************/
@@ -100,7 +84,7 @@ module exe #(
 
   /* wires */
   /// Operation result
-  logic [DataWidth - 1 : 0] out;
+  logic [Archi - 1 : 0] out;
 
   /* registers */
   /********************             ********************/
@@ -118,7 +102,7 @@ module exe #(
   * - Arithmetic/logical operations (`ADD`, `SUB`, `SLL`, etc.)
   *   directly apply the operation to `op1_i` and `op2_i`.
   *
-  * - Shift amounts are truncated to log2(`DataWidth`) bits (as per RISC-V spec).
+  * - Shift amounts are truncated to log2(`Archi`) bits (as per RISC-V spec).
   *
   * - Comparison operations return 1 or 0 depending on
   *   the result (used in branches or `SLT`/`SLTU`).
@@ -131,33 +115,33 @@ module exe #(
   * If `exe_ctrl_i` does not match a valid operation, the output defaults to zero.
   */
   generate
-    if (DataWidth == 64) begin : gen_alu_64
+    if (Archi == 64) begin : gen_alu_64
 
       always_comb begin : alu
         out = '0;
         case (exe_ctrl_i)
 
-          Add:  out = op1_i + op2_i;
-          Sub:  out = op1_i - op2_i;
-          Sll:  out = op1_i << op2_i[$clog2(DataWidth)-1 : 0];
-          Srl:  out = op1_i >> op2_i[$clog2(DataWidth)-1 : 0];
-          Sra:  out = $signed(op1_i) >>> op2_i[$clog2(DataWidth)-1 : 0];
-          Slt:  out = ($signed(op1_i) < $signed(op2_i)) ? 1 : 0;
-          Sltu: out = (op1_i < op2_i) ? 1 : 0;
-          Xor:  out = op1_i ^ op2_i;
-          Or:   out = op1_i | op2_i;
-          And:  out = op1_i & op2_i;
+          EXE_ADD:  out = op1_i + op2_i;
+          EXE_SUB:  out = op1_i - op2_i;
+          EXE_SLL:  out = op1_i << op2_i[$clog2(Archi)-1 : 0];
+          EXE_SRL:  out = op1_i >> op2_i[$clog2(Archi)-1 : 0];
+          EXE_SRA:  out = $signed(op1_i) >>> op2_i[$clog2(Archi)-1 : 0];
+          EXE_SLT:  out = ($signed(op1_i) < $signed(op2_i)) ? 1 : 0;
+          EXE_SLTU: out = (op1_i < op2_i) ? 1 : 0;
+          EXE_XOR:  out = op1_i ^ op2_i;
+          EXE_OR:   out = op1_i | op2_i;
+          EXE_AND:  out = op1_i & op2_i;
 
-          Addw: out[31:0] = op1_i[31:0] + op2_i[31:0];
-          Subw: out[31:0] = op1_i[31:0] - op2_i[31:0];
-          Sllw: out[31:0] = op1_i[31:0] << op2_i[4 : 0];
-          Srlw: out[31:0] = op1_i[31:0] >> op2_i[4 : 0];
-          Sraw: out[31:0] = $signed(op1_i[31:0]) >>> op2_i[4 : 0];
+          EXE_ADDW: out[31:0] = op1_i[31:0] + op2_i[31:0];
+          EXE_SUBW: out[31:0] = op1_i[31:0] - op2_i[31:0];
+          EXE_SLLW: out[31:0] = op1_i[31:0] << op2_i[4 : 0];
+          EXE_SRLW: out[31:0] = op1_i[31:0] >> op2_i[4 : 0];
+          EXE_SRAW: out[31:0] = $signed(op1_i[31:0]) >>> op2_i[4 : 0];
 
-          Eq:  out = (op1_i == op2_i) ? 1 : 0;
-          Ne:  out = (op1_i != op2_i) ? 1 : 0;
-          Ge:  out = ($signed(op1_i) >= $signed(op2_i)) ? 1 : 0;
-          Geu: out = (op1_i >= op2_i) ? 1 : 0;
+          EXE_EQ:  out = (op1_i == op2_i) ? 1 : 0;
+          EXE_NE:  out = (op1_i != op2_i) ? 1 : 0;
+          EXE_GE:  out = ($signed(op1_i) >= $signed(op2_i)) ? 1 : 0;
+          EXE_GEU: out = (op1_i >= op2_i) ? 1 : 0;
 
           default: out = '0;
 
@@ -165,7 +149,7 @@ module exe #(
       end
 
       /// Output driven by alu
-      assign out_o = exe_ctrl_i[4] ? {{DataWidth - 32{out[31]}}, out[31:0]} : out;
+      assign out_o = exe_ctrl_i[4] ? {{Archi - 32{out[31]}}, out[31:0]} : out;
 
     end
     else begin : gen_alu_32
@@ -174,21 +158,21 @@ module exe #(
         out = '0;
         case (exe_ctrl_i)
 
-          Add:  out = op1_i + op2_i;
-          Sub:  out = op1_i - op2_i;
-          Sll:  out = op1_i << op2_i[$clog2(DataWidth)-1 : 0];
-          Srl:  out = op1_i >> op2_i[$clog2(DataWidth)-1 : 0];
-          Sra:  out = $signed(op1_i) >>> op2_i[$clog2(DataWidth)-1 : 0];
-          Slt:  out = ($signed(op1_i) < $signed(op2_i)) ? 1 : 0;
-          Sltu: out = (op1_i < op2_i) ? 1 : 0;
-          Xor:  out = op1_i ^ op2_i;
-          Or:   out = op1_i | op2_i;
-          And:  out = op1_i & op2_i;
+          EXE_ADD:  out = op1_i + op2_i;
+          EXE_SUB:  out = op1_i - op2_i;
+          EXE_SLL:  out = op1_i << op2_i[$clog2(Archi)-1 : 0];
+          EXE_SRL:  out = op1_i >> op2_i[$clog2(Archi)-1 : 0];
+          EXE_SRA:  out = $signed(op1_i) >>> op2_i[$clog2(Archi)-1 : 0];
+          EXE_SLT:  out = ($signed(op1_i) < $signed(op2_i)) ? 1 : 0;
+          EXE_SLTU: out = (op1_i < op2_i) ? 1 : 0;
+          EXE_XOR:  out = op1_i ^ op2_i;
+          EXE_OR:   out = op1_i | op2_i;
+          EXE_AND:  out = op1_i & op2_i;
 
-          Eq:  out = (op1_i == op2_i) ? 1 : 0;
-          Ne:  out = (op1_i != op2_i) ? 1 : 0;
-          Ge:  out = ($signed(op1_i) >= $signed(op2_i)) ? 1 : 0;
-          Geu: out = (op1_i >= op2_i) ? 1 : 0;
+          EXE_EQ:  out = (op1_i == op2_i) ? 1 : 0;
+          EXE_NE:  out = (op1_i != op2_i) ? 1 : 0;
+          EXE_GE:  out = ($signed(op1_i) >= $signed(op2_i)) ? 1 : 0;
+          EXE_GEU: out = (op1_i >= op2_i) ? 1 : 0;
 
           default: out = '0;
 

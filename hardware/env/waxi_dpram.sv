@@ -5,8 +5,8 @@
 \brief      Dual-Port RAM (AXI write-only / Core write/read)
 
 \author     Kawanami
-\date       13/02/2026
-\version    1.3
+\date       29/03/2026
+\version    1.4
 
 \details
   Educational dual-port RAM used to store the SCHOLAR RISC-V core
@@ -40,6 +40,7 @@
 | 1.1     | 15/10/2025 | Kawanami   | Change module name from data_dpram to waxi_dpram.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 | 1.2     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
 | 1.3     | 13/02/2026 | Kawanami   | Replace core custom interface with OBI standard. |
+| 1.4     | 29/03/2026 | Kawanami   | Improve lisibility by directly using depth instead of size. |
 ********************************************************************************
 */
 
@@ -52,99 +53,97 @@ module waxi_dpram #(
     parameter  int unsigned AddrWidth       = 32,
     /// Data bus width in bits (applies to core and AXI)
     parameter  int unsigned DataWidth       = 32,
+    /// Number of bits of bytes enable
+    parameter  int unsigned BeWidth         = DataWidth / ByteLength,
     /// Address granularity in bytes (e.g., 4 bytes for 32-bit, 8 for 64-bit)
     localparam int unsigned AddrOffset      = DataWidth / ByteLength,
     /// Number of bits needed to encode byte offset within a word
     localparam int unsigned AddrOffsetWidth = $clog2(AddrOffset),
     /// Dual Port RAM size in bytes
-    parameter  int unsigned Size            = 16384,
-    /// AXI transaction ID width
-    parameter  int unsigned IdWidth         = 8
+    parameter  int unsigned Depth           = 4096
 ) (
 `ifdef SIM
     /// (Simulation only) Exposes the RAM contents for testbenches
-    output logic [DataWidth-1:0] mem_o[(Size / (DataWidth / ByteLength))],
+    output logic [DataWidth-1:0] mem_o[Depth],
 `endif
 
     /* Global signals */
     /// Core domain clock (drives the core-side port of the RAM)
-    input  wire                                  core_clk_i,
+    input  wire                         core_clk_i,
     /// AXI domain clock (drives the AXI-side port of the RAM and AXI control)
-    input  wire                                  axi_clk_i,
+    input  wire                         axi_clk_i,
     /// Global active-low reset for AXI control logic (memory contents unchanged)
-    input  wire                                  rstn_i,
+    input  wire                         rstn_i,
     /* Core signals */
     /// Address transfer request
-    input  wire                                  req_i,
+    input  wire                         req_i,
     /// Grant: Ready to accept address transfert
-    output wire                                  gnt_o,
+    output wire                         gnt_o,
     /* verilator lint_off UNUSEDSIGNAL */
     /// Address for memory access
-    input  wire [            AddrWidth  - 1 : 0] addr_i,
+    input  wire [   AddrWidth  - 1 : 0] addr_i,
     /* verilator lint_on UNUSEDSIGNAL */
     /// Write enable (1: write - 0: read)
-    input  wire                                  we_i,
+    input  wire                         we_i,
     /// Write data
-    input  wire [             DataWidth - 1 : 0] wdata_i,
+    input  wire [    DataWidth - 1 : 0] wdata_i,
     /// Byte enable
-    input  wire [         (DataWidth/8) - 1 : 0] be_i,
+    input  wire [      BeWidth - 1 : 0] be_i,
     /// Response transfer valid
-    output wire                                  rvalid_o,
+    output wire                         rvalid_o,
     /// Read data
-    output wire [             DataWidth - 1 : 0] rdata_o,
+    output wire [    DataWidth - 1 : 0] rdata_o,
     /// Error response
-    output wire                                  err_o,
+    output wire                         err_o,
     /* AXI signals */
     /// AWID: Write address transaction ID
-    input  wire [         IdWidth       - 1 : 0] s_axi_awid_i,
+    input  wire [                7 : 0] s_axi_awid_i,
     /// AWADDR: Start byte address for write transaction
-    input  wire [         AddrWidth     - 1 : 0] s_axi_awaddr_i,
+    input  wire [AddrWidth     - 1 : 0] s_axi_awaddr_i,
     /// AWSIZE: Bytes per beat = 2**AWSIZE (should match DataWidth/ByteLength)
-    input  wire [                         2 : 0] s_axi_awsize_i,
+    input  wire [                2 : 0] s_axi_awsize_i,
     /* verilator lint_off UNUSEDSIGNAL */
     /// AWLEN: Number of beats minus 1 (nominally 0 for single-beat)
-    input  wire [                         7 : 0] s_axi_awlen_i,
+    input  wire [                7 : 0] s_axi_awlen_i,
     /// AWBURST: Burst type (FIXED/INCR/WRAP)
-    input  wire [                         1 : 0] s_axi_awburst_i,
+    input  wire [                1 : 0] s_axi_awburst_i,
     /// AWLOCK: Lock (unused)
-    input  wire [                         1 : 0] s_axi_awlock_i,
+    input  wire [                1 : 0] s_axi_awlock_i,
     /// AWCACHE: Cache hints (unused)
-    input  wire [                         3 : 0] s_axi_awcache_i,
+    input  wire [                3 : 0] s_axi_awcache_i,
     /// AWPROT: Protection type (unused)
-    input  wire [                         2 : 0] s_axi_awprot_i,
+    input  wire [                2 : 0] s_axi_awprot_i,
     /// AWVALID: Write address valid
-    input  wire                                  s_axi_awvalid_i,
+    input  wire                         s_axi_awvalid_i,
     /* verilator lint_on UNUSEDSIGNAL */
     /// AWREADY: Write address ready
-    output wire                                  s_axi_awready_o,
+    output wire                         s_axi_awready_o,
     /// WDATA: Write data
-    input  wire [         DataWidth     - 1 : 0] s_axi_wdata_i,
+    input  wire [DataWidth     - 1 : 0] s_axi_wdata_i,
     /// WSTRB: Byte write strobes (one bit per byte)
-    input  wire [(DataWidth/ByteLength) - 1 : 0] s_axi_wstrb_i,
+    input  wire [      BeWidth - 1 : 0] s_axi_wstrb_i,
     /// WLAST: Last beat of burst
-    input  wire                                  s_axi_wlast_i,
+    input  wire                         s_axi_wlast_i,
     /// WVALID: Write data valid
-    input  wire                                  s_axi_wvalid_i,
+    input  wire                         s_axi_wvalid_i,
     /// WREADY: Write data ready
-    output wire                                  s_axi_wready_o,
+    output wire                         s_axi_wready_o,
     /// BID: Write transaction response ID
-    output wire [         IdWidth       - 1 : 0] s_axi_bid_o,
+    output wire [                7 : 0] s_axi_bid_o,
     /// BRESP: Write response (OKAY/SLVERR/DECERR)
-    output wire [                         1 : 0] s_axi_bresp_o,
+    output wire [                1 : 0] s_axi_bresp_o,
     /// BVALID: Write transaction response valid
-    output wire                                  s_axi_bvalid_o,
+    output wire                         s_axi_bvalid_o,
     /// BREADY: Write transaction response ready
-    input  wire                                  s_axi_bready_i
+    input  wire                         s_axi_bready_i
 );
 
   /******************** DECLARATION ********************/
   /* parameters verification */
 
   /* local parameters */
-  /// Memory depth
-  localparam int unsigned DEPTH = Size / (DataWidth / ByteLength);
   /// Useful number of bits to address the whole memory
-  localparam int unsigned USED_ADDR_WIDTH = $clog2(DEPTH);
+  localparam int unsigned USED_ADDR_WIDTH = $clog2(Depth);
 
   /* machine states */
 
@@ -167,7 +166,7 @@ module waxi_dpram #(
 
   /* registers */
   /// Registered AWID from AXI write address channel (transaction ID)
-  reg            [IdWidth   - 1 : 0] s_axi_awid_q;
+  reg            [            7 : 0] s_axi_awid_q;
   /* verilator lint_off UNUSEDSIGNAL */
   /// Registered write address from AXI master
   reg            [AddrWidth - 1 : 0] s_axi_awaddr_q;
@@ -181,7 +180,7 @@ module waxi_dpram #(
   /// Controls handshake with master for write data channel
   reg                                s_axi_wready_q;
   /// Stores the ID to return in write response
-  reg            [IdWidth   - 1 : 0] s_axi_bid_q;
+  reg            [            7 : 0] s_axi_bid_q;
   /// Response code for write transaction (OKAY, SLVERR, etc.)
   reg            [            1 : 0] s_axi_bresp_q;
   /// Controls handshake for write response channel
@@ -240,15 +239,15 @@ module waxi_dpram #(
   */
   always_ff @(posedge axi_clk_i) begin : axi_write_ctrl
     if (!rstn_i) begin
-      s_axi_awid_q    <= {IdWidth{1'b0}};
-      s_axi_awaddr_q  <= {AddrWidth{1'b0}};
-      s_axi_awsize_q  <= 3'b000;
-      s_axi_awburst_q <= 2'b00;
-      s_axi_awready_q <= 1'b0;
-      s_axi_wready_q  <= 1'b0;
-      s_axi_bid_q     <= {IdWidth{1'b0}};
-      s_axi_bresp_q   <= 2'b0;
-      s_axi_bvalid_q  <= 1'b0;
+      s_axi_awid_q    <= '0;
+      s_axi_awaddr_q  <= '0;
+      s_axi_awsize_q  <= '0;
+      s_axi_awburst_q <= '0;
+      s_axi_awready_q <= '0;
+      s_axi_wready_q  <= '0;
+      s_axi_bid_q     <= '0;
+      s_axi_bresp_q   <= '0;
+      s_axi_bvalid_q  <= '0;
     end
     else begin
       case (write_state_d)
@@ -391,7 +390,7 @@ module waxi_dpram #(
   */
   dpram #(
       .DataWidth(DataWidth),
-      .Depth    (DEPTH)
+      .Depth    (Depth)
   ) dpram (
 `ifdef SIM
       .mem_o   (mem_o),

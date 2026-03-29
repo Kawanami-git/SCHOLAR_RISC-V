@@ -5,8 +5,8 @@
 \brief      Dual-Port RAM (AXI read-only / Core read/write)
 
 \author     Kawanami
-\date       13/02/2026
-\version    1.3
+\date       29/03/2026
+\version    1.4
 
 \details
   Educational dual-port RAM used to share data from the SCHOLAR RISC-V core
@@ -38,6 +38,7 @@
 | 1.1     | 15/10/2025 | Kawanami   | Change module name from ctp_dpram to raxi_dpram.<br>Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 | 1.2     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
 | 1.3     | 13/02/2026 | Kawanami   | Replace core custom interface with OBI standard. |
+| 1.4     | 29/03/2026 | Kawanami   | Improve lisibility by directly using depth instead of size. |
 ********************************************************************************
 */
 
@@ -50,19 +51,19 @@ module raxi_dpram #(
     parameter  int unsigned AddrWidth       = 32,
     /// Data bus width in bits (applies to core and AXI)
     parameter  int unsigned DataWidth       = 32,
+    /// Number of bits of bytes enable
+    parameter  int unsigned BeWidth         = DataWidth / ByteLength,
     /// Address granularity in bytes (e.g., 4 bytes for 32-bit, 8 for 64-bit)
     localparam int unsigned AddrOffset      = DataWidth / ByteLength,
     /// Number of bits needed to encode byte offset within a word
     localparam int unsigned AddrOffsetWidth = $clog2(AddrOffset),
     /// Dual Port RAM size in bytes
-    parameter  int unsigned Size            = 2048,
-    /// AXI transaction ID width
-    parameter  int unsigned IdWidth         = 8
+    parameter  int unsigned Depth           = 1024
 ) (
 
 `ifdef SIM
     /// (Simulation only) Exposes the RAM contents for testbenches
-    output logic [        DataWidth-1:0] mem_o          [(Size / (DataWidth / ByteLength))],
+    output logic [DataWidth-1:0] mem_o[Depth],
 `endif
 
     /* Global signals */
@@ -86,7 +87,7 @@ module raxi_dpram #(
     /// Write data
     input  wire [    DataWidth - 1 : 0] wdata_i,
     /// Byte enable
-    input  wire [(DataWidth/8) - 1 : 0] be_i,
+    input  wire [      BeWidth - 1 : 0] be_i,
     /// Response transfer valid
     output wire                         rvalid_o,
     /// Read data
@@ -95,7 +96,7 @@ module raxi_dpram #(
     output wire                         err_o,
     /* AXI signals */
     /// ARID: Read address transaction ID
-    input  wire [IdWidth       - 1 : 0] s_axi_arid_i,
+    input  wire [                7 : 0] s_axi_arid_i,
     /// ARADDR: Start byte address for read transaction
     input  wire [AddrWidth     - 1 : 0] s_axi_araddr_i,
     /// ARLEN: Number of beats minus 1 (nominally 0 for single-beat)
@@ -117,7 +118,7 @@ module raxi_dpram #(
     /// ARREADY: Read address ready
     output wire                         s_axi_arready_o,
     /// RID: Read data transaction ID
-    output wire [IdWidth       - 1 : 0] s_axi_rid_o,
+    output wire [                7 : 0] s_axi_rid_o,
     /// RDATA: Read data
     output wire [DataWidth     - 1 : 0] s_axi_rdata_o,
     /// RRESP: Read response (OKAY/SLVERR/DECERR)
@@ -134,10 +135,8 @@ module raxi_dpram #(
   /* parameters verification */
 
   /* local parameters */
-  /// Memory depth
-  localparam int unsigned DEPTH = Size / (DataWidth / ByteLength);
   /// Useful number of bits to address the whole memory
-  localparam int unsigned USED_ADDR_WIDTH = $clog2(DEPTH);
+  localparam int unsigned USED_ADDR_WIDTH = $clog2(Depth);
 
   /* machine states */
 
@@ -158,7 +157,7 @@ module raxi_dpram #(
 
   /* registers */
   /// Registered ARID from AXI read address channel (transaction ID)
-  reg           [  IdWidth-1:0] s_axi_arid_q;
+  reg           [          7:0] s_axi_arid_q;
   /// Registered read address from AXI master
   reg           [AddrWidth-1:0] s_axi_araddr_q;
   /// Registered burst length (number of data beats - 1)
@@ -235,15 +234,15 @@ module raxi_dpram #(
   */
   always_ff @(posedge axi_clk_i) begin : axi_read_ctrl
     if (!rstn_i) begin
-      s_axi_arid_q    <= {IdWidth{1'b0}};
-      s_axi_araddr_q  <= {AddrWidth{1'b0}};
-      s_axi_arlen_q   <= 8'b00000000;
-      s_axi_arsize_q  <= 3'b000;
-      s_axi_arburst_q <= 2'b00;
-      s_axi_arready_q <= 1'b0;
-      s_axi_rresp_q   <= 2'b00;
-      s_axi_rlast_q   <= 1'b0;
-      s_axi_rvalid_q  <= 1'b0;
+      s_axi_arid_q    <= '0;
+      s_axi_araddr_q  <= '0;
+      s_axi_arlen_q   <= '0;
+      s_axi_arsize_q  <= '0;
+      s_axi_arburst_q <= '0;
+      s_axi_arready_q <= '0;
+      s_axi_rresp_q   <= '0;
+      s_axi_rlast_q   <= '0;
+      s_axi_rvalid_q  <= '0;
     end
     else begin
       case (read_state_d)
@@ -386,7 +385,7 @@ module raxi_dpram #(
   */
   dpram #(
       .DataWidth(DataWidth),
-      .Depth    (DEPTH)
+      .Depth    (Depth)
   ) dpram (
 `ifdef SIM
       .mem_o   (mem_o),

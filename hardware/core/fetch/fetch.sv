@@ -4,8 +4,8 @@
 \file       fetch.sv
 \brief      SCHOLAR RISC-V core fetch module
 \author     Kawanami
-\date       13/02/2026
-\version    1.2
+\date       29/03/2026
+\version    1.3
 
 \details
   This module implements the instruction fetch unit
@@ -38,41 +38,44 @@
 | 1.0     | 02/07/2025 | Kawanami   | Initial version of the module.            |
 | 1.1     | 20/09/2025 | Kawanami   | Remove packages.sv and provide useful metadata through parameters.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 | 1.2     | 13/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
+| 1.3     | 29/03/2026 | Kawanami   | Improve global lisibility by using package instead of parameters. |
 ********************************************************************************
 */
 
-module fetch #(
-    /// Number of bits for addressing
-    parameter int AddrWidth  = 32,
-    /// Instructions width (in bits, usually 32)
-    parameter int InstrWidth = 32
+module fetch
+
+  import core_pkg::INSTR_WIDTH;
+
+#(
+    /// Architecture to build (either 32-bit or 64-bit)
+    parameter int unsigned Archi = 32
 ) (
 
     /// System clock
-    input  wire                      clk_i,
+    input  wire                       clk_i,
     /// System active low reset
-    input  wire                      rstn_i,
+    input  wire                       rstn_i,
     /// Program counter (address of the next instruction to fetch)
-    input  wire [AddrWidth  - 1 : 0] pc_next_i,
+    input  wire [     Archi  - 1 : 0] pc_next_i,
     /// Instruction
-    output wire [InstrWidth - 1 : 0] instr_o,
+    output wire [INSTR_WIDTH - 1 : 0] instr_o,
     /// Instruction valid flag (1: valid, 0: invalid)
-    output wire                      valid_o,
+    output wire                       valid_o,
     /// Address transfer request
-    output wire                      req_o,
+    output wire                       req_o,
     /* verilator lint_off UNUSEDSIGNAL */
     /// Grant: Ready to accept address transfert
-    input  wire                      gnt_i,
+    input  wire                       gnt_i,
     /* verilator lint_on UNUSEDSIGNAL */
     /// Address for memory access
-    output wire [AddrWidth  - 1 : 0] addr_o,
+    output wire [     Archi  - 1 : 0] addr_o,
     /// Response transfer valid
-    input  wire                      rvalid_i,
+    input  wire                       rvalid_i,
     /// Read data
-    input  wire [InstrWidth - 1 : 0] rdata_i,
+    input  wire [INSTR_WIDTH - 1 : 0] rdata_i,
     /* verilator lint_off UNUSEDSIGNAL */
     /// Error response
-    input  wire                      err_i
+    input  wire                       err_i
     /* verilator lint_on UNUSEDSIGNAL */
 );
 
@@ -85,13 +88,13 @@ module fetch #(
 
   /* wires */
   /// Fetched instruction
-  logic [InstrWidth - 1 : 0] instr;
+  logic [INSTR_WIDTH - 1 : 0] instr;
 
   /* registers */
   /// Instruction valid flag register
-  reg                        valid_q;
+  reg                         valid_q;
   /// Memory request register
-  reg                        req_q;
+  reg                         req_q;
   /********************             ********************/
 
 
