@@ -5,8 +5,8 @@
 # \file       install_xilinx_env.sh
 # \brief      Automated AMD Vivado/Vitis and Linux dependency installer.
 # \author     Kawanami
-# \version    1.0
-# \date       12/04/2026
+# \version    1.1
+# \date       13/04/2026
 #
 # \details
 #   Installs the Linux host dependencies required by the SCHOLAR RISC-V board
@@ -32,6 +32,7 @@
 # | Version | Date       | Author   | Description      |
 # |:-------:|:----------:|:---------|:-----------------|
 # | 1.0     | 12/04/2026 | Kawanami | Initial version. |
+# | 1.1     | 13/04/2026 | Kawanami | Add minicom package. |
 # ********************************************************************************
 # */
 
@@ -113,6 +114,7 @@ sudo apt install -y \
     xterm \
     repo \
     coreutils \
-    ssh
+    ssh \
+    minicom
 
 git clone https://github.com/Digilent/vivado-boards.git /opt/Xilinx/board_files/digilent

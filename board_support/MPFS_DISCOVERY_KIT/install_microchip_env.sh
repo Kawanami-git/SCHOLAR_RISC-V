@@ -5,7 +5,7 @@
 # \file       install_microchip_env.sh
 # \brief      Automated installer for Microchip Libero/SoftConsole + Yocto deps.
 # \author     Kawanami
-# \version    1.3
+# \version    1.4
 # \date       13/04/2026
 #
 # \details
@@ -28,6 +28,7 @@
 # | 1.1     | 16/11/2025 | Kawanami   | Add missing librairies to drive usb (libusb).<br> Add missing chmod to be able to execute Libero_SoC_2025.1_online_lin.bin. |
 # | 1.2     | 24/12/2025 | Kawanami   | Update libero install with 2025.2. |
 # | 1.3     | 13/04/2026 | Kawanami   | Add lz4 package install. |
+# | 1.4     | 13/04/2026 | Kawanami | Add minicom package. |
 # ********************************************************************************
 # */
 
@@ -130,7 +131,8 @@ sudo apt install -y \
     xterm \
     repo \
     coreutils \
-    ssh
+    ssh \
+    minicom
 
 # --- Create target directory and set ownership ----------------------------------
 sudo mkdir -p "$MICROCHIP_DIR"
