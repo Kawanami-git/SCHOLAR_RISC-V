@@ -5,7 +5,7 @@
 # \file       install_xilinx_env.sh
 # \brief      Automated AMD Vivado/Vitis and Linux dependency installer.
 # \author     Kawanami
-# \version    1.1
+# \version    1.2
 # \date       13/04/2026
 #
 # \details
@@ -33,6 +33,7 @@
 # |:-------:|:----------:|:---------|:-----------------|
 # | 1.0     | 12/04/2026 | Kawanami | Initial version. |
 # | 1.1     | 13/04/2026 | Kawanami | Add minicom package. |
+# | 1.2     | 13/04/2026 | Kawanami | Update AMD/Xilinx installer link. |
 # ********************************************************************************
 # */
 
@@ -61,7 +62,7 @@ sudo mkdir -p "$VIVADO_INSTALL_DIR"
 sudo chown -R "$USER:$USER" "$VIVADO_INSTALL_DIR"
 
 # Download the AMD installer wrapper from the project release page.
-wget "https://github.com/Kawanami-git/CORA_Z7_07S/releases/download/2026-12-04/$VIVADO_INSTALL_SCRIPT"
+wget "https://github.com/Kawanami-git/CORA_Z7_07S/releases/tag/Install-13-04-2026/$VIVADO_INSTALL_SCRIPT"
 
 # Extract the AMD installer without executing the GUI flow.
 chmod +x "$VIVADO_INSTALL_SCRIPT"
