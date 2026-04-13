@@ -5,8 +5,8 @@
 # \file       install_microchip_env.sh
 # \brief      Automated installer for Microchip Libero/SoftConsole + Yocto deps.
 # \author     Kawanami
-# \version    1.2
-# \date       24/12/2025
+# \version    1.3
+# \date       13/04/2026
 #
 # \details
 #   Installs system dependencies and runs the unattended installers for:
@@ -27,6 +27,7 @@
 # | 1.0     | 11/11/2025 | Kawanami   | Initial version. |
 # | 1.1     | 16/11/2025 | Kawanami   | Add missing librairies to drive usb (libusb).<br> Add missing chmod to be able to execute Libero_SoC_2025.1_online_lin.bin. |
 # | 1.2     | 24/12/2025 | Kawanami   | Update libero install with 2025.2. |
+# | 1.3     | 13/04/2026 | Kawanami   | Add lz4 package install. |
 # ********************************************************************************
 # */
 
@@ -118,6 +119,7 @@ sudo apt install -y \
     python3-pip \
     python3-pexpect \
     xz-utils \
+    lz4 \
     debianutils \
     iputils-ping \
     python3-git \

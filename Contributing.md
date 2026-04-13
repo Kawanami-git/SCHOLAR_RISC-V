@@ -270,12 +270,39 @@ This documentation shall appear in the README.md file of each branch.
 (blank line)  
 `body (optional, wrap at 72 cols)`
 
-**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+**Types**:
+- `feat`: a new user-visible feature or functional addition
+- `fix`: a bug fix or correction of incorrect behavior
+- `docs`: documentation-only changes
+- `style`: formatting or style-only changes that do not affect behavior
+- `refactor`: code changes that improve structure or readability without changing behavior
+- `perf`: performance improvements
+- `test`: adding or updating tests
+- `build`: changes to build system, dependencies, or compilation flow
+- `ci`: changes to continuous integration or automation pipelines
+- `chore`: maintenance tasks or non-functional updates that do not fit other types
+- `revert`: reverting a previous commit
+- `work`: temporary work-in-progress snapshot used to save ongoing local development;
+  these commits should normally be cleaned up, squashed, or rewritten before
+  merging into the main branch
 
 **Breaking changes**: use `!` after type.  
 Example: `feat!: change ALU interface to add carry-in`
 
-### C.3 Examples
+### C.3 Git Workflow
+Each feature, fix, or refactoring should be developed on a dedicated working
+branch.
+
+During development, temporary commits such as `work:` commits are allowed to
+save progress and avoid losing ongoing work. These intermediate commits are
+intended for the working branch only.
+
+Once the modification is complete and validated, the working branch should be
+integrated into the main branch using a **squash merge**. This ensures that the
+main branch keeps a clean and readable history, with a single final commit
+written using a proper Conventional Commit type and message.
+
+### C.4 Examples
 ```
 feat(decode): add compressed instruction decoding (C extension)
 
@@ -306,15 +333,15 @@ style(sim): apply clang-format and remove trailing whitespace
 ## Appendix — Quick Checklists
 
 **HDL PR checklist**
-- [ ] SPDX header
-- [ ] Ports documented
+- [ ] SPDX and Doxygen headers
+- [ ] Doxygen comments
 - [ ] No unintended latches
 - [ ] Reset paths initialized
 - [ ] Lint/format pass
 
 **C/C++ PR checklist**
-- [ ] SPDX header
-- [ ] Doxygen in header
+- [ ] SPDX and Doxygen headers
+- [ ] Doxygen comments
 - [ ] Const-correctness
 - [ ] Error codes documented
 - [ ] No `using namespace std;` in headers

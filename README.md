@@ -13,13 +13,13 @@
 <br>
 <br>
 
-## 📚 Table of Contents
+## Table of Contents
 
 - [License](#license)
 - [Terminology & Vocabulary](#terminology--vocabulary)
 - [Overview](#overview)
 - [Project Organization](#project-organization)
-- [Branches Structure](#branches-structure)
+- [Learning Path](#learning-path)
 - [Documentation](#documentation)
 - [Dependencies](#dependencies)
 - [Quick Start](#quick-start)
@@ -40,7 +40,7 @@
 
 This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file for details.
 
-Parts of this repository (**CycleMark**) are derived from **CoreMark**, which is distributed under its own license. You can find the original license and notices in the [`benchmarking/CycleMark/`](./benchmarking/CycleMark/) directory.
+Some files, generated artifacts, or external components used during the build process may come from Xilinx, Digilent, Yocto, or other third-party projects, and therefore remain subject to their respective licenses.
 
 <br>
 <br>
@@ -84,6 +84,9 @@ Parts of this repository (**CycleMark**) are derived from **CoreMark**, which is
 | **SDK**                                | Software Development Kit. |
 | **CycleMark/MHz**                      | Performance metric to show core efficiency per MHz. |
 
+<br>
+<br>
+
 ---
 
 <br>
@@ -100,6 +103,9 @@ The repository is organized into multiple branches, each focused on a specific e
 However, each branch is versioned independently. As a result, files that exist in multiple branches may differ from one branch to another.
 
 The initial branch provides the most basic implementation — a **single‑cycle**, **single‑issue** core supporting **RV32I and RV64I**, with `mcycle` CSR (Zicntr) for CycleMark benchmarking. This branch forms the minimum functional/performance baseline and a clear starting point before exploring more advanced microarchitectural features.
+
+This project does not claim to present universal truths. First, because although I have experience in this field, my knowledge is still far from the level reached by major processor companies such as ARM, Intel, or AMD.<br>
+More importantly, that is not the goal here. The purpose of this project is to provide an accessible entry point into processor architecture. The implemented designs are not intended to be the most advanced or the most optimized, but rather to give learners enough understanding to explore each concept further on their own.
 
 <br>
 <br>
@@ -122,6 +128,9 @@ The repository follows a microarchitecture‑based branching model:
 - Additional branches may cover specialized adaptations (e.g., embedded/resource‑constrained variants).
 - **Tags** mark major milestones or stable releases for easier navigation.
 
+<br>
+<br>
+
 ### Branch Summary
 
 > Only RV32 details are shown here for brevity. See each branch's README for full details (including RV64).
@@ -130,10 +139,11 @@ The repository follows a microarchitecture‑based branching model:
 |------------------|--------------|-------------------|-------------------------------|
 | `Single-Cycle`   | Single‑cycle, single‑issue core; **RV32I/RV64I + `mcycle` (Zicntr)** | 1.24 | LEs: 3141 (1062 FFs)<br>Fmax: 74 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 | `pipeline`   | pipelined single‑issue core; **RV32I/RV64I + `CSR*` (Zicntr)** | 0.55 | LEs: 2023 (782 FFs)<br>Fmax: 192 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
+| `bypass`   | pipelined single‑issue core with forwarding; **RV32I/RV64I + `CSR*` (Zicntr)** | 0.82 | LEs: 2188 (659 FFs)<br>Fmax: 167 MHz<br>uSRAM: 6<br>LSRAM: 0<br>Math blocks: 0 |
 
 > 📝
 >
-> `CSR*`: `mcycle`, `mhpmcounter3` (data hazard counter) and `mhpmcounter4` (branch counter).
+> `CSR*`: `mcycle`.
 
 <br>
 <br>
@@ -146,22 +156,14 @@ The repository follows a microarchitecture‑based branching model:
 <br>
 <br>
 
-## Branches Structure
+## Learning Path
 
-- **hardware** — RTL for the SCHOLAR RISC‑V core and its environment.  
-  - **core** — Verilog sources implementing the processor core.  
-  - **env** — Processor environment (memories, interconnects, etc.).
+| **Branch**       | **Features**                                                                   |
+|------------------|--------------------------------------------------------------------------------|
+| `Single-Cycle`   | Single‑cycle, single‑issue core; **RV32I/RV64I + `mcycle` (Zicntr)**           |
+| `pipeline`       | pipelined single‑issue core; **RV32I/RV64I + `CSR*` (Zicntr)**                 |
+| `bypass`         | pipelined single‑issue core with forwarding; **RV32I/RV64I + `CSR*` (Zicntr)** |
 
-- **software** — Bare‑metal firmware for the core and host‑side tools for sim/FPGA interaction.  
-  - **firmware** — Bare‑metal firmware to run on SCHOLAR RISC‑V.  
-  - **platform** — Host tools to communicate with simulation or the FPGA platform.
-
-- **simulation** — C++‑based infrastructure to:  
-  - Check execution against **Spike** (official RISC‑V ISA simulator).  
-  - Run standalone firmware for functional/performance evaluation.
-
-- **MPFS_DISCOVERY_KIT** — Files to synthesize and test on the Microchip **MPFS Discovery Kit**.  
-  👉 See [`board_support/MPFS_DISCOVERY_KIT/`](./board_support/MPFS_DISCOVERY_KIT/) for details.
 
 <br>
 <br>
@@ -180,7 +182,7 @@ Documentation is split between the **main** branch and the **development** branc
 
 - The **main** branch describes the project, organization, and environment setup.  
 - Each **development** branch documents the specific feature implemented there and also support Doxygen documentation.<br>
-Doxygen documentation can be generated with:
+Doxygen documentation can be generated in each branch with:
   ```bash
   make documentation
   ```
@@ -201,7 +203,10 @@ Doxygen documentation can be generated with:
 
 This project is developed on **Ubuntu 24.04 LTS**. Other Ubuntu versions are fine for **simulation** only.
 
-To build a bitstream and run on the PolarFire SoC/FPGA (**MPFS Discovery Kit**), you must use a supported Ubuntu version: **24.04 LTS**.
+However, to build a bitstream and run on a supported board, you must use the supported Ubuntu version: **24.04 LTS**.
+
+<br>
+<br>
 
 ### Simulation Environment
 
@@ -210,11 +215,24 @@ Install via the main branch makefile:
 make install_sim_env
 ```
 
+<br>
+<br>
+
 ### PolarFire SoC/FPGA (Microchip)
 
-Install the Microchip environment:
+Install the Microchip environment via the main branch makefile:
 ```bash
 make install_microchip_env
+```
+
+<br>
+<br>
+
+### Cora Z7-07S (Digilent)
+
+Install the AMD/Xilinx environment via the main branch makefile:
+```bash
+make install_xilinx_env
 ```
 
 <br>
@@ -233,7 +251,7 @@ make install_microchip_env
 Clone the repository and enter the project directory:
 ```bash
 git clone https://github.com/Kawanami-git/SCHOLAR_RISC-V.git
-cd SCHOLAR_RISC_V/
+cd SCHOLAR_RISC-V/
 ```
 
 Install the simulation environment:
@@ -241,9 +259,10 @@ Install the simulation environment:
 make install_sim_env
 ```
 
-And eventually the Microchip environment:
+And eventually the Microchip or Xilinx environment:
 ```bash
 make install_microchip_env
+make install_xilinx_env
 ```
 
 Check out the desired branch (example: Single-Cycle):
@@ -289,23 +308,6 @@ For more about the environment and capabilities, see the [simulation docs](./sim
 
 ## Known Issues
 
-### Yocto Build Failures
-
-When building a Linux image for the MPFS Discovery Kit, Yocto may fail to fetch some external sources. If this happens, **rerun without cleaning**:
-```bash
-make mpfs_disco_kit_linux
-```
-Yocto will resume and retry the missing fetches.
-
-### Firmware Switching & Memory Corruption
-
-On the MPFS Discovery Kit, running different firmware back‑to‑back may corrupt shared memory between platform and core. Reprogramming the FPGA with the latest bitstream typically fixes it:
-```bash
-make mpfs_disco_kit_program_bitstream
-```
-This issue is under investigation and will be fixed in a future update.
-
-<br>
-<br>
+No known issue is currently documented in this section.
 
 ---
