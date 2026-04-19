@@ -5,52 +5,8 @@
 \brief      SCHOLAR RISC-V Integration Environment (core + RAMs + AXI fabric)
 
 \author     Kawanami
-\date       29/03/2026
-\version    1.4
-
-\details
-  Top-level integration for the SCHOLAR RISC-V core with:
-  - Instruction/Data memories
-  - Platform↔Core shared memories (PTC / CTP)
-  - AXI4-Full slave interface (subset used)
-  - Address-tag–based interconnect (bus_fabric)
-
-  AXI scope (subset):
-  - Designed for simple, single-beat bursts for simplicity.
-  - Several AXI fields (IDs/PROT/CACHE/LOCK) are wired but unused in
-    the educational flow.
-  - Sufficient for AXI writes to instr/data/PTC RAM and AXI reads from CTP RAM.
-  - Will be improved in the future.
-
-  Memory map (conceptual):
-  - INSTR RAM : core fetch read-only, AXI write (firmware instructions load)
-  - DATA  RAM : core read/write, AXI write (firmware data load)
-  - PTC   RAM : platform→core shared (AXI write, core read/write as designed)
-  - CTP   RAM : core→platform shared (core write/read as designed, AXI read)
-
-  In simulation (`SIM`), internal state (GPRs/PC/CSR) and RAM contents are
-  exposed for DPI / Verilator testbenches.
-
-\section riscv_env_version_history Version history
-| Version | Date       | Author     | Description                               |
-|:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/06/2025 | Kawanami   | Initial version of the module.            |
-| 1.1     | 17/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support.              |
-| 1.2     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
-| 1.3     | 13/02/2026 | Kawanami   | Replace core custom interface with OBI standard. |
-| 1.4     | 29/03/2026 | Kawanami   | Improve global lisibility by using better parameters. |
-********************************************************************************
-*/
-
-// SPDX-License-Identifier: MIT
-/*!
-********************************************************************************
-\file       riscv_env.sv
-\brief      SCHOLAR RISC-V Integration Environment (core + RAMs + AXI fabric)
-
-\author     Kawanami
-\date       28/03/2026
-\version    1.4
+\date       16/04/2026
+\version    1.5
 
 \details
   Top-level integration for the SCHOLAR RISC-V core with:
@@ -83,14 +39,22 @@
 | 1.2     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
 | 1.3     | 13/02/2026 | Kawanami   | Replace core custom interface with OBI standard. |
 | 1.4     | 28/03/2026 | Kawanami   | Improve spike compatibility.              |
-********************************************************************************
+| 1.5     | 16/04/2026 | Kawanami   | Add a `Target` parameter to select between the RTL implementation and vendor-specific implementations.<br>Replace the external core reset with the `sys_reset` IP.<br>Update the memory base addresses to prepare support for the Cora Z7-07S. |********************************************************************************
 */
 
-module riscv_env #(
-    /// Number of bits in a byte
-    parameter int unsigned             ByteLength      = 8,
+module riscv_env
+
+  import target_pkg::TARGET_RTL;
+  import target_pkg::TARGET_MPFS_DISCOVERY_KIT;
+  import target_pkg::TARGET_CORA_Z7_07S;
+
+#(
+    /// Implementation target
+    parameter int unsigned             Target          = TARGET_RTL,
     /// Architecture to build (either 32-bit or 64-bit)
     parameter int unsigned             Archi           = 32,
+    /// Number of bits in a byte
+    parameter int unsigned             ByteLength      = 8,
     /// Number of bits of bytes enable
     parameter int unsigned             BeWidth         = Archi / ByteLength,
     /// Instructions width
@@ -115,6 +79,8 @@ module riscv_env #(
     output wire  [Archi          - 1 : 0] gpr_pc_reg,
     /// CSR mcycle mirror
     output wire  [Archi          - 1 : 0] csr_mcycle,
+    /// System reset RAM contents (exposed to TB)
+    output wire  [         Archi - 1 : 0] sys_reset_mem   [     SYS_RESET_DEPTH],
     /// Instruction RAM contents (exposed to TB)
     output logic [  InstrWidth   - 1 : 0] instr_dpram_mem [     INSTR_RAM_DEPTH],
     /// Data RAM contents (exposed to TB)
@@ -132,11 +98,47 @@ module riscv_env #(
     input  wire                                     core_clk_i,
     /// AXI clock
     input  wire                                     axi_clk_i,
-    /// Core active-low reset
-    input  wire                                     core_rstn_i,
     /// AXI active-low reset
     input  wire                                     axi_rstn_i,
-    /* Instructions AXI signals */
+    /* Sys reset AXI signals */
+    /// AWID (sys reset)
+    input  wire [                            7 : 0] sys_reset_axi_awid_i,
+    /// AWADDR (sys reset)
+    input  wire [           Archi          - 1 : 0] sys_reset_axi_awaddr_i,
+    /// AWLEN (sys reset)
+    input  wire [                            7 : 0] sys_reset_axi_awlen_i,
+    /// AWSIZE (sys reset)
+    input  wire [                            2 : 0] sys_reset_axi_awsize_i,
+    /// AWBURST (sys reset)
+    input  wire [                            1 : 0] sys_reset_axi_awburst_i,
+    /// AWLOCK (unused, sys reset)
+    input  wire [                            1 : 0] sys_reset_axi_awlock_i,
+    /// AWCACHE (unused, sys reset)
+    input  wire [                            3 : 0] sys_reset_axi_awcache_i,
+    /// AWPROT (unused, sys reset)
+    input  wire [                            2 : 0] sys_reset_axi_awprot_i,
+    /// AWVALID (sys reset)
+    input  wire                                     sys_reset_axi_awvalid_i,
+    /// AWREADY (sys reset)
+    output wire                                     sys_reset_axi_awready_o,
+    /// WDATA (sys reset) — fixed 32b words even if Archi=64
+    input  wire [        Archi             - 1 : 0] sys_reset_axi_wdata_i,
+    /// WSTRB (sys reset)
+    input  wire [     BeWidth              - 1 : 0] sys_reset_axi_wstrb_i,
+    /// WLAST (sys reset)
+    input  wire                                     sys_reset_axi_wlast_i,
+    /// WVALID (sys reset)
+    input  wire                                     sys_reset_axi_wvalid_i,
+    /// WREADY (sys reset)
+    output wire                                     sys_reset_axi_wready_o,
+    /// BID (sys reset)
+    output wire [                              7:0] sys_reset_axi_bid_o,
+    /// BRESP (sys reset)
+    output wire [                            1 : 0] sys_reset_axi_bresp_o,
+    /// BVALID (sys reset)
+    output wire                                     sys_reset_axi_bvalid_o,
+    /// BREADY (sys reset)
+    input  wire                                     sys_reset_axi_bready_i,
     /// AWID (INSTR)
     input  wire [                            7 : 0] s_instr_axi_awid_i,
     /// AWADDR (INSTR)
@@ -264,26 +266,30 @@ module riscv_env #(
   localparam int unsigned TAG_MSB = 19;
   /// Address tag least significant bit position (TagMsb)
   localparam int unsigned TAG_LSB = 16;
+  /// System Reset ram deptch (word)
+  localparam int unsigned SYS_RESET_DEPTH = 1;
   /// Instructions ram depth (word)
   localparam int unsigned INSTR_RAM_DEPTH = 4096;
   /// Data ram depth (word)
   localparam int unsigned DATA_RAM_DEPTH = 4096;
-  /// Data ram tag (s_axi_axaddr_i[19:16] = 4'b0001)
-  localparam logic [TAG_MSB-TAG_LSB:0] DATA_RAM_ADDR_TAG = 4'b0001;
+  /// Data ram tag
+  localparam logic [TAG_MSB-TAG_LSB:0] DATA_RAM_ADDR_TAG = 4'b0100;
   /// Platform-to-core shared ram depth (word)
-  localparam int unsigned PTC_SHARED_RAM_DEPTH = 1024;
-  /// Platform-to-core shared ram tag (s_axi_axaddr_i[19:16] = 4'b0010)
-  localparam logic [TAG_MSB-TAG_LSB:0] PTC_SHARED_RAM_ADDR_TAG = 4'b0010;
+  localparam int unsigned PTC_SHARED_RAM_DEPTH = 4096;
+  /// Platform-to-core shared ram tag
+  localparam logic [TAG_MSB-TAG_LSB:0] PTC_SHARED_RAM_ADDR_TAG = 4'b0101;
   /// Core-to-platform shared ram depth (word)
-  localparam int unsigned CTP_SHARED_RAM_DEPTH = 1024;
-  /// Core-to-platform shared ram tag (s_axi_axaddr_i[19:16] = 4'b0011)
-  localparam logic [TAG_MSB-TAG_LSB:0] CTP_SHARED_RAM_ADDR_TAG = 4'b0011;
+  localparam int unsigned CTP_SHARED_RAM_DEPTH = 4096;
+  /// Core-to-platform shared ram tag
+  localparam logic [TAG_MSB-TAG_LSB:0] CTP_SHARED_RAM_ADDR_TAG = 4'b0110;
 
   /* machine states */
 
   /* functions */
 
   /* wires */
+  ///
+  wire                      core_rstn;
   /// Address transfer request
   wire                      core_imem_req;
   /// Grant: Ready to accept address transfert
@@ -482,7 +488,7 @@ module riscv_env #(
       .instr_committed_o (instr_committed),
 `endif
       .clk_i             (core_clk_i),
-      .rstn_i            (core_rstn_i),
+      .rstn_i            (core_rstn),
       // IF
       .imem_req_o        (core_imem_req),
       .imem_gnt_i        (core_imem_gnt),
@@ -502,8 +508,43 @@ module riscv_env #(
       .dmem_err_i        (core_dmem_err)
   );
 
+  /// System reset instance
+  sys_reset #(
+      .AddrWidth(Archi),
+      .DataWidth(Archi),
+      .Depth    (1)
+  ) sys_reset (
+`ifdef SIM
+      .mem_o          (sys_reset_mem),
+`endif
+      .axi_clk_i      (axi_clk_i),
+      .rstn_i         (axi_rstn_i),
+      // AXI (INSTR)
+      .s_axi_awid_i   (sys_reset_axi_awid_i),
+      .s_axi_awaddr_i (sys_reset_axi_awaddr_i),
+      .s_axi_awlen_i  (sys_reset_axi_awlen_i),
+      .s_axi_awsize_i (sys_reset_axi_awsize_i),
+      .s_axi_awburst_i(sys_reset_axi_awburst_i),
+      .s_axi_awlock_i (sys_reset_axi_awlock_i),
+      .s_axi_awcache_i(sys_reset_axi_awcache_i),
+      .s_axi_awprot_i (sys_reset_axi_awprot_i),
+      .s_axi_awvalid_i(sys_reset_axi_awvalid_i),
+      .s_axi_awready_o(sys_reset_axi_awready_o),
+      .s_axi_wdata_i  (sys_reset_axi_wdata_i),
+      .s_axi_wstrb_i  (sys_reset_axi_wstrb_i),
+      .s_axi_wlast_i  (sys_reset_axi_wlast_i),
+      .s_axi_wvalid_i (sys_reset_axi_wvalid_i),
+      .s_axi_wready_o (sys_reset_axi_wready_o),
+      .s_axi_bid_o    (sys_reset_axi_bid_o),
+      .s_axi_bresp_o  (sys_reset_axi_bresp_o),
+      .s_axi_bvalid_o (sys_reset_axi_bvalid_o),
+      .s_axi_bready_i (sys_reset_axi_bready_i),
+      .reset0_o       (core_rstn)
+  );
+
   /// Instructions RAM: core read-only, AXI write (firmware instructions loader)
   waxi_dpram #(
+      .Target         (Target),
       .NoPerfectMemory(NoPerfectMemory),
       .AddrWidth      (Archi),
       .DataWidth      (InstrWidth),
@@ -549,6 +590,7 @@ module riscv_env #(
 
   /// data RAM: core R/W, AXI write (firmware data loader)
   waxi_dpram #(
+      .Target         (Target),
       .NoPerfectMemory(NoPerfectMemory),
       .AddrWidth      (Archi),
       .DataWidth      (Archi),
@@ -594,6 +636,7 @@ module riscv_env #(
 
   /// PTC RAM: platform→core shared, AXI write path
   waxi_dpram #(
+      .Target         (Target),
       .NoPerfectMemory(NoPerfectMemory),
       .AddrWidth      (Archi),
       .DataWidth      (Archi),
@@ -639,6 +682,7 @@ module riscv_env #(
 
   /// CTP RAM: core→platform shared, AXI read path
   raxi_dpram #(
+      .Target         (Target),
       .NoPerfectMemory(NoPerfectMemory),
       .AddrWidth      (Archi),
       .DataWidth      (Archi),

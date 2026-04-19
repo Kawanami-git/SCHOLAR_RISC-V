@@ -5,8 +5,8 @@
 \brief      Dual-Port RAM (AXI read-only / Core read/write)
 
 \author     Kawanami
-\date       29/03/2026
-\version    1.4
+\date       16/04/2026
+\version    1.5
 
 \details
   Educational dual-port RAM used to share data from the SCHOLAR RISC-V core
@@ -39,26 +39,33 @@
 | 1.2     | 12/02/2026 | Kawanami   | Add non-perfect memory support.           |
 | 1.3     | 13/02/2026 | Kawanami   | Replace core custom interface with OBI standard. |
 | 1.4     | 29/03/2026 | Kawanami   | Improve lisibility by directly using depth instead of size. |
+| 1.5     | 16/04/2026 | Kawanami   | Add a `Target` parameter to select between the RTL implementation and vendor-specific implementations. |
 ********************************************************************************
 */
 
-module raxi_dpram #(
+module raxi_dpram
+
+  import target_pkg::TARGET_RTL;
+
+#(
+    /// Implementation target
+    parameter int unsigned Target          = TARGET_RTL,
     /// Use non-perfect memory
-    parameter  bit          NoPerfectMemory = 0,
+    parameter bit          NoPerfectMemory = 0,
     /// Number of bits in a byte
-    parameter  int unsigned ByteLength      = 8,
+    parameter int unsigned ByteLength      = 8,
     /// Address bus width in bits (applies to core and AXI)
-    parameter  int unsigned AddrWidth       = 32,
+    parameter int unsigned AddrWidth       = 32,
     /// Data bus width in bits (applies to core and AXI)
-    parameter  int unsigned DataWidth       = 32,
+    parameter int unsigned DataWidth       = 32,
     /// Number of bits of bytes enable
-    parameter  int unsigned BeWidth         = DataWidth / ByteLength,
+    parameter int unsigned BeWidth         = DataWidth / ByteLength,
     /// Address granularity in bytes (e.g., 4 bytes for 32-bit, 8 for 64-bit)
-    localparam int unsigned AddrOffset      = DataWidth / ByteLength,
+    parameter int unsigned AddrOffset      = DataWidth / ByteLength,
     /// Number of bits needed to encode byte offset within a word
-    localparam int unsigned AddrOffsetWidth = $clog2(AddrOffset),
+    parameter int unsigned AddrOffsetWidth = $clog2(AddrOffset),
     /// Dual Port RAM size in bytes
-    parameter  int unsigned Depth           = 1024
+    parameter int unsigned Depth           = 1024
 ) (
 
 `ifdef SIM
@@ -384,6 +391,7 @@ module raxi_dpram #(
   * for inspection from C++ testbenches.
   */
   dpram #(
+      .Target   (Target),
       .DataWidth(DataWidth),
       .Depth    (Depth)
   ) dpram (

@@ -4,8 +4,8 @@
 \file       load.cpp
 \brief      Firmware loader for SCHOLAR RISC-V (parses addr:data and writes RAM)
 \author     Kawanami
-\version    1.0
-\date       25/10/2025
+\version    1.1
+\date       17/04/2026
 
 \details
   Loads a text firmware file containing lines of the form:
@@ -32,7 +32,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 25/10/2025 | Kawanami   | Initial version.                          |
-| 1.1     | xx/xx/xxxx | Author     |                                           |
+| 1.1     | 17/04/2026 | Kawanami   | Update softcore reset protocol (sys_reset). |
 ********************************************************************************
 */
 
@@ -59,9 +59,9 @@ using std::string;
 /*!
  * \brief Normalize a SPIKE/user-space address into an AXI fabric offset.
  *
- * We keep only the lower 24 bits (tag[23:20] + offset[19:0]) used by the fabric.
- * This makes 0x8___ addresses comparable to our region constants and usable
- * as window-relative offsets for the AXI backends.
+ * We keep only the lower 24 bits (tag[23:20] + offset[19:0]) used by the
+ * fabric. This makes 0x8___ addresses comparable to our region constants and
+ * usable as window-relative offsets for the AXI backends.
  */
 static inline uintptr_t NormalizeAxiOffset(uintptr_t a) { return (a & 0x00FFFFFFu); }
 
@@ -77,13 +77,6 @@ static inline bool InRange(uintptr_t x, uintptr_t base, uintptr_t size)
  * Public API
  *----------------------------------------------------------------------------*/
 
-/*!
- * \brief Load a firmware text file into the RISC-V RAMs.
- *
- * \param[in] filename  Path to the firmware file ("addr:data" per line, hex).
- * \return number of lines that failed to write (0 on success), or FAILURE if
- *         the file couldn't be opened or a fatal step failed.
- */
 uword_t LoadFirmware(const string& filename)
 {
   uword_t addr     = 0;
@@ -103,21 +96,21 @@ uword_t LoadFirmware(const string& filename)
     return FAILURE;
   }
 
-#ifndef SIM
-  // Platform reset: drive a sysfs LED tied to the core reset (active-low/high depends on wiring).
+  // Platform reset
   {
-    std::FILE* rf = std::fopen("/sys/devices/platform/leds/leds/led1/brightness", "w");
-    if (rf == nullptr)
+    uword_t tmp = 0;
+    flag         = SysResetMemWrite(SYS_RESET_START_ADDR, &tmp, NB_BYTES_IN_WORD);
+    if (flag != SUCCESS)
     {
-      LogPrintf("Error: unable to open platform reset handle (sysfs).\n");
-      std::fclose(f);
-      return FAILURE;
+      LogPrintf("Error: write %u bytes @ 0x%u failed, code=" WORD_PRINT_FMT "\n",
+                4,
+                (uint32_t)SYS_RESET_START_ADDR,
+                flag);
+      ++nbErrors;
     }
-    std::fprintf(rf, "0"); // assert reset (as designed in your wiring)
-    std::fclose(rf);
-    std::this_thread::sleep_for(std::chrono::seconds{1});
   }
 
+#ifndef SIM
   // Clear both INSTR/DATA memories before programming
   {
     const uword_t zero = 0;
@@ -199,19 +192,16 @@ uword_t LoadFirmware(const string& filename)
   // If no error, release core reset
   if (nbErrors == 0)
   {
-#ifdef SIM
-    SetCoreResetSignal(1);
-#else
-    std::FILE* rf = std::fopen("/sys/devices/platform/leds/leds/led1/brightness", "w");
-    if (rf == nullptr)
+    uword_t tmp = 1;
+    flag         = SysResetMemWrite(SYS_RESET_START_ADDR, &tmp, NB_BYTES_IN_WORD);
+    if (flag != SUCCESS)
     {
-      LogPrintf("Error: unable to open platform reset handle to release reset.\n");
-      return FAILURE;
+      LogPrintf("Error: write %u bytes @ 0x" WORD_PRINT_FMT " failed, code=" WORD_PRINT_FMT "\n",
+                4,
+                (uint32_t)SYS_RESET_START_ADDR,
+                flag);
+      ++nbErrors;
     }
-    std::fprintf(rf, "1"); // de-assert reset
-    std::fclose(rf);
-    std::this_thread::sleep_for(std::chrono::seconds{1});
-#endif
   }
 
   LogPrintf("Done. Errors: %u\n\n", nbErrors);

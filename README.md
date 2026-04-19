@@ -356,8 +356,8 @@ Below is a summary of synthesis results on a PolarFire MPFS095T FPGA:
 
 | **Architecture**              | **Features**                                    | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor                   | 1.24              | LEs: 3141 (1062 FFs)<br>Fmax: 74 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor (64-bit datapath) | 1.05              | LEs: 6718 (2119 FFs)<br>Fmax: 66 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor                   | 1.24              | LEs: 3150 (1063 FFs)<br>Fmax: 71 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor (64-bit datapath) | 1.05              | LEs: 6553 (2120 FFs)<br>Fmax: 64 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 
 <br>
 
@@ -1130,8 +1130,8 @@ The performance of the **SCHOLAR RISC-V** processor is evaluated using three key
 
 | **Architecture**              | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `mcycle` (Zicntr)** | 1.24              | LEs: 3141 (1062 FFs)<br>Fmax: 74 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `mcycle` (Zicntr)** | 1.05              | LEs: 6718 (2119 FFs)<br>Fmax: 66 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `mcycle` (Zicntr)** | 1.24              | LEs: 3150 (1063 FFs)<br>Fmax: 71 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `mcycle` (Zicntr)** | 1.05              | LEs: 6553 (2120 FFs)<br>Fmax: 64 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 
 <br>
 <br>
@@ -1176,8 +1176,8 @@ However, memory operations (LOAD and STORE) require two cycles to complete, whic
 ### Resource Utilization and Cost Insights
 
 From a resource perspective, the processor remains relatively compact:
-  - 3141 logic elements (1062 flip-flops) for **RV32I**.
-  - 6718 logic elements (2119 flip-flops) for **RV64I**.
+  - 3150 logic elements (1063 flip-flops) for **RV32I**.
+  - 6553 logic elements (2120 flip-flops) for **RV64I**.
   - No block RAMs (uSRAM/LSRAM).
   - No hardware multipliers or DSP blocks.
 

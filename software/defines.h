@@ -4,8 +4,8 @@
 \file       defines.h
 \brief      Global constants and memory map for the test environment.
 \author     Kawanami
-\date       28/03/2026
-\version    1.2
+\date       17/04/2026
+\version    1.3
 
 \details
   This file provides shared definitions used throughout the SCHOLAR RISC-V
@@ -30,6 +30,7 @@
 | 1.0     | 04/06/2025 | Kawanami   | Initial version.                          |
 | 1.1     | 23/10/2025 | Kawanami   | Add RV64 support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
 | 1.2     | 28/03/2026 | Kawanami   | Update softcore tag to improve compatibility with spike. |
+| 1.3     | 17/04/2026 | Kawanami   | Add 'sys_reset' module start address and update memories addresses. |
 ********************************************************************************
 */
 
@@ -103,13 +104,11 @@ typedef uint64_t uword_t;
 /// Bitmask used to extract or compare the region tag from an address
 #define FPGA_FABRIC_TAG_MASK ((1 << FPGA_FABRIC_TAG_SIZE) - 1)
 
-/******************** GPIO REGION ********************/
-/// Tag value identifying the GPIO memory region
-#define GPIO_TAG 0b0000
-/// GPIO memory start address
-#define GPIO_START_ADDR (GPIO_TAG << FPGA_FABRIC_TAG_LSB)
-/// GPIO memory size (in bytes)
-#define GPIO_SIZE 4096
+/******************** SYSTEM RESET REGION ********************/
+/// Tag value used to identify memory-mapped regions belonging to SYS RESET
+#define SYS_RESET_TAG 0b0000
+/// SYS RESET memory regions start address
+#define SYS_RESET_START_ADDR (SYS_RESET_TAG << FPGA_FABRIC_TAG_LSB)
 
 /******************** SOFTCORE 0: SECOND-LEVEL TAGGING ********************/
 /// Tag value used to identify memory-mapped regions belonging to SOFTCORE 0
@@ -139,7 +138,7 @@ typedef uint64_t uword_t;
 
 /******************** DATA RAM (Softcore-0) ********************/
 /// Tag value identifying the SOFTCORE 0 data memory region
-#define SOFTCORE_0_DATA_RAM_TAG 0b0001
+#define SOFTCORE_0_DATA_RAM_TAG 0b0100
 /// Start address of the SOFTCORE 0 data memory region
 #define SOFTCORE_0_DATA_RAM_START_ADDR \
   (SOFTCORE_0_START_ADDR + (SOFTCORE_0_DATA_RAM_TAG << SOFTCORE_0_TAG_LSB))
@@ -148,7 +147,7 @@ typedef uint64_t uword_t;
 
 /******************** PTC SHARED RAM (Softcore-0) ********************/
 /// Tag value identifying the SOFTCORE 0 platform-to-core shared memory region
-#define SOFTCORE_0_PTC_RAM_TAG 0b0010
+#define SOFTCORE_0_PTC_RAM_TAG 0b0101
 /// Start address of the SOFTCORE 0 platform-to-core shared memory region
 #define SOFTCORE_0_PTC_RAM_START_ADDR \
   (SOFTCORE_0_START_ADDR + (SOFTCORE_0_PTC_RAM_TAG << SOFTCORE_0_TAG_LSB))
@@ -166,7 +165,7 @@ typedef uint64_t uword_t;
 
 /******************** CTP SHARED RAM (Softcore-0) ********************/
 /// Tag value identifying the SOFTCORE 0 core-to-platform shared memory region
-#define SOFTCORE_0_CTP_RAM_TAG 0b0011
+#define SOFTCORE_0_CTP_RAM_TAG 0b0110
 /// Start address of the SOFTCORE 0 core-to-platform shared memory region
 #define SOFTCORE_0_CTP_RAM_START_ADDR \
   (SOFTCORE_0_START_ADDR + (SOFTCORE_0_CTP_RAM_TAG << SOFTCORE_0_TAG_LSB))

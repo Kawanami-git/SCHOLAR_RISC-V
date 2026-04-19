@@ -4,8 +4,8 @@
 \file       clocks_resets.cpp
 \brief      Clock and reset control implementation for the Verilator DUT
 \author     Kawanami
-\version    1.0
-\date       25/10/2025
+\version    1.1
+\date       16/04/2026
 
 \details
   Implementation of the helpers declared in \ref clocks_resets.h.
@@ -20,7 +20,7 @@
 | Version | Date       | Author     | Description      |
 |:-------:|:----------:|:-----------|:-----------------|
 | 1.0     | 25/10/2025 | Kawanami   | Initial version. |
-| 1.1     | xx/xx/xxxx | Author     |                  |
+| 1.1     | 16/04/2026 | Kawanami   | Remove the softcore reset which is not handled through the 'sys_reset' IP. |
 ********************************************************************************
 */
 
@@ -44,12 +44,6 @@ void ClockTick()
   // Keep core and AXI clocks in phase by toggling both together.
   dut->core_clk_i ^= 1u;
   dut->axi_clk_i ^= 1u;
-}
-
-void SetCoreResetSignal(uint8_t rstn)
-{
-  // Active-low reset: 0 = assert, 1 = de-assert.
-  dut->core_rstn_i = (rstn != 0u) ? 1u : 0u;
 }
 
 void SetRamResetSignal(uint8_t rstn)

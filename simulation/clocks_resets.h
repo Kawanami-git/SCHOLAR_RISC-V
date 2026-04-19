@@ -4,8 +4,8 @@
 \file       clocks_resets.h
 \brief      Clock and reset control API for the Verilator DUT (Vriscv_env)
 \author     Kawanami
-\version    1.1
-\date       25/10/2025
+\version    1.2
+\date       16/04/2026
 
 \details
   Lightweight helpers to drive the DUT clocks and resets from the simulation
@@ -23,8 +23,8 @@
 | Version | Date       | Author     | Description      |
 |:-------:|:----------:|:-----------|:-----------------|
 | 1.0     | 02/06/2025 | Kawanami   | Initial version. |
-| 1.1     | 25/10/2025 | Kawanami   | Update the whole file for coding style compliance.<br>Update
-the whole file comments for doxygen support. |
+| 1.1     | 25/10/2025 | Kawanami   | Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 16/04/2026 | Kawanami   | Remove the softcore reset which is not handled through the 'sys_reset' IP. |
 ********************************************************************************
 */
 
@@ -51,16 +51,6 @@ void SetClkSignal(uint8_t clk);
  * advance time with your central stepping function.
  */
 void ClockTick();
-
-/*!
- * \brief Control the core reset (active-low).
- *
- * Writes `core_rstn_i`. Passing 0 asserts reset; passing 1 de-asserts reset.
- * No call to `eval()` is performed here.
- *
- * \param[in] rstn  0 = assert reset, 1 = de-assert reset.
- */
-void SetCoreResetSignal(uint8_t rstn);
 
 /*!
  * \brief Control the AXI (“RAM”) reset (active-low).

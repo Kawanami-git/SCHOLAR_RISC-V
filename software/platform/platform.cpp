@@ -2,22 +2,23 @@
 /*!
 ********************************************************************************
 \file       platform.cpp
-\brief      Entry point for driving SCHOLAR RISC-V on SIM or PolarFire Linux target
+\brief      Entry point for driving SCHOLAR RISC-V on SIM or Platform Linux target
 \author     Kawanami
-\version    1.0
-\date       25/10/2025
+\version    1.1
+\date       17/04/2026
 
 \details
   Unified main loop for two environments, selected at compile time:
 
   - SIM (Verilator)
     * Entry function is `run(argc, argv)` (called by the simulation harness).
-    * Uses `cycle()` to advance time and optional reset helpers from sim headers.
+    * Uses `cycle()` to advance time and optional reset helpers from sim
+headers.
     * AXI helpers write directly into the simulated model (no /dev/mem).
 
-  - Platform (PolarFire Linux target)
+  - Platform (Linux target)
     * Entry function is `main(argc, argv)`.
-    * Maps AXI regions with `/dev/mem` via `SetupInstrAxi4()` / `SetupAxi4()`.
+    * Maps AXI regions with `/dev/mem` via `SetupSysResetAxi4` / `SetupInstrAxi4()` / `SetupAxi4()`.
 
   Behavior:
     * Parses CLI options (log file, firmware path, etc.) with `Arguments`.
@@ -36,7 +37,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 25/10/2025 | Kawanami   | Initial version.                          |
-| 1.1     | xx/xx/xxxx | Author     |                                           |
+| 1.1     | 17/04/2026 | Kawanami   | Add system reset AXI interface.           |
 ********************************************************************************
 */
 
@@ -86,6 +87,11 @@ unsigned int run(int argc, char** argv)
 int main(int argc, char** argv)
 {
   // Map the AXI regions we'll use. Errors are handled by return codes.
+  if (SetupSysResetAxi4(FIC0_START_ADDR, FIC0_SIZE) != SUCCESS)
+  {
+    std::cout << "Error: SetupSysResetAxi4 failed." << std::endl;
+    return FAILURE;
+  }
   if (SetupInstrAxi4(FIC0_START_ADDR, FIC0_SIZE) != SUCCESS)
   {
     std::cout << "Error: SetupInstrAxi4 failed." << std::endl;
@@ -113,6 +119,7 @@ int main(int argc, char** argv)
 #ifndef SIM
     FinalizeAxi4();
     FinalizeInstrAxi4();
+    FinalizeSysResetAxi4();
 #endif
     return FAILURE;
   }
@@ -124,6 +131,7 @@ int main(int argc, char** argv)
 #ifndef SIM
     FinalizeAxi4();
     FinalizeInstrAxi4();
+    FinalizeSysResetAxi4();
 #endif
     return FAILURE;
   }
@@ -228,6 +236,7 @@ int main(int argc, char** argv)
   // Clean unmap on platform builds
   FinalizeAxi4();
   FinalizeInstrAxi4();
+  FinalizeSysResetAxi4();
 #endif
 
   return SUCCESS;

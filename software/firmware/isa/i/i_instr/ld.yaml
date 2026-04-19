@@ -4,8 +4,8 @@
 # \file       ld.yaml
 # \brief      ISA test: LD
 # \author     Kawanami
-# \version    1.1
-# \date       28/03/2026
+# \version    1.2
+# \date       15/04/2026
 #
 # \details
 #
@@ -16,13 +16,14 @@
 # |:-------:|:----------:|:-----------|:--------------------|
 # | 1.0     | 25/10/2025 | Kawanami   | Initial version.    |
 # | 1.1     | 28/03/2026 | Kawanami   | Update addresses to match Hardware.    |
+# | 1.2     | 15/04/2026 | Kawanami   | Update addresses to match Hardware.    |
 # ********************************************************************************
 # */
 
 name: ld
 description: Load Double instruction test
 instruction_under_test: lwu
-requires: [mem-aligned-8, mem-data-start=00110010, mem-data-size=8K]
+requires: [mem-aligned-8, mem-data-start=00140010, mem-data-size=8K]
 
 rv64:
   sequence:
@@ -30,8 +31,8 @@ rv64:
       rd: random addr_reg
       imm:
         random:
-          min: 0x0000000000110800
-          max: 0x0000000000111DC8
+          min: 0x0000000000140800
+          max: 0x0000000000141DC8
 
     - op: ld
       rd: random dst_reg

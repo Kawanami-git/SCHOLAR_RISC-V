@@ -5,7 +5,7 @@
 \brief      64-bit Dual-Port RAM (composed from two 32-bit vendor-backed halves)
 
 \author     Kawanami
-\date       17/10/2025
+\date       17/04/2026
 \version    1.0
 
 \details
@@ -31,7 +31,7 @@
 \section dpram_64w_version_history Version history
 | Version | Date       | Author   | Description                                 |
 |:-------:|:----------:|:---------|:--------------------------------------------|
-| 1.0     | 17/10/2025 | Kawanami | Initial version of the module               |
+| 1.0     | 17/04/2026 | Kawanami | Initial version of the module               |
 | 1.1     | xx/xx/xxxx | name     |                                             |
 ********************************************************************************
 */
@@ -43,10 +43,6 @@ module dpram_64w #(
     /// Address width in bits (derived from Depth)
     parameter int unsigned AddrWidth = $clog2(Depth)
 ) (
-`ifdef SIM
-    /// (Simulation only) Exposes the composed 64-bit memory words
-    output logic [      DataWidth-1:0] mem_o   [Depth],
-`endif
     /// Port A clock
     input  logic                       a_clk_i,
     /// Port A address (word address in the 64-bit logical space)
@@ -97,73 +93,51 @@ module dpram_64w #(
 
   /********************             ********************/
 
-  generate
-`ifdef SIM
-    /// (SIM only) Upper 32-bit lane storage view
-    wire [(DataWidth/2) - 1 : 0] mem_hi[Depth];
-    /// (SIM only) Lower 32-bit lane storage view
-    wire [(DataWidth/2) - 1 : 0] mem_lo[Depth];
-
-    genvar i;
-    /// Concatenate simulation views into the 64-bit public array
-    for (i = 0; i < Depth; i++) begin : gen_mem_concat
-      assign mem_o[i] = {mem_hi[i], mem_lo[i]};
-    end
-`endif
-
-    /*!
+  /*!
      * `ram_hi` handles the upper 32-bit lane [63:32] for both ports.
      * Byte enable bits [7:4] map to this lane.
      */
-    dpram_32w #(
-        .Depth(Depth)
-    ) ram_hi (
-`ifdef SIM
-        .mem_o   (mem_hi),
-`endif
-        .a_clk_i (a_clk_i),
-        .a_addr_i(a_addr_i),
-        .a_din_i (a_din_i[63:32]),
-        .a_be_i  (a_be_i[7:4]),
-        .a_wren_i(a_wren_i),
-        .a_rden_i(a_rden_i),
-        .a_dout_o(a_dout_o[63:32]),
-        .b_clk_i (b_clk_i),
-        .b_addr_i(b_addr_i),
-        .b_din_i (b_din_i[63:32]),
-        .b_be_i  (b_be_i[7:4]),
-        .b_wren_i(b_wren_i),
-        .b_rden_i(b_rden_i),
-        .b_dout_o(b_dout_o[63:32])
-    );
+  dpram_32w #(
+      .Depth(Depth)
+  ) ram_hi (
+      .a_clk_i (a_clk_i),
+      .a_addr_i(a_addr_i),
+      .a_din_i (a_din_i[63:32]),
+      .a_be_i  (a_be_i[7:4]),
+      .a_wren_i(a_wren_i),
+      .a_rden_i(a_rden_i),
+      .a_dout_o(a_dout_o[63:32]),
+      .b_clk_i (b_clk_i),
+      .b_addr_i(b_addr_i),
+      .b_din_i (b_din_i[63:32]),
+      .b_be_i  (b_be_i[7:4]),
+      .b_wren_i(b_wren_i),
+      .b_rden_i(b_rden_i),
+      .b_dout_o(b_dout_o[63:32])
+  );
 
-    /*!
+  /*!
      * `ram_lo` handles the lower 32-bit lane [31:0] for both ports.
      * Byte enable bits [3:0] map to this lane.
      */
-    dpram_32w #(
-        .Depth(Depth)
-    ) ram_lo (
-`ifdef SIM
-        .mem_o   (mem_lo),
-`endif
-        .a_clk_i (a_clk_i),
-        .a_addr_i(a_addr_i),
-        .a_din_i (a_din_i[31:0]),
-        .a_be_i  (a_be_i[3:0]),
-        .a_wren_i(a_wren_i),
-        .a_rden_i(a_rden_i),
-        .a_dout_o(a_dout_o[31:0]),
-        .b_clk_i (b_clk_i),
-        .b_addr_i(b_addr_i),
-        .b_din_i (b_din_i[31:0]),
-        .b_be_i  (b_be_i[3:0]),
-        .b_wren_i(b_wren_i),
-        .b_rden_i(b_rden_i),
-        .b_dout_o(b_dout_o[31:0])
-    );
-
-  endgenerate
+  dpram_32w #(
+      .Depth(Depth)
+  ) ram_lo (
+      .a_clk_i (a_clk_i),
+      .a_addr_i(a_addr_i),
+      .a_din_i (a_din_i[31:0]),
+      .a_be_i  (a_be_i[3:0]),
+      .a_wren_i(a_wren_i),
+      .a_rden_i(a_rden_i),
+      .a_dout_o(a_dout_o[31:0]),
+      .b_clk_i (b_clk_i),
+      .b_addr_i(b_addr_i),
+      .b_din_i (b_din_i[31:0]),
+      .b_be_i  (b_be_i[3:0]),
+      .b_wren_i(b_wren_i),
+      .b_rden_i(b_rden_i),
+      .b_dout_o(b_dout_o[31:0])
+  );
   //==========================================================================
 
 endmodule

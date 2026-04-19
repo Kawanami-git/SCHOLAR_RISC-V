@@ -5,8 +5,8 @@
 \file       memory.h
 \brief      Thin, safe helpers on top of the AXI4 backend (reads/writes, mailbox)
 \author     Kawanami
-\date       24/10/2025
-\version    1.1
+\date       17/04/2026
+\version    1.2
 
 \details
   Convenience functions layered atop axi4.h:
@@ -16,19 +16,19 @@
 
   Notes:
   - All \b addresses are interpreted as \b relative to the AXI window mapped
-    by the backend (\ref SetupAxi4 / \ref SetupInstrAxi4). If you hold absolute
-    addresses, convert to the proper window-relative offset beforehand (or use
-    a higher wrapper that does it for you).
+    by the backend (\ref SetupAxi4 / \ref SetupInstrAxi4 \ref SetupSysResetAxi4).
+    If you hold absolute addresses, convert to the proper window-relative
+    offset beforehand (or use a higher wrapper that does it for you).
 
 \remarks
   - TODO: .
 
 \section memory_h_version_history Version history
-| Version | Date       | Author     | Description                               |
+| Version | Date       | Author     | Description |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 02/06/2025 | Kawanami   | Initial version.                          |
-| 1.1     | 24/10/2025 | Kawanami   | Add RV64I support.<br>Update the whole file for coding style
-compliance.<br>Update the whole file comments for doxygen support. |
+| 1.0     | 02/06/2025 | Kawanami   | Initial version. |
+| 1.1     | 24/10/2025 | Kawanami   | Add RV64I support.<br>Update the whole file for coding style compliance.<br>Update the whole file comments for doxygen support. |
+| 1.2     | 17/04/2026 | Kawanami   | Add system reset AXI interface.           |
 ********************************************************************************
 */
 
@@ -38,6 +38,25 @@ compliance.<br>Update the whole file comments for doxygen support. |
 #include <cstdint>
 
 #include "defines.h"
+
+/*!
+ * \brief Write Word-wide data via the SYS RESET window.
+ *
+ * Performs word-aligned writes to reset/unreset modules in the FPGA. On the platform
+ * target, ensure \ref SetupSysResetAxi4 was called beforehand. In simulation, the
+ * backend drives the DUT AXI directly.
+ * This function allows to drive the reset of the following modules:
+ * - scholar_riscv.sv -> SYS_RESET_START_ADDR[0:0].
+ *
+ * \param[in] addr  Window-relative byte address (aligned to NB_BYTES_IN_WORD).
+ * \param[in] data  Source buffer (non-null if \p size > 0).
+ * \param[in] size  Number of bytes to write (multiple of NB_BYTES_IN_WORD).
+ *
+ * \retval SUCCESS            OK
+ * \retval ADDR_NOT_ALIGNED   \p addr or \p size is not NB_BYTES_IN_WORD aligned
+ * \retval FAILURE            Backend error
+ */
+uword_t SysResetMemWrite(const uintptr_t addr, const uword_t* data, const uword_t size);
 
 /*!
  * \brief Write 32-bit instruction words via the INSTR window.
@@ -92,9 +111,9 @@ uword_t InstrMemReset(const uintptr_t addr, const uword_t size, const uint32_t v
 /*!
  * \brief Fill a region of the DATA window with the same word value.
  *
- * \param[in] addr   Window-relative start address (aligned to NB_BYTES_IN_WORD).
- * \param[in] size   Number of bytes (multiple of NB_BYTES_IN_WORD).
- * \param[in] value  Word pattern.
+ * \param[in] addr   Window-relative start address (aligned to
+ * NB_BYTES_IN_WORD). \param[in] size   Number of bytes (multiple of
+ * NB_BYTES_IN_WORD). \param[in] value  Word pattern.
  *
  * \retval See MemWrite
  */

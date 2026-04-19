@@ -2,23 +2,17 @@
 /*!
 ********************************************************************************
 \file       dpram_20x1024.sv
-\brief      20-bit × 1024 true Dual-Port RAM (Microchip-backed or simulation model)
+\brief      20-bit × 1024 true Dual-Port RAM (Microchip-backed)
 
 \author     Kawanami
-\date       17/10/2025
-\version    1.0
+\date       15/04/2026
+\version    1.1
 
 \details
-  Leaf-level dual-port RAM used as a Microchip-backed macro wrapper or as a simple
-  behavioral model in simulation:
+  Leaf-level dual-port RAM used as a Microchip-backed macro wrapper:
 
   - Synthesis (Libero / PolarFire SoC/FPGA):
     Instantiates the Microchip large SRAM macro `DP_LSRAM_20x1024` directly.
-
-  - Simulation (Verilator/DPI):
-    Implements a minimal behavioral true dual-port RAM with per-lane write
-    enable and synchronous, 1-cycle read latency. The full memory array can be
-    exposed to testbenches via `mem_o` (enabled with `SIM`).
 
   Each port supports independent read/write operations. Per-lane write enables
   are expressed over **BeWidth = 2** lanes (two 10-bit lanes per 20-bit word).
@@ -47,8 +41,8 @@
 \section dpram20x1024_version_history Version history
 | Version | Date       | Author   | Description                                 |
 |:-------:|:----------:|:---------|:--------------------------------------------|
-| 1.0     | 17/10/2025 | Kawanami | Initial version of the module               |
-| 1.1     | xx/xx/xxxx | Name     |                                             |
+| 1.0     | 17/10/2025 | Kawanami | Initial version of the module.              |
+| 1.1     | 15/04/2026 | Kawanami | Remove RTL/simulation implementation.       |
 ********************************************************************************
 */
 module dpram_20x1024 #(
@@ -61,10 +55,6 @@ module dpram_20x1024 #(
     /// Number of write-enable lanes (2 lanes × 10 bits per lane)
     parameter int unsigned BeWidth   = 2
 ) (
-`ifdef SIM
-    /// (Simulation only) Exposes the full memory to testbenches (DPI/Verilator)
-    output logic [DataWidth-1:0] mem_o   [Depth],
-`endif
     /// Port A clock
     input  logic                 a_clk_i,
     /// Port A address
@@ -95,80 +85,6 @@ module dpram_20x1024 #(
     output logic [DataWidth-1:0] b_dout_o
 );
 
-`ifdef SIM
-
-  /******************** DECLARATION ********************/
-  /* parameters verification */
-
-  /* local parameters */
-
-  /* machine states */
-
-  /* functions */
-
-  /* wires */
-
-  /* registers */
-  /// Registered read address for port A (held when `a_rden_i=0`)
-  reg   [AddrWidth -1:0] a_addr_reg;
-  /// Registered read address for port B (held when `b_rden_i=0`)
-  reg   [AddrWidth -1:0] b_addr_reg;
-  /* verilator lint_off MULTIDRIVEN */
-  /// Memory array (behavioral). Multi-driver warnings are suppressed intentionally.
-  logic [ DataWidth-1:0] mem        [Depth];
-  /* verilator lint_on  MULTIDRIVEN */
-  /********************             ********************/
-
-
-  /// Port A memory access logic.
-  /*!
-   * - Write: When `a_wren_i=1`, each enabled lane writes 10 bits:
-   *     lane 0 → bits `[9:0]`, lane 1 → bits `[19:10]`.
-   * - Read: When `a_rden_i=1`, capture the address; `a_dout_o` updates on
-   *   the next rising edge from `mem[a_addr_reg]`.
-   * - Priority: Write has priority over read if both are asserted.
-   */
-  always_ff @(posedge a_clk_i) begin
-    if (a_wren_i) begin
-      for (int i = 0; i < BeWidth; i++) begin
-        if (a_be_i[i]) mem[a_addr_i][i*10+:10] <= a_din_i[i*10+:10];
-      end
-    end
-    else if (a_rden_i) begin
-      a_addr_reg <= a_addr_i;
-    end
-  end
-
-  /// Port A read data (1-cycle latency)
-  assign a_dout_o = mem[a_addr_reg];
-
-  /// Port B memory access logic.
-  /*!
-   * - Write: When `b_wren_i=1`, each enabled lane writes 10 bits:
-   *     lane 0 → bits `[9:0]`, lane 1 → bits `[19:10]`.
-   * - Read: When `b_rden_i=1`, capture the address; `b_dout_o` updates on
-   *   the next rising edge from `mem[b_addr_reg]`.
-   * - Priority: Write has priority over read if both are asserted.
-   */
-  always_ff @(posedge b_clk_i) begin
-    if (b_wren_i) begin
-      for (int i = 0; i < BeWidth; i++) begin
-        if (b_be_i[i]) mem[b_addr_i][i*10+:10] <= b_din_i[i*10+:10];
-      end
-    end
-    else if (b_rden_i) begin
-      b_addr_reg <= b_addr_i;
-    end
-  end
-
-  /// Port B read data (1-cycle latency)
-  assign b_dout_o = mem[b_addr_reg];
-
-  /// Public memory exposure for simulation (DPI/Verilator)
-  assign mem_o    = mem;
-
-`else
-
   /// Microchip Large DPRAM
   DP_LSRAM_20x1024 ram (
       .A_CLK     (a_clk_i),
@@ -186,7 +102,5 @@ module dpram_20x1024 #(
       .B_REN     (b_rden_i),
       .B_DOUT    (b_dout_o)
   );
-
-`endif
 
 endmodule

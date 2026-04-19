@@ -5,8 +5,8 @@
 \brief      40-bit Dual-Port RAM (composed from two 20×1024 Microchip blocks)
 
 \author     Kawanami
-\date       17/10/2025
-\version    1.0
+\date       15/04/2026
+\version    1.1
 
 \details
   This wrapper presents a 40-bit true dual-port RAM by composing two
@@ -32,7 +32,7 @@
 | Version | Date       | Author   | Description                                 |
 |:-------:|:----------:|:---------|:--------------------------------------------|
 | 1.0     | 17/10/2025 | Kawanami | Initial version of the module               |
-| 1.1     | xx/xx/xxxx | Name     |                                             |
+| 1.1     | 15/04/2026 | Kawanami | Remove RTL/simulation implementation.       |
 ********************************************************************************
 */
 module dpram_40x1024 #(
@@ -45,10 +45,6 @@ module dpram_40x1024 #(
     /// Number of write-strobe lanes (4 lanes = 2 per 20-bit slice)
     parameter int unsigned BeWidth   = 4
 ) (
-`ifdef SIM
-    /// (Simulation only) Exposes the composed 40-bit memory words
-    output logic [DataWidth-1:0] mem_o[Depth],
-`endif
 
     //============================= Port A ===================================//
     /// Port A clock
@@ -93,76 +89,51 @@ module dpram_40x1024 #(
   /* functions */
 
   /* wires */
-  generate
-`ifdef SIM
-    /// Upper 20-bit slice memory view (per word)
-    wire [(DataWidth/2) - 1 : 0] mem_hi[Depth];
-    /// Lower 20-bit slice memory view (per word)
-    wire [(DataWidth/2) - 1 : 0] mem_lo[Depth];
-`endif
-  endgenerate
+
   /* registers */
 
   /********************             ********************/
 
-  /// SIM-only public memory exposure and hi/lo concatenation
-  generate
-`ifdef SIM
-    genvar i;
-    /// Concatenate the two 20-bit slices into a single 40-bit word
-    for (i = 0; i < Depth; i++) begin : gen_mem_concat
-      assign mem_o[i] = {mem_hi[i], mem_lo[i]};
-    end
-`endif
-
-    /*!
+  /*!
      * Handles bits [39:20] for both ports. Write lanes `a_be_i[3:2]`
      * and `b_be_i[3:2]` are forwarded to this slice.
      */
-    dpram_20x1024 ram_hi (
-`ifdef SIM
-        .mem_o   (mem_hi),
-`endif
-        .a_clk_i (a_clk_i),
-        .a_addr_i(a_addr_i),
-        .a_din_i (a_din_i[39:20]),
-        .a_be_i  (a_be_i[3:2]),
-        .a_wren_i(a_wren_i),
-        .a_rden_i(a_rden_i),
-        .a_dout_o(a_dout_o[39:20]),
-        .b_clk_i (b_clk_i),
-        .b_addr_i(b_addr_i),
-        .b_din_i (b_din_i[39:20]),
-        .b_be_i  (b_be_i[3:2]),
-        .b_wren_i(b_wren_i),
-        .b_rden_i(b_rden_i),
-        .b_dout_o(b_dout_o[39:20])
-    );
+  dpram_20x1024 ram_hi (
+      .a_clk_i (a_clk_i),
+      .a_addr_i(a_addr_i),
+      .a_din_i (a_din_i[39:20]),
+      .a_be_i  (a_be_i[3:2]),
+      .a_wren_i(a_wren_i),
+      .a_rden_i(a_rden_i),
+      .a_dout_o(a_dout_o[39:20]),
+      .b_clk_i (b_clk_i),
+      .b_addr_i(b_addr_i),
+      .b_din_i (b_din_i[39:20]),
+      .b_be_i  (b_be_i[3:2]),
+      .b_wren_i(b_wren_i),
+      .b_rden_i(b_rden_i),
+      .b_dout_o(b_dout_o[39:20])
+  );
 
-    /*!
+  /*!
      * Handles bits [19:0] for both ports. Write lanes `a_be_i[1:0]`
      * and `b_be_i[1:0]` are forwarded to this slice.
      */
-    dpram_20x1024 ram_lo (
-`ifdef SIM
-        .mem_o   (mem_lo),
-`endif
-        .a_clk_i (a_clk_i),
-        .a_addr_i(a_addr_i),
-        .a_din_i (a_din_i[19:0]),
-        .a_be_i  (a_be_i[1:0]),
-        .a_wren_i(a_wren_i),
-        .a_rden_i(a_rden_i),
-        .a_dout_o(a_dout_o[19:0]),
-        .b_clk_i (b_clk_i),
-        .b_addr_i(b_addr_i),
-        .b_din_i (b_din_i[19:0]),
-        .b_be_i  (b_be_i[1:0]),
-        .b_wren_i(b_wren_i),
-        .b_rden_i(b_rden_i),
-        .b_dout_o(b_dout_o[19:0])
-    );
-
-  endgenerate
+  dpram_20x1024 ram_lo (
+      .a_clk_i (a_clk_i),
+      .a_addr_i(a_addr_i),
+      .a_din_i (a_din_i[19:0]),
+      .a_be_i  (a_be_i[1:0]),
+      .a_wren_i(a_wren_i),
+      .a_rden_i(a_rden_i),
+      .a_dout_o(a_dout_o[19:0]),
+      .b_clk_i (b_clk_i),
+      .b_addr_i(b_addr_i),
+      .b_din_i (b_din_i[19:0]),
+      .b_be_i  (b_be_i[1:0]),
+      .b_wren_i(b_wren_i),
+      .b_rden_i(b_rden_i),
+      .b_dout_o(b_dout_o[19:0])
+  );
 
 endmodule

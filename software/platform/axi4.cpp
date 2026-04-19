@@ -2,18 +2,18 @@
 /*!
 ********************************************************************************
 \file       axi4.cpp
-\brief      AXI4 access backend (simulation & PolarFire Linux target)
+\brief      AXI4 access backend (simulation & Linux target)
 
 \author     Kawanami
-\version    1.0
-\date       24/10/2025
+\version    1.1
+\date       17/04/2026
 
 \details
   Implementation of the AXI4 memory helper API declared in \ref axi4.h.
 
   Two backends are provided via conditional compilation:
   - SIM (Verilator simulation): cycles accurate handshakes on the DUT AXI pins.
-  - Platform (PolarFire Linux target): /dev/mem mapping and plain loads/stores.
+  - Platform (Linux target): /dev/mem mapping and plain loads/stores.
 
   Only single-beat style transactions are modeled. Bursts are not implemented.
 
@@ -27,7 +27,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 24/10/2025 | Kawanami   | Initial version.                          |
-| 1.1     | xx/xx/xxxx | Author     |                                           |
+| 1.1     | 17/04/2026 | Kawanami   | Add system reset AXI interface.           |
 ********************************************************************************
 */
 
@@ -69,12 +69,71 @@ static inline bool IsAligned(uintptr_t addr, uword_t size, uword_t granule)
 /// Provided by the simulation harness.
 extern Vriscv_env* dut;
 
-/*!
- * \brief Instruction write through the INSTR AXI slave of the DUT.
- *
- * Drives AW → W → B for a sequence of single-beat writes (no bursts). Each
- * transfer advances the simulation clock using \ref cycle().
- */
+uword_t SysResetAxi4Write(const uintptr_t addr, const uint32_t* data, const uword_t size)
+{
+  if (data == nullptr || size == 0u)
+  {
+    return FAILURE;
+  }
+
+  if (!IsAligned(addr, size, 4))
+  {
+    return ADDR_NOT_ALIGNED;
+  }
+
+  uint32_t     localAddr = static_cast<uint32_t>(addr);
+  const size_t beats     = static_cast<size_t>(size / 4);
+
+  for (size_t i = 0; i < beats; i++)
+  {
+    // --- AW phase (single-beat, 4-byte) ---
+    dut->sys_reset_axi_awaddr_i  = localAddr;
+    dut->sys_reset_axi_awburst_i = 0b00;
+#ifdef XLEN64
+    dut->sys_reset_axi_awsize_i = 0b011; // 8 bytes
+#else
+    dut->sys_reset_axi_awsize_i = 0b010; // 4 bytes
+#endif
+    dut->sys_reset_axi_awlen_i   = 0;
+    dut->sys_reset_axi_awvalid_i = 1;
+    while (dut->sys_reset_axi_awready_o == 0)
+    {
+      Cycle();
+    }
+    Cycle();
+    dut->sys_reset_axi_awvalid_i = 0;
+
+    // --- W phase (data + strobes) ---
+    dut->sys_reset_axi_wdata_i  = data[i];
+#ifdef XLEN64
+    dut->sys_reset_axi_wstrb_i = 0xFF;
+#else
+    dut->sys_reset_axi_wstrb_i = 0x0F;
+#endif
+    dut->sys_reset_axi_wlast_i  = 1;
+    dut->sys_reset_axi_wvalid_i = 1;
+    while (dut->sys_reset_axi_wready_o == 0)
+    {
+      Cycle();
+    }
+    Cycle();
+    dut->sys_reset_axi_wvalid_i = 0;
+
+    // --- B phase (response) ---
+    dut->sys_reset_axi_bready_i = 1;
+    while (dut->sys_reset_axi_bvalid_o == 0)
+    {
+      Cycle();
+    }
+    Cycle();
+    dut->sys_reset_axi_bready_i = 0;
+
+    localAddr += 4;
+  }
+
+  return SUCCESS;
+}
+
 uword_t InstrAxi4Write(const uintptr_t addr, const uint32_t* data, const uword_t size)
 {
   if (data == nullptr || size == 0u)
@@ -132,11 +191,6 @@ uword_t InstrAxi4Write(const uintptr_t addr, const uint32_t* data, const uword_t
   return SUCCESS;
 }
 
-/*!
- * \brief Generic AXI write through the DATA/SHARED AXI slave of the DUT.
- *
- * Drives AW → W → B handshakes for word-wide single-beat writes.
- */
 uword_t Axi4Write(const uintptr_t addr, const uword_t* data, const uword_t size)
 {
   if (data == nullptr || size == 0u)
@@ -202,11 +256,6 @@ uword_t Axi4Write(const uintptr_t addr, const uword_t* data, const uword_t size)
   return SUCCESS;
 }
 
-/*!
- * \brief Generic AXI read through the DATA/SHARED AXI slave of the DUT.
- *
- * Drives AR → R handshakes for word-wide single-beat reads.
- */
 uword_t Axi4Read(const uintptr_t addr, uword_t* data, const uword_t size)
 {
   if (data == nullptr || size == 0u)
@@ -259,21 +308,25 @@ uword_t Axi4Read(const uintptr_t addr, uword_t* data, const uword_t size)
 
 #else
 /*==============================================================================
- *                          PLATFORM (PolarFire Linux)
+ *                          PLATFORM (Linux)
  *============================================================================*/
 
 #include <fcntl.h>
 #include <iostream>
 #include <sys/mman.h>
 
-/// Instruction AXI Mapped base addresses (volatile to prevent compiler reordering/merging).
+/// System reset AXI Mapped base addresses (volatile to prevent compiler reordering/merging)
+static volatile uword_t* gSysResetAxiBase = nullptr;
+/// Instruction AXI Mapped base addresses (volatile to prevent compiler reordering/merging)
 static volatile uint32_t* gInstrAxiBase = nullptr;
-/// Data AXI Mapped base addresses (volatile to prevent compiler reordering/merging).
+/// Data AXI Mapped base addresses (volatile to prevent compiler reordering/merging)
 static volatile uword_t* gAxiBase = nullptr;
 
-/// Tracked mmap sizes (used on unmap).
+/// Tracked mmap sizes (used on unmap)
+static uword_t gSysResetAxiSize = 0;
+/// Tracked mmap sizes (used on unmap)
 static uint32_t gInstrAxiSize = 0;
-/// Tracked mmap sizes (used on unmap).
+/// Tracked mmap sizes (used on unmap)
 static uword_t gAxiSize = 0;
 
 /*!
@@ -283,6 +336,69 @@ static int OpenDevMem()
 {
   int fd = ::open("/dev/mem", O_RDWR | O_SYNC);
   return fd;
+}
+
+/*--------------------------- System Reset window mapping ----------------------*/
+
+uword_t SetupSysResetAxi4(const uword_t start_addr, const uword_t size)
+{
+  if (!IsAligned(start_addr, size, NB_BYTES_IN_WORD))
+  {
+    return ADDR_NOT_ALIGNED;
+  }
+
+  int fd = OpenDevMem();
+  if (fd < 0)
+  {
+    return FAILURE;
+  }
+  void* base = ::mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, start_addr);
+  ::close(fd);
+
+  if (base == MAP_FAILED)
+  {
+    return FAILURE;
+  }
+
+  gSysResetAxiBase = reinterpret_cast<volatile uword_t*>(base);
+  gSysResetAxiSize = size;
+
+  return SUCCESS;
+}
+
+void FinalizeSysResetAxi4()
+{
+  if (gSysResetAxiBase)
+  {
+    ::munmap((void*)gSysResetAxiBase, gSysResetAxiSize);
+    gSysResetAxiBase = nullptr;
+    gSysResetAxiSize = 0;
+  }
+}
+
+uword_t SysResetAxi4Write(const uintptr_t addr, const uword_t* data, const uword_t size)
+{
+  if (gSysResetAxiBase == nullptr)
+  {
+    return INVALID_ADDR;
+  }
+  if (data == nullptr || size == 0u)
+  {
+    return FAILURE;
+  }
+  if (!IsAligned(addr, size, NB_BYTES_IN_WORD))
+  {
+    return ADDR_NOT_ALIGNED;
+  }
+
+  volatile uword_t* p     = gSysResetAxiBase + static_cast<uintptr_t>(addr) / NB_BYTES_IN_WORD;
+  const size_t       beats = static_cast<size_t>(size / NB_BYTES_IN_WORD);
+  for (size_t i = 0; i < beats; ++i)
+  {
+    p[i] = data[i];
+  }
+
+  return SUCCESS;
 }
 
 /*--------------------------- Instruction window mapping ----------------------*/
@@ -386,11 +502,6 @@ void FinalizeAxi4()
   }
 }
 
-/*!
- * \brief Generic word-wide write on the mapped AXI window.
- *
- * Writes NB_BYTES_IN_WORD per iteration starting from \p addr.
- */
 uword_t Axi4Write(const uintptr_t addr, const uword_t* data, const uword_t size)
 {
   if (gAxiBase == nullptr)
@@ -406,21 +517,24 @@ uword_t Axi4Write(const uintptr_t addr, const uword_t* data, const uword_t size)
     return ADDR_NOT_ALIGNED;
   }
 
+  /*
+  * Without usleep, the platform writes data and waits for an AXI response indefinitely.
+  * I think it is due to the poorly handled AXI4 FSM inside memory modules.
+  * As this is not the main topic of this project, I will keep this software fix for now.
+  */
   volatile uword_t* p     = gAxiBase + static_cast<uintptr_t>(addr) / NB_BYTES_IN_WORD;
   const size_t      beats = static_cast<size_t>(size / NB_BYTES_IN_WORD);
   for (size_t i = 0; i < beats; ++i)
   {
     p[i] = data[i];
+    usleep(10);
   }
+
+
 
   return SUCCESS;
 }
 
-/*!
- * \brief Generic word-wide read on the mapped AXI window.
- *
- * Reads NB_BYTES_IN_WORD per iteration starting from \p addr.
- */
 uword_t Axi4Read(const uintptr_t addr, uword_t* data, const uword_t size)
 {
   if (gAxiBase == nullptr)

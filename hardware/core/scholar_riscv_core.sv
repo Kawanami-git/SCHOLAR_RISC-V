@@ -4,8 +4,8 @@
 \file       scholar_riscv_core.sv
 \brief      SCHOLAR RISC-V Core Module
 \author     Kawanami
-\date       29/03/2026
-\version    1.4
+\date       15/04/2026
+\version    1.5
 
 \details
   This module is the top-level module of the SCHOLAR RISC-V core.
@@ -38,6 +38,7 @@
 | 1.2     | 13/02/2026 | Kawanami   | Replace custom interface with OBI standard. |
 | 1.3     | 28/03/2026 | Kawanami   | Improve spike compatibility.              |
 | 1.4     | 29/03/2026 | Kawanami   | Improve global lisibility by using package instead of parameters. |
+| 1.5     | 15/04/2026 | Kawanami   | Add a reset synchronizer. |
 ********************************************************************************
 */
 module scholar_riscv_core
@@ -184,65 +185,80 @@ module scholar_riscv_core
   /* wires */
   /* General purpose register file */
   /// General purpose register file RS1 value
-  wire [Archi          - 1 : 0] gpr_rs1_val;
+  wire  [Archi          - 1 : 0] gpr_rs1_val;
   /// General purpose register file RS2 value
-  wire [Archi          - 1 : 0] gpr_rs2_val;
+  wire  [Archi          - 1 : 0] gpr_rs2_val;
   /// Program counter
-  wire [Archi          - 1 : 0] gpr_pc;
+  wire  [Archi          - 1 : 0] gpr_pc;
   /* CSR file */
   /// CSR read value
-  wire [Archi          - 1 : 0] csr_val;
+  wire  [Archi          - 1 : 0] csr_val;
   /* fetch */
-  wire [INSTR_WIDTH    - 1 : 0] fetch_instr;
-  wire                          fetch_valid;
+  wire  [INSTR_WIDTH    - 1 : 0] fetch_instr;
+  wire                           fetch_valid;
   /* Decode */
   /// General purpose register file port 0 read address
-  wire [RF_ADDR_WIDTH  - 1 : 0] decode_rs1;
+  wire  [RF_ADDR_WIDTH  - 1 : 0] decode_rs1;
   /// General purpose register file port 1 read address
-  wire [RF_ADDR_WIDTH  - 1 : 0] decode_rs2;
+  wire  [RF_ADDR_WIDTH  - 1 : 0] decode_rs2;
   /// RS1 value or zeroes
-  wire [Archi          - 1 : 0] decode_op1;
+  wire  [Archi          - 1 : 0] decode_op1;
   /// RS2 value (REG_OP or BRANCH_OP) or immediate
-  wire [Archi          - 1 : 0] decode_op2;
+  wire  [Archi          - 1 : 0] decode_op2;
   /// EXE unit control
-  wire [EXE_CTRL_WIDTH - 1 : 0] decode_exe_ctrl;
+  wire  [EXE_CTRL_WIDTH - 1 : 0] decode_exe_ctrl;
   /// Immediate (BRANCH_OP or CSR_OP) or RS2 value (STORE_OP) or zeroes
-  wire [Archi          - 1 : 0] decode_op3;
+  wire  [Archi          - 1 : 0] decode_op3;
   /// Destination register
-  wire [RF_ADDR_WIDTH  - 1 : 0] decode_rd;
+  wire  [RF_ADDR_WIDTH  - 1 : 0] decode_rd;
   /// Program counter control
-  wire [PC_CTRL_WIDTH  - 1 : 0] decode_pc_ctrl;
+  wire  [PC_CTRL_WIDTH  - 1 : 0] decode_pc_ctrl;
   /// Memory control
-  wire [MEM_CTRL_WIDTH - 1 : 0] decode_mem_ctrl;
+  wire  [MEM_CTRL_WIDTH - 1 : 0] decode_mem_ctrl;
   /// General purpose register file control
-  wire [GPR_CTRL_WIDTH - 1 : 0] decode_gpr_ctrl;
+  wire  [GPR_CTRL_WIDTH - 1 : 0] decode_gpr_ctrl;
   /// Control/status register file control
-  wire [CSR_CTRL_WIDTH - 1 : 0] decode_csr_ctrl;
+  wire  [CSR_CTRL_WIDTH - 1 : 0] decode_csr_ctrl;
   /// Control/status register file read address
-  wire [CSR_ADDR_WIDTH - 1 : 0] decode_csr_raddr;
+  wire  [CSR_ADDR_WIDTH - 1 : 0] decode_csr_raddr;
   /// valid flag
-  wire                          decode_valid;
+  wire                           decode_valid;
   /// EXE operation result
-  wire [Archi          - 1 : 0] exe_out;
+  wire  [Archi          - 1 : 0] exe_out;
   /* write-back */
   /// Register index to be written (GPR destination)
-  wire [RF_ADDR_WIDTH  - 1 : 0] writeback_rd;
+  wire  [RF_ADDR_WIDTH  - 1 : 0] writeback_rd;
   /// Data to write to the destination register
-  wire [Archi          - 1 : 0] writeback_rd_val;
+  wire  [Archi          - 1 : 0] writeback_rd_val;
   /// Write enable for GPR destination register
-  wire                          writeback_rd_valid;
+  wire                           writeback_rd_valid;
   /// Next program counter value
-  wire [Archi          - 1 : 0] writeback_pc_next;
+  wire  [Archi          - 1 : 0] writeback_pc_next;
   /// Write address for CSR file
-  wire [CSR_ADDR_WIDTH - 1 : 0] writeback_csr_waddr;
+  wire  [CSR_ADDR_WIDTH - 1 : 0] writeback_csr_waddr;
   /// Data to write to CSR
-  wire [Archi          - 1 : 0] writeback_csr_val;
+  wire  [Archi          - 1 : 0] writeback_csr_val;
   /// CSR write enable signal
-  wire                          writeback_csr_valid;
+  wire                           writeback_csr_valid;
 
   /* registers */
+  /// First stage of the reset synchronizer
+  (* ASYNC_REG = "TRUE" *)logic                          core_rstn_q;
 
+  /// Second stage of the reset synchronizer
+  (* ASYNC_REG = "TRUE" *)logic                          core_rstn_q_d;
   /********************             ********************/
+
+  /*!
+   * \brief Synchronize the external reset into the local clock domain.
+   *
+   * This 2-flop synchronizer reduces the risk of metastability when the
+   * external active-low reset `rstn_i` is sampled by logic running on `clk_i`.
+   */
+  always_ff @(posedge clk_i) begin : rst_sync
+    core_rstn_q   <= rstn_i;
+    core_rstn_q_d <= core_rstn_q;
+  end
 
 
   gpr #(
@@ -254,7 +270,7 @@ module scholar_riscv_core
       .pc_q_o    (gpr_pc_q_o),
 `endif
       .clk_i     (clk_i),
-      .rstn_i    (rstn_i),
+      .rstn_i    (core_rstn_q_d),
       .rs1_i     (decode_rs1),
       .rs2_i     (decode_rs2),
       .rd_i      (writeback_rd),
@@ -275,7 +291,7 @@ module scholar_riscv_core
       .mcycle_q_o (csr_mcycle_q_o),
 `endif
       .clk_i      (clk_i),
-      .rstn_i     (rstn_i),
+      .rstn_i     (core_rstn_q_d),
       .csr_waddr_i(writeback_csr_waddr),
       .csr_val_i  (writeback_csr_val),
       .csr_valid_i(writeback_csr_valid),
@@ -292,7 +308,7 @@ module scholar_riscv_core
       .Archi(Archi)
   ) fetch (
       .clk_i    (clk_i),
-      .rstn_i   (rstn_i),
+      .rstn_i   (core_rstn_q_d),
       .pc_next_i(writeback_pc_next),
       .instr_o  (fetch_instr),
       .valid_o  (fetch_valid),
@@ -307,7 +323,7 @@ module scholar_riscv_core
   decode #(
       .Archi(Archi)
   ) decode (
-      .rstn_i       (rstn_i),
+      .rstn_i       (core_rstn_q_d),
       .valid_o      (decode_valid),
       .instr_i      (fetch_instr),
       .instr_valid_i(fetch_valid),
@@ -346,7 +362,7 @@ module scholar_riscv_core
       .instr_committed_o(instr_committed_o),
 `endif
       .clk_i            (clk_i),
-      .rstn_i           (rstn_i),
+      .rstn_i           (core_rstn_q_d),
       .decode_valid_i   (decode_valid),
       .exe_out_i        (exe_out),
       .op3_i            (decode_op3),

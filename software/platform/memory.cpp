@@ -4,8 +4,8 @@
 \file       memory.cpp
 \brief      Thin, safe helpers on top of the AXI4 backend (impl)
 \author     Kawanami
-\date       24/10/2025
-\version    1.0
+\date       17/04/2026
+\version    1.1
 
 \details
   See \ref memory.h. This layer:
@@ -21,7 +21,7 @@
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
 | 1.0     | 24/10/2025 | Kawanami   | Initial version.                          |
-| 1.1     | xx/xx/xxxx | Author     |                                           |
+| 1.1     | 17/04/2026 | Kawanami   | Add system reset AXI interface.           |
 ********************************************************************************
 */
 
@@ -44,6 +44,14 @@ static inline bool IsAligned(const uintptr_t addr, const uword_t size, const uwo
 /*------------------------------------------------------------------------------
  * Basic memory I/O
  *----------------------------------------------------------------------------*/
+
+uword_t SysResetMemWrite(const uintptr_t addr, const uword_t* data, const uword_t size)
+{
+  uword_t alignedSize;
+  alignedSize = (size + 3) & ~3;
+
+  return SysResetAxi4Write(addr, data, alignedSize);
+}
 
 uword_t InstrMemWrite(const uintptr_t addr, const uint32_t* data, const uword_t size)
 {
@@ -98,13 +106,16 @@ uword_t MemReset(const uintptr_t addr, const uword_t size, const uword_t value)
  * Shared-memory mailbox (PTC / CTP)
  *
  * Protocol summary (as used by the platform side here):
- * - CTP (Core→Platform) contains PLATFORM_COUNT and CORE_COUNT + DATA_SIZE/DATA.
+ * - CTP (Core→Platform) contains PLATFORM_COUNT and CORE_COUNT +
+ *DATA_SIZE/DATA.
  *   * SharedWriteReady() consults CTP PLATFORM_COUNT to decide if the platform
  *     may publish a new message (token-based).
  *   * SharedReadReady() checks CTP CORE_COUNT to detect a new message and, if
  *     present, returns DATA_SIZE.
- * - PTC (Platform→Core) contains PLATFORM_COUNT and CORE_COUNT mirrored for acks.
- *   * SharedReadAck() increments PTC CORE_COUNT once the platform consumed a msg.
+ * - PTC (Platform→Core) contains PLATFORM_COUNT and CORE_COUNT mirrored for
+ *acks.
+ *   * SharedReadAck() increments PTC CORE_COUNT once the platform consumed a
+ *msg.
  *   * SharedWriteAck() increments PTC PLATFORM_COUNT after writing a msg.
  *----------------------------------------------------------------------------*/
 

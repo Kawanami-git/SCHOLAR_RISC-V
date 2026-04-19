@@ -5,7 +5,7 @@
 \brief      32-bit Dual-Port RAM (Microchip-backed composition from 40×1024 blocks)
 
 \author     Kawanami
-\date       17/10/2025
+\date       17/04/2026
 \version    1.0
 
 \details
@@ -35,7 +35,7 @@
 \section dpram_32w_version_history Version history
 | Version | Date       | Author     | Description                               |
 |:-------:|:----------:|:-----------|:------------------------------------------|
-| 1.0     | 17/10/2025 | Kawanami   | Initial version of the module.            |
+| 1.0     | 17/04/2026 | Kawanami   | Initial version of the module.            |
 | 1.1     | xx/xx/xxxx | Name       |                                           |
 ********************************************************************************
 */
@@ -48,11 +48,6 @@ module dpram_32w #(
     /// Address width in bits (derived from Depth)
     parameter int unsigned AddrWidth = $clog2(Depth)
 ) (
-`ifdef SIM
-    /// (Simulation only) Exposes the composed memory as 32-bit words
-    output wire [DataWidth-1:0] mem_o[Depth],
-`endif
-
     /// Port A clock
     input  logic                       a_clk_i,
     /// Port A address (word address in the 32-bit logical space)
@@ -130,31 +125,26 @@ module dpram_32w #(
   /* wires */
 
   /// Port A bank select (MSBs of logical address)
-  wire [ BANK_SEL_W-1:0] A_BANK_SEL;
+  wire  [ BANK_SEL_W-1:0] A_BANK_SEL;
   /// Port A row index inside the selected bank
-  wire [BANK_ADDR_W-1:0] A_ROW;
+  wire  [BANK_ADDR_W-1:0] A_ROW;
 
   /// Port B bank select (MSBs of logical address)
-  wire [ BANK_SEL_W-1:0] B_BANK_SEL;
+  wire  [ BANK_SEL_W-1:0] B_BANK_SEL;
   /// Port B row index inside the selected bank
-  wire [BANK_ADDR_W-1:0] B_ROW;
+  wire  [BANK_ADDR_W-1:0] B_ROW;
 
   /// Per-bank 40-bit read data (Port A)
-  wire [           39:0] a_dout_o_bank[NB_BANKS];
+  wire  [           39:0] a_dout_o_bank[NB_BANKS];
   /// Per-bank 40-bit read data (Port B)
-  wire [           39:0] b_dout_o_bank[NB_BANKS];
-
-`ifdef SIM
-  /// (Simulation only) Per-bank raw 40-bit memory exposure
-  wire [39:0] bank_mem[NB_BANKS][BANK_DEPTH];
-`endif
+  wire  [           39:0] b_dout_o_bank[NB_BANKS];
 
   /* registers */
 
   /// Registered bank select for Port A (aligns MUX select with data timing)
-  logic [BANK_SEL_W-1:0] a_bank_sel_q;
+  logic [ BANK_SEL_W-1:0] a_bank_sel_q;
   /// Registered bank select for Port B (aligns MUX select with data timing)
-  logic [BANK_SEL_W-1:0] b_bank_sel_q;
+  logic [ BANK_SEL_W-1:0] b_bank_sel_q;
   /********************             ********************/
 
   /*!
@@ -202,9 +192,6 @@ module dpram_32w #(
        * are packed to 40-bit on write and unpacked on read.
        */
       dpram_40x1024 u_bank0 (
-`ifdef SIM
-          .mem_o   (bank_mem[0]),
-`endif
           // --- Port A ---
           .a_clk_i (a_clk_i),
           .a_addr_i(A_ROW),
@@ -237,9 +224,6 @@ module dpram_32w #(
         wire b_hit = (B_BANK_SEL == BANK_SEL_W'(b));
 
         dpram_40x1024 u_bank (
-`ifdef SIM
-            .mem_o   (bank_mem[b]),
-`endif
             .a_clk_i (a_clk_i),
             .a_addr_i(A_ROW),
             .a_din_i (pack40(a_din_i)),
@@ -270,20 +254,5 @@ module dpram_32w #(
   * registered bank select (matches 1-cycle read latency).
   */
   assign b_dout_o = unpack32(b_dout_o_bank[b_bank_sel_q]);
-
-`ifdef SIM
-  /*!
-   * Public memory exposure for simulation:
-   * - `bank_mem` exposes each vendor bank as 40-bit words.
-   * - `mem_o` repacks those words into a flat 32-bit array to match
-   *   the logical external view (bank-major → linear address).
-   */
-  genvar gi, gj;
-  for (gi = 0; gi < NB_BANKS; gi++) begin : g_pub_bank
-    for (gj = 0; gj < BANK_DEPTH; gj++) begin : g_pub_row
-      assign mem_o[gi*BANK_DEPTH+gj] = unpack32(bank_mem[gi][gj]);
-    end
-  end
-`endif
 
 endmodule
