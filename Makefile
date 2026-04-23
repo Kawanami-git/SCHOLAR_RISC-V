@@ -4,8 +4,8 @@
 # \file       Makefile
 # \brief      Top-level build & run orchestration for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    2.0
-# \date       02/04/2026
+# \version    2.1
+# \date       23/04/2026
 #
 # \details
 #   This Makefile is intentionally thin. It only:
@@ -32,6 +32,7 @@
 # | 1.5     | 28/03/2026 | Kawanami | Add targets to compare loader/cyclemark with Spike trace.       |
 # | 1.6     | 29/03/2026 | Kawanami | Pass 'Archi' in simulation and add 'core_pkg' for readability.  |
 # | 2.0     | 02/04/2026 | Kawanami | Split all targets into dedicated Makefiles.                     |
+# | 2.1     | 23/04/2026 | Kawanami | Add 'mpfs_disco_kit_help' to the 'help' Target.                 |
 # ********************************************************************************
 # */
 
@@ -74,7 +75,7 @@ include $(SIM_MK)
 
 # Global help
 .PHONY: help
-help: common_help sim_help
+help: common_help sim_help mpfs_disco_kit_help
 
 # Global clean
 .PHONY: clean_all

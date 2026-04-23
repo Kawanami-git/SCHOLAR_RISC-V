@@ -356,7 +356,7 @@ Below is a summary of synthesis results on a PolarFire MPFS095T FPGA:
 
 | **Architecture**              | **Features**                                    | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor                   | 1.24              | LEs: 3150 (1063 FFs)<br>Fmax: 71 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor                   | 1.24              | LEs: 3150 (1063 FFs)<br>Fmax: 75 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 | **RV64I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor (64-bit datapath) | 1.05              | LEs: 6553 (2120 FFs)<br>Fmax: 64 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 
 <br>
@@ -1130,7 +1130,7 @@ The performance of the **SCHOLAR RISC-V** processor is evaluated using three key
 
 | **Architecture**              | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `mcycle` (Zicntr)** | 1.24              | LEs: 3150 (1063 FFs)<br>Fmax: 71 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `mcycle` (Zicntr)** | 1.24              | LEs: 3150 (1063 FFs)<br>Fmax: 75 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 | **RV64I + `mcycle` (Zicntr)** | 1.05              | LEs: 6553 (2120 FFs)<br>Fmax: 64 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 
 <br>

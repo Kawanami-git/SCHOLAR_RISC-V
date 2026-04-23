@@ -4,8 +4,8 @@
 # \file       common.mk
 # \brief      Common variables and helper targets for SCHOLAR RISC-V.
 # \author     Kawanami
-# \version    1.0
-# \date       15/04/2026
+# \version    1.1
+# \date       23/04/2026
 #
 # \details
 #   This Makefile fragment contains the variables, file lists, and helper targets
@@ -33,6 +33,7 @@
 # | Version | Date       | Author   | Description                                |
 # |:-------:|:----------:|:---------|:-------------------------------------------|
 # | 1.0     | 15/04/2026 | Kawanami | Initial split from the top-level Makefile. |
+# | 1.1     | 23/04/2026 | Kawanami | Fix 'common_help' target.                  |
 # ********************************************************************************
 # */
 
@@ -210,11 +211,11 @@ ECFLAGS  				                ?= -I$(FIRMWARE_DIR)common/ -I$(SOFTWARE_DIR) \
 ELDFLAGS 				                ?= -T $(LINKER) -nostdlib -static --gc-sections
 #################################### 	 				####################################
 
-# Display help for simulation-related targets
+# Display help for common-related targets
 .PHONY: common_help
 common_help:
 	@echo
-	@echo "SCHOLAR RISC-V — simulation Makefile helper"
+	@echo "SCHOLAR RISC-V — common Makefile helper"
 	@echo "Usage: make <target>"
 	@echo
 	@printf "Targets:\n"
