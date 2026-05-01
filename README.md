@@ -68,8 +68,9 @@ it is predictable (each instruction takes one cycle), easy to visualize, and str
 
 This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file for details.
 
-However, part of this repository (CycleMark) is derived from the [CoreMark repository](https://github.com/eembc/coremark), which is distributed under its own license. You can find the original license and related notices in the [CycleMark](software/firmware/cyclemark/) directory.<br>
+However, sub-modules of this repository are distributed under their own licenses.
 
+<br>
 <br>
 
 ---
@@ -97,6 +98,11 @@ Together, they define the minimum working instruction set that allows a program 
 > Arithmetic instructions in **RV32I** always operate on 32-bit values.<br>
 > When working in **RV64I**, the same logic applies — but operands and results are sign-extended to 64 bits.<br>
 > Additional instructions introduced by **RV64I** specifically handle 32-bit operations within a 64-bit architecture.<br>
+
+<br>
+
+<details>
+<summary>Supported RISC-V Instructions</summary>
 
 <br>
 
@@ -231,6 +237,8 @@ The new instructions introduced by **RV64I** enable explicit 32-bit arithmetic a
 
 <br>
 
+</details>
+
 ---
 
 <br>
@@ -246,6 +254,13 @@ Understanding these formats is key to interpreting instructions and designing th
 
 Each format divides the 32-bit instruction word into fields that identify operands, immediates, and operation types.<br>
 Depending on the instruction type, some fields may be reused or interpreted differently.
+
+<br>
+
+<details>
+<summary>Instruction Formats</summary>
+
+<br>
 
 | **Field**          | **Purpose**                                                                 |
 | ------------------ | --------------------------------------------------------------------------- |
@@ -335,6 +350,8 @@ Examples: **JAL**.
 
 <br>
 
+</details>
+
 ---
 
 <br>
@@ -356,8 +373,8 @@ Below is a summary of synthesis results on a PolarFire MPFS095T FPGA:
 
 | **Architecture**              | **Features**                                    | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor                   | 1.24              | LEs: 3150 (1063 FFs)<br>Fmax: 75 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor (64-bit datapath) | 1.05              | LEs: 6553 (2120 FFs)<br>Fmax: 64 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor                   | 1.24              | LEs: 3248 (1093 FFs)<br>Fmax: 75 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `mcycle` (Zicntr)** | Single-cycle RISC-V processor (64-bit datapath) | 1.05              | LEs: 6584 (2190 FFs)<br>Fmax: 69 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 
 <br>
 
@@ -438,6 +455,9 @@ This limits performance but provides a crystal-clear view of how every instructi
 
 ## Fetch
 
+<details>
+<summary></summary>
+
 **Fetch** is responsible for retrieving one instruction per cycle from the instruction memory.<br>
 It uses the `pc_next_i` signal from the **writeback** stage to determine the address of the next instruction to execute.<br>
 Its role is to ensure a continuous flow of valid instructions into **decode** — keeping the processor busy every cycle.
@@ -482,6 +502,8 @@ This simple **fetch** design provides a clear and predictable mechanism for inst
 
 <br>
 
+</details>
+
 ---
 
 <br>
@@ -491,6 +513,9 @@ This simple **fetch** design provides a clear and predictable mechanism for inst
 <br>
 
 ## Decode
+
+<details>
+<summary></summary>
 
 **Decode** is the central “control hub” of the processor.<br>
 Its purpose is to translate the binary instruction fetched from memory into meaningful hardware actions — determining what operation to perform, which operands to use, and where the result should go.
@@ -582,6 +607,8 @@ Thanks to this modular design, new instructions or addressing modes can be added
 
 <br>
 
+</details>
+
 ---
 
 <br>
@@ -591,6 +618,9 @@ Thanks to this modular design, new instructions or addressing modes can be added
 <br>
 
 ## Exe
+
+<details>
+<summary></summary>
 
 **exe** (execute) performs the actual computation requested by the instruction.<br>
 It receives the operands and control signals from **decode**, executes the required arithmetic or logical operation, and produces a result that will later be stored or written back.
@@ -632,6 +662,8 @@ From a design perspective:
 
 <br>
 
+</details>
+
 ---
 
 <br>
@@ -641,6 +673,9 @@ From a design perspective:
 <br>
 
 ## Writeback
+
+<details>
+<summary></summary>
 
 **Writeback** is the final step in the instruction flow.<br>
 Its role is to apply the results of the executed instruction to the processor’s visible state — that is, to update the register file, data memory, and program counter.<br>
@@ -732,6 +767,8 @@ This stage closes the loop of instruction execution — completing the **single-
 
 <br>
 
+</details>
+
 ---
 
 <br>
@@ -742,6 +779,9 @@ This stage closes the loop of instruction execution — completing the **single-
 
 
 ## Execution flow example
+
+<details>
+<summary></summary>
 
 This following program has been executed on the core:
 ```
@@ -1111,6 +1151,8 @@ This detailed exploration also highlights the inherent trade-offs in **single-cy
 
 <br>
 
+</details>
+
 ---
 
 <br>
@@ -1121,6 +1163,9 @@ This detailed exploration also highlights the inherent trade-offs in **single-cy
 
 ## Performance, Cost and Limitations
 
+<details>
+<summary></summary>
+
 ![SCHOLAR_RISC-V_resources](./img/SCHOLAR_RISC-V_32bit_resources.png)
 
 The performance of the **SCHOLAR RISC-V** processor is evaluated using three key indicators:
@@ -1130,8 +1175,8 @@ The performance of the **SCHOLAR RISC-V** processor is evaluated using three key
 
 | **Architecture**              | **CycleMark/MHz** | **FPGA Resources & Performance (PolarFire MPFS095T)**                          |
 | ----------------------------- | ----------------- | ------------------------------------------------------------------------------ |
-| **RV32I + `mcycle` (Zicntr)** | 1.24              | LEs: 3150 (1063 FFs)<br>Fmax: 75 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
-| **RV64I + `mcycle` (Zicntr)** | 1.05              | LEs: 6553 (2120 FFs)<br>Fmax: 64 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV32I + `mcycle` (Zicntr)** | 1.24              | LEs: 3248 (1093 FFs)<br>Fmax: 75 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
+| **RV64I + `mcycle` (Zicntr)** | 1.05              | LEs: 6584 (2190 FFs)<br>Fmax: 69 MHz<br>uSRAM: 0<br>LSRAM: 0<br>Math blocks: 0 |
 
 <br>
 <br>
@@ -1152,7 +1197,7 @@ Comparison data (CoreMark scores, which CycleMark is derived from) can be found 
 
 Although the frequencies may seem modest, they are typical for FPGA-based implementations of **single-cycle** processors.
 
-To execute an instruction, the following path must be completed within one clock cycle: `Instruction memory → Fetch → Decode → Execute → Writeback → Data memory`.
+To execute an instruction, the following path must be completed within one clock cycle: `Instruction memory → Fetch → Decode → Execute → Writeback → Data memory (or Instruction memory due to PC computation in Writeback)`.
 
 This full sequence forms the **critical path** of the processor — the longest combinational route between two synchronous elements.<br>
 The longer this path, the slower the clock must be to ensure signals have enough time to propagate and settle before the next rising edge.
@@ -1176,8 +1221,8 @@ However, memory operations (LOAD and STORE) require two cycles to complete, whic
 ### Resource Utilization and Cost Insights
 
 From a resource perspective, the processor remains relatively compact:
-  - 3150 logic elements (1063 flip-flops) for **RV32I**.
-  - 6553 logic elements (2120 flip-flops) for **RV64I**.
+  - 3248 logic elements (1093 flip-flops) for **RV32I**.
+  - 6584 logic elements (2190 flip-flops) for **RV64I**.
   - No block RAMs (uSRAM/LSRAM).
   - No hardware multipliers or DSP blocks.
 
@@ -1190,6 +1235,8 @@ This highlights a common reality in digital design: **Memory structures, even sm
 This is why most practical architectures, whether in ASICs or FPGAs, use dedicated memory blocks (BRAMs, uSRAMs, etc.) instead of generic logic for register files and caches.
 
 <br>
+
+</details>
 
 ---
 

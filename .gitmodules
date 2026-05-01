@@ -1,6 +1,9 @@
-[submodule "MPFS_DISCOVERY_KIT"]
-	path = MPFS_DISCOVERY_KIT
-	url = https://github.com/Kawanami-git/MPFS_DISCOVERY_KIT.git
-[submodule "scripts"]
-	path = scripts
-	url = https://github.com/Kawanami-git/scripts.git
+[submodule "sv-tools"]
+	path = sv-tools
+	url = https://github.com/Kawanami-git/sv-tools.git
+[submodule "mpfs-discovery-kit"]
+	path = mpfs-discovery-kit
+	url = https://github.com/Kawanami-git/mpfs-discovery-kit.git
+[submodule "riscv-core-harness"]
+	path = riscv-core-harness
+	url = https://github.com/Kawanami-git/riscv-core-harness.git

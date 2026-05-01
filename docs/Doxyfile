@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: MIT
+# /*!
+# ********************************************************************************
+# \file       Doxyfile
+# \brief      Doxygen configuration for scholar-risc-v documentation.
+# \author     Kawanami
+# \version    1.0
+# \date       30/04/2026
+#
+# \details
+#   Generates HTML documentation of the scholar-risc-v.
+#
+# \remarks
+#
+# \section doxyfile_version_history Version history
+# | Version | Date       | Author     | Description            |
+# |:-------:|:----------:|:-----------|:-----------------------|
+# | 1.0     | 30/04/2026 | Kawanami   | Initial configuration. |
+# ********************************************************************************
+# */
+
+# --- Project ---
+PROJECT_NAME            = "scholar-risc-v"
+OUTPUT_DIRECTORY        = ./docs/doxygen/
+GENERATE_HTML           = YES
+QUIET                   = YES
+WARN_LOGFILE            = ./docs/doxygen.warnings
+
+# --- Inputs ---
+USE_MDFILE_AS_MAINPAGE  = ./docs/doxygen_mainpage.md
+INPUT                   = risc-v/ ./docs/doxygen_mainpage.md
+RECURSIVE               = YES
+FILE_PATTERNS           = *.sv *.svh *.v *.h *.cpp *.c *.yaml *.sh *.py *.flags *.rules *.mk *.md
+EXCLUDE = \
+  docs/doxygen
+
+# --- Make Doxygen treat SV like C++ for comment parsing ---
+EXTENSION_MAPPING       = sv=C++ svh=C++ v=C++ yaml=C++ sh=C++ py=C++ flags=C++ rules=C++ mk=C++
+
+# --- run filter for non c/c++ files ---
+FILTER_PATTERNS = \
+  *.sv="python3 sv-tools/sv2cpp.py" \
+  *.svh="python3 sv-tools/sv2cpp.py" \
+  *.v="python3 sv-tools/sv2cpp.py" \
+  *.yaml="python3 sv-tools/script2cpp.py" \
+  *.py="python3 sv-tools/script2cpp.py" \
+  *.sh="python3 sv-tools/script2cpp.py" \
+  *.flags="python3 sv-tools/script2cpp.py" \
+  *.rules="python3 sv-tools/script2cpp.py" \
+  *.mk="python3 sv-tools/script2cpp.py"
+
+
+JAVADOC_AUTOBRIEF       = YES
+MULTILINE_CPP_IS_BRIEF  = YES
+EXTRACT_ALL             = YES
+EXTRACT_PRIVATE         = YES
+EXTRACT_STATIC          = YES
+OPTIMIZE_OUTPUT_FOR_C   = YES
+
+ENABLE_PREPROCESSING    = YES
+MACRO_EXPANSION         = NO
+EXPAND_ONLY_PREDEF      = YES
+PREDEFINED              += $(DOXY_PREDEFINED)
+
